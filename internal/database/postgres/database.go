@@ -21,10 +21,15 @@ func New(log *zap.Logger) *Storage {
 	return &Storage{log: log, Builder: &builder}
 }
 
-func (s *Storage) Init(ctx context.Context, connectionString string) error {
+func (s *Storage) Init(ctx context.Context, connStr string) error {
 	const op = "storage.postgres.Init"
 	var err error
-	s.Db, err = pgx.Connect(ctx, connectionString)
+	connCfg, err := pgx.ParseConfig(connStr)
+	if err != nil {
+		s.log.Fatal("%s unable to ParseConfig")
+		return err
+	}
+	s.Db, err = pgx.ConnectConfig(ctx, connCfg)
 	if err != nil {
 		s.log.Error(op, zap.Error(err))
 		return fmt.Errorf("%s : %w", op, err)
