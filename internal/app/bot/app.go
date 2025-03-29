@@ -1,6 +1,9 @@
 package bot
 
 import (
+	"support_bot/internal/bot"
+	"support_bot/internal/bot/handlers"
+	"support_bot/internal/service"
 	"time"
 
 	"go.uber.org/zap"
@@ -8,14 +11,17 @@ import (
 )
 
 type Bot struct {
-	bot *telebot.Bot
-	log *zap.Logger
+	bot    *telebot.Bot
+	log    *zap.Logger
+	router *bot.Router
 }
 
 func New(
 	token string,
 	poll time.Duration,
 	log *zap.Logger,
+	us *service.User,
+	cs *service.Chat,
 ) (*Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
@@ -26,9 +32,16 @@ func New(
 		return nil, err
 	}
 
+	ah := handlers.NewAdminHandler(b, us, cs, log)
+
+	uh := handlers.NewUserHandler(b, cs)
+
+	router := bot.NewRouter(b, ah, uh)
+	router.Setup()
 	return &Bot{
-		bot: b,
-		log: log,
+		bot:    b,
+		log:    log,
+		router: router,
 	}, nil
 }
 

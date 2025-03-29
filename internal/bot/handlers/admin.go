@@ -46,16 +46,11 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 
 // ManageUsers handles the user management menu
 func (h *AdminHandler) ManageUsers(c tele.Context) error {
-	keyboard := &tele.ReplyMarkup{
-		ReplyKeyboard: [][]tele.ReplyButton{
-			{{Text: "➕ Add User"}, {Text: "➖ Remove User"}},
-			{{Text: "📋 List Users"}},
-			{{Text: "🔙 Back to Admin Menu"}},
-		},
-		ResizeKeyboard: true,
-	}
+	menu.AdminMenu.Reply(
+		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
+		menu.AdminMenu.Row(menu.ListUser, menu.Back))
 
-	return c.Send("User Management. What would you like to do?", keyboard)
+	return c.Send("User Management. What would you like to do?", menu.AdminMenu)
 }
 
 // AddUser handles adding a new user
@@ -66,6 +61,7 @@ func (h *AdminHandler) AddUser(c tele.Context) error {
 
 // ProcessAddUser processes the username input for adding a user
 func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
+	c.Send("Please send me the Telegram username (@username) of the user you want to add.")
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
 		return c.Send("Please send a valid username starting with @")
@@ -163,16 +159,10 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 
 // ManageChats handles the chat management menu
 func (h *AdminHandler) ManageChats(c tele.Context) error {
-	keyboard := &tele.ReplyMarkup{
-		ReplyKeyboard: [][]tele.ReplyButton{
-			{{Text: "➕ Add Chat"}, {Text: "➖ Remove Chat"}},
-			{{Text: "📋 List Chats"}},
-			{{Text: "🔙 Back to Admin Menu"}},
-		},
-		ResizeKeyboard: true,
-	}
-
-	return c.Send("Chat Management. What would you like to do?", keyboard)
+	menu.AdminMenu.Reply(
+		menu.AdminMenu.Row(menu.AddChat, menu.RemoveChat),
+		menu.AdminMenu.Row(menu.ListChats, menu.Back))
+	return c.Send("Chat Management. What would you like to do?", menu.AdminMenu)
 }
 
 // AddChat handles adding a new chat

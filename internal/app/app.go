@@ -6,6 +6,8 @@ import (
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
 	"support_bot/internal/database/postgres"
+	"support_bot/internal/repository"
+	"support_bot/internal/service"
 
 	"go.uber.org/zap"
 )
@@ -23,15 +25,19 @@ func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error)
 	if err != nil {
 		return nil, err
 	}
-	b, err := bot.New(
-		cfg.Bot.TelegramToken,
-		cfg.Timeout.BotPoll,
-		log,
-	)
+
+	ur := repository.NewUser(s, log)
+
+	cr := repository.NewChat(s, log)
+
+	us := service.NewUser(&ur, log)
+
+	cs := service.NewChat(&cr, log)
+
+	b, err := bot.New(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll, log, us, cs)
 	if err != nil {
 		return nil, err
 	}
-
 	return &App{
 		bot: b,
 		log: log,

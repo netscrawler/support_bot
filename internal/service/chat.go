@@ -25,8 +25,10 @@ func (c *Chat) GetChatByTitle(username string) (*models.Chat, error) {
 }
 
 func (c *Chat) Add(chat *models.Chat) error {
-	c.repo.Create(context.TODO(), chat)
-	return models.ErrInternal
+	if err := c.repo.Create(context.TODO(), chat); err != nil {
+		return models.ErrInternal
+	}
+	return nil
 }
 
 func (c *Chat) Remove(chID int64) error {
