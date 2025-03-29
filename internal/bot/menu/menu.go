@@ -15,7 +15,7 @@ var (
 
 var (
 	SendNotifyAdmin = AdminMenu.Text("📝 Send Notification")
-	SendNotifyUser  = UserMenu.Text("📝 Send Notification")
+	SendNotifyUser  = UserMenu.Text("📝 Сделать рассылку")
 )
 
 var (
@@ -33,6 +33,8 @@ var (
 )
 
 var (
-	StartCommand = "/start"
-	AddChat      = "/subscribe"
+	StartCommand    = "/admin"
+	UserStart       = "/start"
+	AddChat         = "/subscribe"
+	RegisterCommand = "/register"
 )

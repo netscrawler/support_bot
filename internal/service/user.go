@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"support_bot/internal/models"
 	"support_bot/internal/repository"
 
 	"go.uber.org/zap"
+	"gopkg.in/telebot.v4"
 )
 
 // User репозиторий для работы с данными пользователя
@@ -24,7 +24,6 @@ func NewUser(repo *repository.User, log *zap.Logger) *User {
 }
 
 func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
-	const op = "service.User.GetAll"
 	users, err := u.repo.GetAll(ctx)
 	if err != nil {
 		return nil, err
@@ -32,19 +31,29 @@ func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
-func (u *User) CheckAccess(ctx context.Context, uid int64) string {
-	const op = "service.User.CheckAccess"
-	user, err := u.repo.GetByTgId(ctx, uid)
-	if errors.Is(err, models.ErrNotFound) {
-		return models.Denied
+func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
+	user, err := u.repo.GetByTgId(ctx, id)
+	if err != nil {
+		return models.Denied, err
 	}
-	u.log.Info(op, zap.Any("user", *user), zap.Error(err))
-	if err == nil {
-		u.log.Info(fmt.Sprintf("%s acces granted for", op), zap.Any("user", user))
-		return user.Role
-	}
+	return user.Role, nil
+}
 
-	return models.Denied
+func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
+	const op = "service.User.GetAllUserIds"
+	users, err := u.repo.GetAll(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	var userIds, adminIds []int64
+	for _, user := range users {
+		if user.Role == models.AdminRole {
+			adminIds = append(adminIds, user.TelegramID)
+			continue
+		}
+		userIds = append(userIds, user.TelegramID)
+	}
+	return userIds, adminIds, nil
 }
 
 func (u *User) Create(ctx context.Context, tgId int64, username, firstName, lastName string) error {
@@ -70,29 +79,10 @@ func (u *User) Update(usr *models.User) error {
 	return u.repo.Update(context.Background(), usr)
 }
 
-func (s *User) AddUserComplete(user models.User) error {
-	// Check if user already exists
+func (s *User) AddUserComplete(user *telebot.User) error {
+	usr := models.NewUser(user, false)
 
-	// Update existing user with telegram_id if needed
-	existingUser, err := s.repo.GetByUsername(context.TODO(), user.Username)
-	if errors.Is(err, models.ErrNotFound) {
-		return s.repo.Create(context.TODO(), &user)
-	}
-	if err != nil {
-		return err
-	}
-
-	if existingUser.TelegramID == 0 {
-		// Update the record with the telegram_id
-		existingUser.TelegramID = user.TelegramID
-		existingUser.FirstName = user.FirstName
-		existingUser.LastName = user.LastName
-		return s.repo.Update(context.TODO(), existingUser)
-
-	}
-	return s.repo.Create(context.Background(), &user)
-
-	// Create new user
+	return s.Update(usr)
 }
 
 func (u *User) Delete(ctx context.Context, username string) error {

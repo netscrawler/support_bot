@@ -43,9 +43,10 @@ func New(
 		log,
 	)
 
-	uh := handlers.NewUserHandler(b, cs)
+	uh := handlers.NewUserHandler(b, cs, us, state, ns)
+	th := handlers.NewTextHandler(ah, uh, state)
 
-	router := bot.NewRouter(b, ah, uh)
+	router := bot.NewRouter(b, ah, uh, th, us)
 	router.Setup()
 	return &Bot{
 		bot:    b,

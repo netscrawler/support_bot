@@ -11,6 +11,7 @@ const (
 	ListChatsState           = "list_chats"
 	SendNotificationState    = "send_message"
 	ConfirmNotificationState = "confirm_notification"
+	CancelNotificationState  = "cancel_notification"
 	MenuState                = "menu"
 )
 

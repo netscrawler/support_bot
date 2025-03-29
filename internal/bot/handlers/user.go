@@ -1,7 +1,9 @@
 package handlers
 
 import (
-	"strings"
+	"context"
+	"fmt"
+	"support_bot/internal/bot/menu"
 	"support_bot/internal/service"
 
 	tele "gopkg.in/telebot.v4"
@@ -10,112 +12,142 @@ import (
 type UserHandler struct {
 	bot         *tele.Bot
 	chatService *service.Chat
+	userService *service.User
+	state       *State
+	notify      *service.Notify
 }
 
 func NewUserHandler(
 	bot *tele.Bot,
 	chatService *service.Chat,
+	userService *service.User,
+	state *State,
+	notify *service.Notify,
 ) *UserHandler {
 	return &UserHandler{
 		bot:         bot,
 		chatService: chatService,
+		userService: userService,
+		state:       state,
+		notify:      notify,
+	}
+}
+
+func (h *UserHandler) ProcessUserInput(c tele.Context) error {
+	userID := c.Sender().ID
+	state := h.state.Get(userID)
+
+	switch state {
+	case SendNotificationState:
+		return h.ProcessSendNotification(c)
+	case ConfirmNotificationState:
+		return h.ConfirmSendNotification(c)
+	case CancelNotificationState:
+		return h.CancelSendNotification(c)
+	default:
+		return nil
 	}
 }
 
 // StartUser handles the start command for regular users
 func (h *UserHandler) StartUser(c tele.Context) error {
-	keyboard := &tele.ReplyMarkup{
-		ReplyKeyboard: [][]tele.ReplyButton{
-			{{Text: "📝 Send Notification"}},
-		},
-		ResizeKeyboard: true,
-	}
-
-	return c.Send("Welcome! What would you like to do?", keyboard)
+	menu.UserMenu.Reply(
+		menu.UserMenu.Row(menu.SendNotifyUser),
+	)
+	h.state.Set(c.Sender().ID, MenuState)
+	return c.Send("Welcome! What would you like to do?", menu.UserMenu)
 }
 
-// SendNotification handles the notification sending workflow
-// TODO: Переделать эту залупу
-func (h *UserHandler) SendNotificationWithOpt(c tele.Context) error {
-	chats, err := h.chatService.GetAll()
-	if err != nil {
-		return c.Send("Failed to get chats: " + err.Error())
+func (h *UserHandler) RegisterUser(c tele.Context) error {
+	snd := c.Sender()
+	err := h.userService.AddUserComplete(snd)
+	if err == nil {
+		return c.Send("You have been registered successfully!")
 	}
-
-	if len(chats) == 0 {
-		return c.Send("No chats available for sending notifications.")
-	}
-
-	// Create keyboard with all chats
-	var keyboard [][]tele.ReplyButton
-	var row []tele.ReplyButton
-
-	for i, chat := range chats {
-		row = append(row, tele.ReplyButton{Text: "@" + chat.Title})
-
-		// Create a new row every 2 buttons
-		if (i+1)%2 == 0 || i == len(chats)-1 {
-			keyboard = append(keyboard, row)
-			row = []tele.ReplyButton{}
-		}
-	}
-
-	// Add cancel button
-	keyboard = append(keyboard, []tele.ReplyButton{{Text: "❌ Cancel"}})
-
-	markup := &tele.ReplyMarkup{
-		ReplyKeyboard:  keyboard,
-		ResizeKeyboard: true,
-	}
-
-	return c.Send("Select a chat to send notification to:", markup)
-}
-
-// TODO доделать это говно позорное
-func (h *UserHandler) SendNotification(c tele.Context) error {
 	return nil
 }
 
-// ProcessChatSelection processes the selected chat
-func (h *UserHandler) ProcessChatSelection(c tele.Context) error {
-	selectedChat := c.Text()
+func (h *UserHandler) SendNotification(c tele.Context) error {
+	h.state.Set(c.Sender().ID, SendNotificationState)
+	return c.Send("Please send me the message you want to send to all users.")
+}
 
-	if selectedChat == "❌ Cancel" {
-		return h.StartUser(c)
+func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
+	if h.state.Get(c.Sender().ID) != SendNotificationState {
+		return nil
 	}
 
-	if !strings.HasPrefix(selectedChat, "@") {
-		return c.Send("Please select a valid chat from the keyboard.")
+	msg := c.Text()
+	if msg == "" {
+		return c.Send("Please send me the message you want to send to all users.")
 	}
 
-	// Store selected chat for later use
+	// Создаем inline-клавиатуру с кнопками "Confirm" и "Cancel"
+	confirmBtn := menu.Selector.Data("✅ Confirm", "confirm_user_notification", msg)
 
-	// Give user a regular keyboard to cancel
-	keyboard := &tele.ReplyMarkup{
-		ReplyKeyboard: [][]tele.ReplyButton{
-			{{Text: "❌ Cancel"}},
-		},
-		ResizeKeyboard: true,
-	}
+	menu.Selector.Inline(
+		menu.Selector.Row(confirmBtn),
+		menu.Selector.Row(menu.Selector.Data("❌ Cancel", "cancel_user_notification", msg)),
+	)
 
+	// Сохраняем состояние ожидания подтверждения
+	h.state.Set(c.Sender().ID, ConfirmNotificationState)
+
+	conf := "Are you sure you want to send this notification?\n\n"
+	formated := fmt.Sprintf("%s```%s```", conf, msg)
+
+	// Отправляем сообщение с клавиатурой
 	return c.Send(
-		"Please enter the notification text you want to send to "+selectedChat+":",
-		keyboard,
+		formated,
+		menu.Selector,
+		tele.ModeMarkdownV2,
 	)
 }
 
-// ProcessNotificationText processes the notification text
-func (h *UserHandler) ProcessNotificationText(c tele.Context, chatName string) error {
-	text := c.Text()
-
-	if text == "❌ Cancel" {
-		return h.StartUser(c)
+// Confirm sending notification
+func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
+	// Проверяем, что юзер в состоянии подтверждения
+	if h.state.Get(c.Sender().ID) != ConfirmNotificationState {
+		return nil
 	}
-	// TODO добавить логику
-	// Send notification logic would go here
-	// Currently this is just a placeholder since the notification service is commented out
 
-	// Return to the main menu with success message
-	c.Send("Notification successfully sent to @" + chatName + "!")
-	return h.StartUser(c)
+	// Получаем сообщение из data кнопки
+	msg := c.Data()
+
+	// Отправляем всем пользователям
+	num, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
+	if err != nil {
+		return c.Send("Failed to send notification: " + err.Error())
+	}
+
+	h.state.Set(c.Sender().ID, MenuState)
+
+	// Редактируем предыдущее сообщение, заменяя клавиатуру на текст
+	return c.Edit("✅ Notification sent successfully to " + fmt.Sprintf("%d chats", num))
+}
+
+// Cancel sending notification
+func (h *UserHandler) CancelSendNotification(c tele.Context) error {
+	h.state.Set(c.Sender().ID, MenuState)
+	return c.Edit("❌ Notification sending canceled.")
+}
+
+func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
+	return func(c tele.Context) error {
+		// Получаем username пользователя
+		username := c.Sender().Username
+		if username == "" {
+			return nil
+		}
+
+		// Проверяем пользователя в базе
+		user, err := h.userService.GetByUsername(context.Background(), username)
+		if err != nil {
+			return nil
+		}
+
+		// Сохраняем пользователя в context
+		c.Set("user", user)
+		return next(c)
+	}
 }

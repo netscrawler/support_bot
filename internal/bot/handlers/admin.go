@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"support_bot/internal/bot/menu"
 	"support_bot/internal/models"
@@ -36,7 +37,8 @@ func NewAdminHandler(
 		chatService: chatService,
 		state:       state,
 		notify:      notificationService,
-		log:         log,
+
+		log: log,
 	}
 }
 
@@ -77,8 +79,15 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	// Сохраняем состояние ожидания подтверждения
 	h.state.Set(c.Sender().ID, ConfirmNotificationState)
 
+	conf := "Are you sure you want to send this notification?\n\n"
+	formated := fmt.Sprintf("%s```%s```", conf, msg)
+
 	// Отправляем сообщение с клавиатурой
-	return c.Send("Are you sure you want to send this notification?", menu.Selector)
+	return c.Send(
+		formated,
+		menu.Selector,
+		tele.ModeMarkdownV2,
+	)
 }
 
 // Confirm sending notification
@@ -119,8 +128,14 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 }
 
 // Универсальный обработчик текстовых сообщений
-func (h *AdminHandler) ProcessUserInput(c tele.Context) error {
+func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 	userID := c.Sender().ID
+
+	// Проверяем, что юзер в состоянии
+	if h.state.Get(userID) == MenuState {
+		return nil
+	}
+
 	state := h.state.Get(userID)
 
 	switch state {
@@ -158,24 +173,9 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 	}
 
 	username = username[1:]
-	chat, err := h.bot.ChatByUsername(username)
 
-	if err == nil && chat != nil && chat.Type == tele.ChatPrivate {
-		userToAdd := models.User{
-			TelegramID: 0,
-			Username:   username,
-			FirstName:  chat.FirstName,
-			LastName:   &chat.LastName,
-			Role:       "user",
-		}
-
-		if err := h.userService.AddUserComplete(userToAdd); err != nil {
-			return c.Send("Failed to add user: " + err.Error())
-		}
-	} else {
-		if err := h.userService.Create(context.Background(), 0, username, "", ""); err != nil {
-			return c.Send("Failed to add user: " + err.Error())
-		}
+	if err := h.userService.Create(context.Background(), rand.Int64(), username, "", ""); err != nil {
+		return c.Send("Failed to add user: " + err.Error())
 	}
 
 	h.state.Set(userID, MenuState) // Сбрасываем состояние
