@@ -9,27 +9,22 @@ var (
 )
 
 var (
-	Confirm = Selector.Data("yes", "SendConirm")
-	Dismiss = Selector.Data("no", "SendDismiss")
-)
-
-var (
-	SendNotifyAdmin = AdminMenu.Text("📝 Send Notification")
+	SendNotifyAdmin = AdminMenu.Text("📝 Начать рассылку")
 	SendNotifyUser  = UserMenu.Text("📝 Сделать рассылку")
 )
 
 var (
-	ManageUsers = AdminMenu.Text("👥 Manage Users")
-	ManageChats = AdminMenu.Text("💬 Manage Chats")
+	ManageUsers = AdminMenu.Text("👥 Управление пользователями")
+	ManageChats = AdminMenu.Text("💬 Управление чатами")
 
-	ListUser   = AdminMenu.Text("📋 List Users")
-	AddUser    = AdminMenu.Text("➕ Add User")
-	RemoveUser = AdminMenu.Text("➖ Remove User")
+	ListUser   = AdminMenu.Text("📋 Список пользователей")
+	AddUser    = AdminMenu.Text("➕ Добавить пользователя")
+	RemoveUser = AdminMenu.Text("➖ Удалить пользователя")
 
-	ListChats  = AdminMenu.Text("📋 List Chats")
-	RemoveChat = AdminMenu.Text("➖ Remove Chat")
+	ListChats  = AdminMenu.Text("📋 Список чатов")
+	RemoveChat = AdminMenu.Text("➖ Удалить чат")
 
-	Back = AdminMenu.Text("🔙 Back to Admin Menu")
+	Back = AdminMenu.Text("🔙 Назад")
 )
 
 var (

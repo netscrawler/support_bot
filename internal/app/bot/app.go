@@ -40,7 +40,6 @@ func New(
 		cs,
 		ns,
 		state,
-		log,
 	)
 
 	uh := handlers.NewUserHandler(b, cs, us, state, ns)

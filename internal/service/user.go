@@ -40,7 +40,6 @@ func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
 }
 
 func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
-	const op = "service.User.GetAllUserIds"
 	users, err := u.repo.GetAll(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -86,8 +85,6 @@ func (s *User) AddUserComplete(user *telebot.User) error {
 }
 
 func (u *User) Delete(ctx context.Context, username string) error {
-	const op = "service.User.Delete"
-
 	user, err := u.repo.GetByUsername(ctx, username)
 	if errors.Is(err, models.ErrNotFound) {
 		return err
@@ -98,7 +95,6 @@ func (u *User) Delete(ctx context.Context, username string) error {
 
 	err = u.repo.Delete(ctx, user.TelegramID)
 	if err != nil {
-		u.log.Info(op, zap.Error(err))
 		return err
 	}
 	return nil

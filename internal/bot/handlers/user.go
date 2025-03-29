@@ -55,21 +55,21 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 		menu.UserMenu.Row(menu.SendNotifyUser),
 	)
 	h.state.Set(c.Sender().ID, MenuState)
-	return c.Send("Welcome! What would you like to do?", menu.UserMenu)
+	return c.Send("Добро пожаловать!", menu.UserMenu)
 }
 
 func (h *UserHandler) RegisterUser(c tele.Context) error {
 	snd := c.Sender()
 	err := h.userService.AddUserComplete(snd)
 	if err == nil {
-		return c.Send("You have been registered successfully!")
+		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
 	}
 	return nil
 }
 
 func (h *UserHandler) SendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, SendNotificationState)
-	return c.Send("Please send me the message you want to send to all users.")
+	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 }
 
 func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
@@ -79,21 +79,22 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 
 	msg := c.Text()
 	if msg == "" {
-		return c.Send("Please send me the message you want to send to all users.")
+		return c.Send(
+			"Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.",
+		)
 	}
 
-	// Создаем inline-клавиатуру с кнопками "Confirm" и "Cancel"
-	confirmBtn := menu.Selector.Data("✅ Confirm", "confirm_user_notification", msg)
+	confirmBtn := menu.Selector.Data("✅ Отправить", "confirm_user_notification", msg)
 
 	menu.Selector.Inline(
 		menu.Selector.Row(confirmBtn),
-		menu.Selector.Row(menu.Selector.Data("❌ Cancel", "cancel_user_notification", msg)),
+		menu.Selector.Row(menu.Selector.Data("❌ Отменить", "cancel_user_notification", msg)),
 	)
 
 	// Сохраняем состояние ожидания подтверждения
 	h.state.Set(c.Sender().ID, ConfirmNotificationState)
 
-	conf := "Are you sure you want to send this notification?\n\n"
+	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
 	formated := fmt.Sprintf("%s```%s```", conf, msg)
 
 	// Отправляем сообщение с клавиатурой
@@ -106,30 +107,33 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 
 // Confirm sending notification
 func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
-	// Проверяем, что юзер в состоянии подтверждения
 	if h.state.Get(c.Sender().ID) != ConfirmNotificationState {
 		return nil
 	}
 
-	// Получаем сообщение из data кнопки
 	msg := c.Data()
 
-	// Отправляем всем пользователям
-	num, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
+	num, successfully, witherror, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
 	if err != nil {
-		return c.Send("Failed to send notification: " + err.Error())
+		return c.Send("Не удалось отправить уведомление: " + err.Error())
 	}
 
 	h.state.Set(c.Sender().ID, MenuState)
-
-	// Редактируем предыдущее сообщение, заменяя клавиатуру на текст
-	return c.Edit("✅ Notification sent successfully to " + fmt.Sprintf("%d chats", num))
+	formattedMsg := fmt.Sprintf(
+		"✅ **Уведомления отправлены**\n\n"+
+			"Всего чатов: **%d**\n"+
+			"Успешно: **%d**\n"+
+			"Не отправленно: **%d**\n\n"+
+			"*Note: Пожалуйста, проверьте, есть ли какие-либо особые проблемы в неудачных чатах.*",
+		num, successfully, witherror,
+	)
+	return c.Edit(formattedMsg, tele.ModeMarkdownV2)
 }
 
 // Cancel sending notification
 func (h *UserHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
-	return c.Edit("❌ Notification sending canceled.")
+	return c.Edit("❌ Отправка уведомления отменена.")
 }
 
 func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {

@@ -2,13 +2,11 @@ package bot
 
 import (
 	"context"
-	"log"
 	"support_bot/internal/bot/handlers"
 	"support_bot/internal/bot/menu"
 	"support_bot/internal/models"
 
 	"gopkg.in/telebot.v4"
-	"gopkg.in/telebot.v4/middleware"
 )
 
 type UserProvider interface {
@@ -40,16 +38,12 @@ func NewRouter(
 }
 
 func (r *Router) Setup() {
-	r.bot.Use(middleware.Logger())
-
-	// Группа для регистрации (если юзер не в базе)
 	register := r.bot.Group()
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
 
 	text := r.bot.Group()
 	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.TextAuthMiddleware)
 
-	// Группа пользователей
 	userOnly := r.bot.Group()
 
 	userOnly.Use(r.UserAuthMiddleware)
@@ -57,7 +51,6 @@ func (r *Router) Setup() {
 	userOnly.Handle(menu.UserStart, r.userHl.StartUser)
 	userOnly.Handle(&menu.SendNotifyUser, r.userHl.SendNotification)
 
-	// userOnly.Handle(telebot.OnText, r.textHl.ProcessTextInput)
 	userOnly.Handle(
 		&telebot.InlineButton{Unique: "confirm_user_notification"},
 		r.adminHl.ConfirmSendNotification,
@@ -67,7 +60,6 @@ func (r *Router) Setup() {
 		r.adminHl.CancelSendNotification,
 	)
 
-	// Группа админов (должна быть зарегистрирована **после** userOnly)
 	adminOnly := r.bot.Group()
 	adminOnly.Use(r.AdminAuthMiddleware)
 	adminOnly.Handle(menu.StartCommand, r.adminHl.StartAdmin)
@@ -80,9 +72,7 @@ func (r *Router) Setup() {
 	adminOnly.Handle(menu.AddChat, r.adminHl.ProcessAddChat)
 	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
-	// adminOnly.Handle(telebot.OnText, r.textHl.ProcessTextInput)
 	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)
-	// r.bot.Handle(telebot.OnText, r.textHl.ProcessTextInput)
 	adminOnly.Handle(
 		&telebot.InlineButton{Unique: "confirm_notification"},
 		r.adminHl.ConfirmSendNotification,
@@ -96,19 +86,14 @@ func (r *Router) Setup() {
 func (r *Router) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
-		log.Printf("UserAuthMiddleware triggered for user: %d", userID)
 
-		// Проверяем пользователя в базе
 		role, err := r.userPr.IsAllowed(context.TODO(), userID)
 		if err != nil || role == models.Denied {
-			log.Printf("Error checking user %d: %v, %s", userID, err, role)
 			return nil // Не выдаём ошибку пользователю
 		}
 
-		// Добавляем роль в контекст, если юзер есть
 		c.Set("isAdmin", role)
 
-		log.Printf("User %d authenticated as %s", userID, role)
 		return next(c)
 	}
 }
@@ -116,19 +101,14 @@ func (r *Router) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFun
 func (r *Router) TextAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
-		log.Printf("TextAuthMiddleware triggered for user: %d", userID)
 
-		// Проверяем пользователя в базе
 		role, err := r.userPr.IsAllowed(context.TODO(), userID)
 		if err != nil || role == models.Denied {
-			log.Printf("Error checking user %d: %v, %s", userID, err, role)
 			return nil // Не выдаём ошибку пользователю
 		}
 
-		// Добавляем роль в контекст, если юзер есть
 		c.Set("isAdmin", role)
 
-		log.Printf("User %d authenticated as %s", userID, role)
 		return next(c)
 	}
 }
@@ -138,14 +118,12 @@ func (r *Router) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFu
 		userID := c.Sender().ID
 		role, err := r.userPr.IsAllowed(context.TODO(), userID)
 		if err != nil || role == models.Denied || role == models.UserRole {
-			log.Printf("Error checking user %d: %v", userID, err)
 			return nil // Не выдаём ошибку пользователю
 		}
 
 		// Добавляем роль в контекст, если юзер есть
 		c.Set("isAdmin", role)
 
-		log.Printf("User %d authenticated as %s", userID, role)
 		return next(c)
 	}
 }

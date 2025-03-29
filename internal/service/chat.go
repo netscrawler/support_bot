@@ -47,17 +47,3 @@ func (c *Chat) GetAll() ([]models.Chat, error) {
 	}
 	return chats, nil
 }
-
-type ChatService interface {
-	GetChatByUsername(username string) (*Chat, error)
-	AddChat(username string) error
-	RemoveChat(username string) error
-	GetAllChats() ([]Chat, error)
-}
-type UserService interface {
-	GetUserByTelegramID(telegramID int64) (*models.User, error)
-	GetUserByUsername(username string) (*models.User, error)
-	AddUser(username string, role string) error
-	RemoveUser(username string) error
-	GetAllUsers() ([]models.User, error)
-}
