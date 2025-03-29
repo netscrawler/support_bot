@@ -3,14 +3,15 @@ package handlers
 import "sync"
 
 const (
-	AddUserState          = "add_user"
-	AddChatState          = "add_chat"
-	RemoveUserState       = "remove_user"
-	RemoveChatState       = "remove_chat"
-	ListUsersState        = "list_users"
-	ListChatsState        = "list_chats"
-	SendNotificationState = "send_message"
-	MenuState             = "menu"
+	AddUserState             = "add_user"
+	AddChatState             = "add_chat"
+	RemoveUserState          = "remove_user"
+	RemoveChatState          = "remove_chat"
+	ListUsersState           = "list_users"
+	ListChatsState           = "list_chats"
+	SendNotificationState    = "send_message"
+	ConfirmNotificationState = "confirm_notification"
+	MenuState                = "menu"
 )
 
 type State struct {

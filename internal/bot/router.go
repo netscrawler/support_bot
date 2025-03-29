@@ -40,6 +40,14 @@ func (r *Router) Setup() {
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
 	adminOnly.Handle(telebot.OnText, r.adminHl.ProcessUserInput)
 	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)
+	adminOnly.Handle(
+		&telebot.InlineButton{Unique: "confirm_notification"},
+		r.adminHl.ConfirmSendNotification,
+	)
+	adminOnly.Handle(
+		&telebot.InlineButton{Unique: "cancel_notification"},
+		r.adminHl.CancelSendNotification,
+	)
 
 	// TODO: настроить обработку юзера
 	// userOnly := r.bot.Group()

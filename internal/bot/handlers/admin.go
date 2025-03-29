@@ -60,17 +60,53 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	if h.state.Get(c.Sender().ID) != SendNotificationState {
 		return nil
 	}
+
 	msg := c.Text()
 	if msg == "" {
 		return c.Send("Please send me the message you want to send to all users.")
 	}
+
+	// Создаем inline-клавиатуру с кнопками "Confirm" и "Cancel"
+	confirmBtn := menu.Selector.Data("✅ Confirm", "confirm_notification", msg)
+
+	menu.Selector.Inline(
+		menu.Selector.Row(confirmBtn),
+		menu.Selector.Row(menu.Selector.Data("❌ Cancel", "cancel_notification", msg)),
+	)
+
+	// Сохраняем состояние ожидания подтверждения
+	h.state.Set(c.Sender().ID, ConfirmNotificationState)
+
+	// Отправляем сообщение с клавиатурой
+	return c.Send("Are you sure you want to send this notification?", menu.Selector)
+}
+
+// Confirm sending notification
+func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
+	// Проверяем, что юзер в состоянии подтверждения
+	if h.state.Get(c.Sender().ID) != ConfirmNotificationState {
+		return nil
+	}
+
+	// Получаем сообщение из data кнопки
+	msg := c.Data()
+
+	// Отправляем всем пользователям
 	num, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
 	if err != nil {
 		return c.Send("Failed to send notification: " + err.Error())
 	}
 
 	h.state.Set(c.Sender().ID, MenuState)
-	return c.Send(fmt.Sprintf("Notification sent to %d chats", num))
+
+	// Редактируем предыдущее сообщение, заменяя клавиатуру на текст
+	return c.Edit("✅ Notification sent successfully to " + fmt.Sprintf("%d chats", num))
+}
+
+// Cancel sending notification
+func (h *AdminHandler) CancelSendNotification(c tele.Context) error {
+	h.state.Set(c.Sender().ID, MenuState)
+	return c.Edit("❌ Notification sending canceled.")
 }
 
 // ManageUsers handles the user management menu
