@@ -32,9 +32,10 @@ func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error)
 
 	us := service.NewUser(&ur, log)
 
+	ns := service.NewNotify(&cr, log)
 	cs := service.NewChat(&cr, log)
 
-	b, err := bot.New(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll, log, us, cs)
+	b, err := bot.New(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll, log, us, cs, ns)
 	if err != nil {
 		return nil, err
 	}

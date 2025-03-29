@@ -73,22 +73,7 @@ func (h *UserHandler) SendNotificationWithOpt(c tele.Context) error {
 
 // TODO доделать это говно позорное
 func (h *UserHandler) SendNotification(c tele.Context) error {
-	chats, err := h.chatService.GetAll()
-	if err != nil {
-		return c.Send("Failed to get chats: " + err.Error())
-	}
-
-	if len(chats) == 0 {
-		return c.Send("No chats available for sending notifications.")
-	}
-
-	// Add cancel button
-
-	markup := &tele.ReplyMarkup{
-		ResizeKeyboard: true,
-	}
-
-	return c.Send("Select a chat to send notification to:", markup)
+	return nil
 }
 
 // ProcessChatSelection processes the selected chat

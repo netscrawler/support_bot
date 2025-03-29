@@ -6,6 +6,7 @@ import (
 	"support_bot/internal/models"
 
 	"go.uber.org/zap"
+	"gopkg.in/telebot.v4"
 )
 
 type ChatProvider interface {
@@ -26,7 +27,7 @@ func NewNotify(c ChatProvider, log *zap.Logger) *Notify {
 	}
 }
 
-func (n *Notify) Broadcast(ctx context.Context) (int, error) {
+func (n *Notify) Broadcast(ctx context.Context, bot *telebot.Bot, notify string) (int, error) {
 	const op = "service.Notify.Broadcast"
 	// count := 0
 	chats, err := n.chat.GetAll(ctx)
@@ -36,6 +37,13 @@ func (n *Notify) Broadcast(ctx context.Context) (int, error) {
 		}
 		return 0, models.ErrInternal
 
+	}
+
+	for _, chat := range chats {
+		_, err := bot.Send(&telebot.Chat{ID: chat.ChatID}, notify)
+		if err != nil {
+			n.log.Error(op, zap.Error(err))
+		}
 	}
 
 	return len(chats), nil

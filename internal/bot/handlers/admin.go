@@ -17,6 +17,8 @@ type AdminHandler struct {
 	bot         *tele.Bot
 	userService *service.User
 	chatService *service.Chat
+	state       *State
+	notify      *service.Notify
 	log         *zap.Logger
 }
 
@@ -24,12 +26,16 @@ func NewAdminHandler(
 	bot *tele.Bot,
 	userService *service.User,
 	chatService *service.Chat,
+	notificationService *service.Notify,
+	state *State,
 	log *zap.Logger,
 ) *AdminHandler {
 	return &AdminHandler{
 		bot:         bot,
 		userService: userService,
 		chatService: chatService,
+		state:       state,
+		notify:      notificationService,
 		log:         log,
 	}
 }
@@ -40,8 +46,31 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
 		menu.AdminMenu.Row(menu.SendNotifyAdmin),
 	)
+	h.state.Set(c.Sender().ID, MenuState)
 
 	return c.Send("Welcome, Admin! What would you like to do?", menu.AdminMenu)
+}
+
+func (h *AdminHandler) SendNotification(c tele.Context) error {
+	h.state.Set(c.Sender().ID, SendNotificationState)
+	return c.Send("Please send me the message you want to send to all users.")
+}
+
+func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
+	if h.state.Get(c.Sender().ID) != SendNotificationState {
+		return nil
+	}
+	msg := c.Text()
+	if msg == "" {
+		return c.Send("Please send me the message you want to send to all users.")
+	}
+	num, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
+	if err != nil {
+		return c.Send("Failed to send notification: " + err.Error())
+	}
+
+	h.state.Set(c.Sender().ID, MenuState)
+	return c.Send(fmt.Sprintf("Notification sent to %d chats", num))
 }
 
 // ManageUsers handles the user management menu
@@ -49,38 +78,53 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
 		menu.AdminMenu.Row(menu.ListUser, menu.Back))
-
+	h.state.Set(c.Sender().ID, MenuState)
 	return c.Send("User Management. What would you like to do?", menu.AdminMenu)
 }
 
-// AddUser handles adding a new user
+// Универсальный обработчик текстовых сообщений
+func (h *AdminHandler) ProcessUserInput(c tele.Context) error {
+	userID := c.Sender().ID
+	state := h.state.Get(userID)
+
+	switch state {
+	case AddUserState:
+		return h.ProcessAddUser(c) // Вызываем обработку добавления пользователя
+	case RemoveUserState:
+		return h.ProcessRemoveUser(c)
+	case AddChatState:
+		return h.ProcessAddChat(c)
+	case RemoveChatState:
+		return h.ProcessRemoveChat(c)
+	case SendNotificationState:
+		return h.ProcessSendNotification(c)
+	default:
+		return nil // Если нет активного состояния — игнорируем
+	}
+}
+
+// Мне нужно чтобы после срабатывания этого хендлера бот ждал пока пользователь не напишет в чат ник который нужно добавить
 func (h *AdminHandler) AddUser(c tele.Context) error {
-	c.Send("Please send me the Telegram username (@username) of the user you want to add.")
-	return h.ProcessAddUser(c)
+	h.state.Set(c.Sender().ID, AddUserState)
+	return c.Send("Please send me the Telegram username (@username) of the user you want to add.")
 }
 
 // ProcessAddUser processes the username input for adding a user
 func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
-	c.Send("Please send me the Telegram username (@username) of the user you want to add.")
+	userID := c.Sender().ID
+	if h.state.Get(userID) != AddUserState {
+		return nil
+	}
+
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
 		return c.Send("Please send a valid username starting with @")
 	}
 
-	// Remove @ and extract the username
 	username = username[1:]
-	// TODO: Зарефакторить это позорное говно
 	chat, err := h.bot.ChatByUsername(username)
 
-	// If we can get user info, add them with complete information
-	if err == nil && chat != nil {
-		// Make sure it's a user, not a group/channel
-		if chat.Type != tele.ChatPrivate {
-			return c.Send(
-				"@" + username + " is not a user account. Please provide a valid user, not a group or channel.",
-			)
-		}
-
+	if err == nil && chat != nil && chat.Type == tele.ChatPrivate {
 		userToAdd := models.User{
 			TelegramID: 0,
 			Username:   username,
@@ -88,31 +132,26 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 			LastName:   &chat.LastName,
 			Role:       "user",
 		}
-		h.log.Debug("user to add", zap.Any("user", userToAdd))
 
-		err = h.userService.AddUserComplete(userToAdd)
-		if err != nil {
+		if err := h.userService.AddUserComplete(userToAdd); err != nil {
 			return c.Send("Failed to add user: " + err.Error())
 		}
-
-		return c.Send("User @" + username + " has been added successfully!")
+	} else {
+		if err := h.userService.Create(context.Background(), 0, username, "", ""); err != nil {
+			return c.Send("Failed to add user: " + err.Error())
+		}
 	}
 
-	// If we can't get user info, add just the username and wait for the user to interact with the bot
-	err = h.userService.Create(context.Background(), 0, username, "", "")
-	if err != nil {
-		c.Send("Failed to add user: " + err.Error())
-		return h.ProcessAddUser(c)
-	}
-
-	return c.Send("User @" + username + " has been added to the authorized list. " +
-		"They need to start a conversation with the bot by sending /start to complete registration.")
+	h.state.Set(userID, MenuState) // Сбрасываем состояние
+	return c.Send("User @" + username + " has been added.")
 }
 
 // RemoveUser handles removing a user
 func (h *AdminHandler) RemoveUser(c tele.Context) error {
-	c.Send("Please send me the Telegram username (@username) of the user you want to remove.")
-	return h.ProcessRemoveUser(c)
+	h.state.Set(c.Sender().ID, RemoveUserState)
+	return c.Send(
+		"Please send me the Telegram username (@username) of the user you want to remove.",
+	)
 }
 
 // ProcessRemoveUser processes the username input for removing a user
@@ -131,6 +170,7 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	if err != nil {
 		return c.Send("Failed to remove user: " + err.Error())
 	}
+	h.state.Set(c.Sender().ID, MenuState)
 
 	return c.Send("User @" + username + " has been removed successfully!")
 }
@@ -160,51 +200,43 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 // ManageChats handles the chat management menu
 func (h *AdminHandler) ManageChats(c tele.Context) error {
 	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.AddChat, menu.RemoveChat),
+		menu.AdminMenu.Row(menu.RemoveChat),
 		menu.AdminMenu.Row(menu.ListChats, menu.Back))
 	return c.Send("Chat Management. What would you like to do?", menu.AdminMenu)
 }
 
 // AddChat handles adding a new chat
 func (h *AdminHandler) AddChat(c tele.Context) error {
-	c.Send("Please send me the chat username (@username) you want to add.")
-	return h.ProcessAddChat(c)
+	h.state.Set(c.Sender().ID, AddChatState)
+	return c.Send("Please send me the chat username (@username) you want to add.")
 }
 
 // ProcessAddChat processes the chat input for adding a chat
 func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
-	chatName := c.Text()
-	if !strings.HasPrefix(chatName, "@") {
-		return c.Send("Please send a valid chat username starting with @")
+	// Проверяем, откуда пришла команда (чат или личка)
+	if c.Chat().Type == tele.ChatPrivate {
+		return c.Send("This command must be used in a group or channel.")
 	}
 
-	// Remove @ and extract the username
-	chatName = chatName[1:]
-	ch, err := h.bot.ChatByUsername(chatName)
-	if err != nil {
-		return c.Send("Failed to add chat: " + err.Error())
-	}
-	// TODO: Переписать это позорное говно
 	chat := &models.Chat{
-		ChatID:      ch.ID,
-		Title:       ch.Title,
-		Type:        string(ch.Type),
-		Description: ch.Description,
+		ChatID:      c.Chat().ID,
+		Title:       c.Chat().Title,
+		Type:        string(c.Chat().Type),
+		Description: c.Chat().Description,
 	}
 
-	// Call service to add chat
-	err = h.chatService.Add(chat)
+	err := h.chatService.Add(chat)
 	if err != nil {
 		return c.Send("Failed to add chat: " + err.Error())
 	}
 
-	return c.Send("Chat @" + chatName + " has been added successfully!")
+	return c.Send("Chat added successfully! The bot can now send notifications here.")
 }
 
 // RemoveChat handles removing a chat
 func (h *AdminHandler) RemoveChat(c tele.Context) error {
-	c.Send("Please send me the chat username (@username) you want to remove.")
-	return h.ProcessRemoveChat(c)
+	h.state.Set(c.Sender().ID, RemoveChatState)
+	return c.Send("Please send me the chat username (@username) you want to remove.")
 }
 
 // ProcessRemoveChat processes the chat input for removing a chat
@@ -217,17 +249,12 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 	// Remove @ and extract the username
 	chatName = chatName[1:]
 
-	ch, err := h.bot.ChatByUsername(chatName)
-	if err != nil {
-		return c.Send("Failed to find chat: " + err.Error())
-	}
-
 	// Call service to remove chat
-	err = h.chatService.Remove(ch.ID)
+	err := h.chatService.Remove(chatName)
 	if err != nil {
 		return c.Send("Failed to remove chat: " + err.Error())
 	}
-
+	h.state.Set(c.Sender().ID, MenuState)
 	return c.Send("Chat @" + chatName + " has been removed successfully!")
 }
 

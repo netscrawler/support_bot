@@ -31,7 +31,12 @@ func (c *Chat) Add(chat *models.Chat) error {
 	return nil
 }
 
-func (c *Chat) Remove(chID int64) error {
+func (c *Chat) Remove(title string) error {
+	ch, err := c.repo.GetByTitle(context.TODO(), title)
+	if err != nil {
+		return err
+	}
+	chID := ch.ChatID
 	return c.repo.Delete(context.TODO(), chID)
 }
 

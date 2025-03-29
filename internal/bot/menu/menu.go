@@ -27,10 +27,12 @@ var (
 	RemoveUser = AdminMenu.Text("➖ Remove User")
 
 	ListChats  = AdminMenu.Text("📋 List Chats")
-	AddChat    = AdminMenu.Text("➕ Add Chat")
 	RemoveChat = AdminMenu.Text("➖ Remove Chat")
 
 	Back = AdminMenu.Text("🔙 Back to Admin Menu")
 )
 
-var StartCommand = "/start"
+var (
+	StartCommand = "/start"
+	AddChat      = "/subscribe"
+)

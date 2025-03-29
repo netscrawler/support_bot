@@ -22,6 +22,7 @@ func New(
 	log *zap.Logger,
 	us *service.User,
 	cs *service.Chat,
+	ns *service.Notify,
 ) (*Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
@@ -32,7 +33,15 @@ func New(
 		return nil, err
 	}
 
-	ah := handlers.NewAdminHandler(b, us, cs, log)
+	state := handlers.NewState()
+	ah := handlers.NewAdminHandler(
+		b,
+		us,
+		cs,
+		ns,
+		state,
+		log,
+	)
 
 	uh := handlers.NewUserHandler(b, cs)
 
