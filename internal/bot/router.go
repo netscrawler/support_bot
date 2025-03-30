@@ -1,16 +1,15 @@
 package bot
 
 import (
-	"context"
 	"support_bot/internal/bot/handlers"
 	"support_bot/internal/bot/menu"
-	"support_bot/internal/models"
+	"support_bot/internal/bot/middlewares"
 
 	"gopkg.in/telebot.v4"
 )
 
-type UserProvider interface {
-	IsAllowed(ctx context.Context, id int64) (string, error)
+type handlerBuilder interface {
+	Build() (*handlers.AdminHandler, *handlers.UserHandler, *handlers.TextHandler, *middlewares.Mw)
 }
 
 type Router struct {
@@ -18,22 +17,20 @@ type Router struct {
 	adminHl *handlers.AdminHandler
 	textHl  *handlers.TextHandler
 	userHl  *handlers.UserHandler
-	userPr  UserProvider
+	mw      *middlewares.Mw
 }
 
 func NewRouter(
 	bot *telebot.Bot,
-	ahl *handlers.AdminHandler,
-	uhl *handlers.UserHandler,
-	thl *handlers.TextHandler,
-	userPr UserProvider,
+	hb handlerBuilder,
 ) *Router {
+	aHl, uHl, tHl, mw := hb.Build()
 	return &Router{
 		bot:     bot,
-		adminHl: ahl,
-		userHl:  uhl,
-		textHl:  thl,
-		userPr:  userPr,
+		adminHl: aHl,
+		userHl:  uHl,
+		textHl:  tHl,
+		mw:      mw,
 	}
 }
 
@@ -42,11 +39,11 @@ func (r *Router) Setup() {
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
 
 	text := r.bot.Group()
-	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.TextAuthMiddleware)
+	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.mw.TextAuthMiddleware)
 
 	userOnly := r.bot.Group()
 
-	userOnly.Use(r.UserAuthMiddleware)
+	userOnly.Use(r.mw.UserAuthMiddleware)
 
 	userOnly.Handle(menu.UserStart, r.userHl.StartUser)
 	userOnly.Handle(&menu.SendNotifyUser, r.userHl.SendNotification)
@@ -61,7 +58,7 @@ func (r *Router) Setup() {
 	)
 
 	adminOnly := r.bot.Group()
-	adminOnly.Use(r.AdminAuthMiddleware)
+	adminOnly.Use(r.mw.AdminAuthMiddleware)
 	adminOnly.Handle(menu.StartCommand, r.adminHl.StartAdmin)
 	adminOnly.Handle(&menu.ManageUsers, r.adminHl.ManageUsers)
 	adminOnly.Handle(&menu.ManageChats, r.adminHl.ManageChats)
@@ -81,49 +78,4 @@ func (r *Router) Setup() {
 		&telebot.InlineButton{Unique: "cancel_notification"},
 		r.adminHl.CancelSendNotification,
 	)
-}
-
-func (r *Router) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
-	return func(c telebot.Context) error {
-		userID := c.Sender().ID
-
-		role, err := r.userPr.IsAllowed(context.TODO(), userID)
-		if err != nil || role == models.Denied {
-			return nil // Не выдаём ошибку пользователю
-		}
-
-		c.Set("isAdmin", role)
-
-		return next(c)
-	}
-}
-
-func (r *Router) TextAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
-	return func(c telebot.Context) error {
-		userID := c.Sender().ID
-
-		role, err := r.userPr.IsAllowed(context.TODO(), userID)
-		if err != nil || role == models.Denied {
-			return nil // Не выдаём ошибку пользователю
-		}
-
-		c.Set("isAdmin", role)
-
-		return next(c)
-	}
-}
-
-func (r *Router) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
-	return func(c telebot.Context) error {
-		userID := c.Sender().ID
-		role, err := r.userPr.IsAllowed(context.TODO(), userID)
-		if err != nil || role == models.Denied || role == models.UserRole {
-			return nil // Не выдаём ошибку пользователю
-		}
-
-		// Добавляем роль в контекст, если юзер есть
-		c.Set("isAdmin", role)
-
-		return next(c)
-	}
 }

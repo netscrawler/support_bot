@@ -17,12 +17,10 @@ type Bot struct {
 }
 
 func New(
+	log *zap.Logger,
 	token string,
 	poll time.Duration,
-	log *zap.Logger,
-	us *service.User,
-	cs *service.Chat,
-	ns *service.Notify,
+	sb *service.ServiceBuilder,
 ) (*Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
@@ -33,19 +31,8 @@ func New(
 		return nil, err
 	}
 
-	state := handlers.NewState()
-	ah := handlers.NewAdminHandler(
-		b,
-		us,
-		cs,
-		ns,
-		state,
-	)
+	router := bot.NewRouter(b, handlers.NewHB(b, sb))
 
-	uh := handlers.NewUserHandler(b, cs, us, state, ns)
-	th := handlers.NewTextHandler(ah, uh, state)
-
-	router := bot.NewRouter(b, ah, uh, th, us)
 	router.Setup()
 	return &Bot{
 		bot:    b,

@@ -16,7 +16,7 @@ type User struct {
 	log  *zap.Logger
 }
 
-func NewUser(repo *repository.User, log *zap.Logger) *User {
+func newUser(repo *repository.User, log *zap.Logger) *User {
 	return &User{
 		repo: repo,
 		log:  log,

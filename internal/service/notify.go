@@ -20,7 +20,7 @@ type Notify struct {
 	log  *zap.Logger
 }
 
-func NewNotify(c ChatProvider, log *zap.Logger) *Notify {
+func newNotify(c ChatProvider, log *zap.Logger) *Notify {
 	return &Notify{
 		chat: c,
 		log:  log,

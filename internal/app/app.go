@@ -13,9 +13,9 @@ import (
 )
 
 type App struct {
-	bot *bot.Bot
-	log *zap.Logger
-	cfg *config.Config
+	bot     *bot.Bot
+	log     *zap.Logger
+	storage *postgres.Storage
 }
 
 func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error) {
@@ -26,23 +26,20 @@ func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error)
 		return nil, err
 	}
 
-	ur := repository.NewUser(s, log)
+	sb := service.NewSB(log, repository.NewRB(log, s))
 
-	cr := repository.NewChat(s, log)
-
-	us := service.NewUser(&ur, log)
-
-	ns := service.NewNotify(&cr, log)
-	cs := service.NewChat(&cr, log)
-
-	b, err := bot.New(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll, log, us, cs, ns)
+	b, err := bot.New(
+		log,
+		cfg.Bot.TelegramToken,
+		cfg.Timeout.BotPoll,
+		sb)
 	if err != nil {
 		return nil, err
 	}
 	return &App{
-		bot: b,
-		log: log,
-		cfg: cfg,
+		bot:     b,
+		log:     log,
+		storage: s,
 	}, nil
 }
 
@@ -55,10 +52,10 @@ func (a *App) Start() error {
 	return nil
 }
 
-func (a *App) GracefulShutdown() {
+func (a *App) GracefulShutdown(ctx context.Context) {
 	const op = "app.GracefulShutdown"
 	a.log.Info(fmt.Sprintf("%s : shutting down application", op))
 	a.bot.Stop()
-
+	a.storage.Close(ctx)
 	a.log.Info(fmt.Sprintf("%s : application stopped", op))
 }

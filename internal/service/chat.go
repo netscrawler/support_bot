@@ -13,7 +13,7 @@ type Chat struct {
 	log  *zap.Logger
 }
 
-func NewChat(repo *repository.Chat, log *zap.Logger) *Chat {
+func newChat(repo *repository.Chat, log *zap.Logger) *Chat {
 	return &Chat{
 		repo: repo,
 		log:  log,
