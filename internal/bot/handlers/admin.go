@@ -259,7 +259,7 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
-
+	c.Delete()
 	err := h.chatService.Add(ctx, c.Chat())
 	if err != nil {
 		h.userNotify.SendNotify(
