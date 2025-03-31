@@ -119,6 +119,13 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
 
+	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
+	formString := fmt.Sprintf(
+		"%s\n```\n%s```",
+		userString, msg,
+	)
+	//nolint:errcheck
+	h.userNotify.SendAdminNotify(ctx, h.bot, formString)
 	h.state.Set(c.Sender().ID, MenuState)
 	return c.Edit(resp, tele.ModeMarkdownV2)
 }

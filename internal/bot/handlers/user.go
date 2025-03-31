@@ -16,7 +16,8 @@ type UserHandler struct {
 	chatService *service.Chat
 	userService *service.User
 	state       *State
-	notify      *service.ChatNotify
+	chatNotify  *service.ChatNotify
+	userNotify  *service.UserNotify
 }
 
 func NewUserHandler(
@@ -24,14 +25,16 @@ func NewUserHandler(
 	chatService *service.Chat,
 	userService *service.User,
 	state *State,
-	notify *service.ChatNotify,
+	chatNotify *service.ChatNotify,
+	userNotify *service.UserNotify,
 ) *UserHandler {
 	return &UserHandler{
 		bot:         bot,
 		chatService: chatService,
 		userService: userService,
 		state:       state,
-		notify:      notify,
+		chatNotify:  chatNotify,
+		userNotify:  userNotify,
 	}
 }
 
@@ -52,6 +55,10 @@ func (h *UserHandler) ProcessUserInput(c tele.Context) error {
 }
 
 func (h *UserHandler) StartUser(c tele.Context) error {
+	if c.Chat().Type != tele.ChatPrivate {
+		return nil
+	}
+
 	menu.UserMenu.Reply(
 		menu.UserMenu.Row(menu.SendNotifyUser),
 	)
@@ -62,10 +69,20 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 }
 
 func (h *UserHandler) RegisterUser(c tele.Context) error {
-	snd := c.Sender()
-	err := h.userService.AddUserComplete(snd)
 	//nolint:errcheck
 	c.Delete()
+	if c.Chat().Type != tele.ChatPrivate {
+		return nil
+	}
+	ctx := context.Background()
+	snd := c.Sender()
+	err := h.userService.AddUserComplete(snd)
+	formatedString := fmt.Sprintf(
+		"Пользователь с ником @%s успешно прошел регистрацию",
+		c.Sender().Username,
+	)
+	// nolint:errcheck
+	h.userNotify.SendAdminNotify(ctx, h.bot, formatedString)
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
 	}
@@ -92,9 +109,9 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 	h.state.SetMsgData(c.Sender().ID, msg)
 	confirmBtn := menu.Selector.Data(
 		"✅ Отправить",
-		"confirm_notification",
+		"confirm_user_notification",
 	)
-	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_notification")
+	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_user_notification")
 
 	menu.Selector.Inline(
 		menu.Selector.Row(cancelBtn, confirmBtn),
@@ -120,7 +137,8 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 		return c.Edit("Время на подтверждение истекло")
 	}
 
-	resp, err := h.notify.Broadcast(ctx, h.bot, msg)
+	fmt.Println("start broadcast")
+	resp, err := h.chatNotify.Broadcast(ctx, h.bot, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
@@ -130,6 +148,14 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 		}
 		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
+
+	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
+	formString := fmt.Sprintf(
+		"%s\n```\n%s```",
+		userString, msg,
+	)
+	//nolint:errcheck
+	go h.userNotify.SendAdminNotify(ctx, h.bot, formString)
 
 	h.state.Set(c.Sender().ID, MenuState)
 	return c.Edit(resp, tele.ModeMarkdownV2)

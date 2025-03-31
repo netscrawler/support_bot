@@ -15,6 +15,7 @@ type ChatProvider interface {
 
 type UserProvider interface {
 	GetAll(ctx context.Context) ([]models.User, error)
+	GetAllAdmins(ctx context.Context) ([]models.User, error)
 }
 
 type ChatNotify struct {
@@ -111,5 +112,29 @@ func (n *UserNotify) SendNotify(
 		n.log.Error(op, zap.Error(err))
 		return err
 	}
+	return nil
+}
+
+func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, notify string) error {
+	const op = "service.UserNotify.SendAdminNotify"
+
+	chats, err := n.user.GetAllAdmins(ctx)
+	n.log.Info(op, zap.Any("chats", chats))
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return models.ErrNotFound
+		}
+		return models.ErrInternal
+
+	}
+
+	for _, user := range chats {
+		_, err := bot.Send(&telebot.Chat{ID: user.TelegramID}, notify, telebot.ModeMarkdownV2)
+		if err != nil {
+			n.log.Error(op, zap.Error(err))
+			continue
+		}
+	}
+
 	return nil
 }

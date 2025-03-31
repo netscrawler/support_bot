@@ -50,11 +50,11 @@ func (r *Router) Setup() {
 
 	userOnly.Handle(
 		&telebot.InlineButton{Unique: "confirm_user_notification"},
-		r.adminHl.ConfirmSendNotification,
+		r.userHl.ConfirmSendNotification,
 	)
 	userOnly.Handle(
 		&telebot.InlineButton{Unique: "cancel_user_notification"},
-		r.adminHl.CancelSendNotification,
+		r.userHl.CancelSendNotification,
 	)
 
 	adminOnly := r.bot.Group()

@@ -164,6 +164,57 @@ func (u *User) GetByTgId(ctx context.Context, id int64) (*models.User, error) {
 	return &user, nil
 }
 
+func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
+	const op = "repository.User.GetAllAdmins"
+	query, args, err := u.storage.Builder.
+		Select(
+			"id",
+			"telegram_id",
+			"username",
+			"first_name",
+			"last_name",
+			"role",
+		).
+		From("users").
+		Where(squirrel.Eq{"role": models.AdminRole}).
+		ToSql()
+	if err != nil {
+		u.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
+		return nil, fmt.Errorf("%s : %w", op, err)
+	}
+
+	rows, err := u.storage.Db.Query(ctx, query, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			u.log.Error(fmt.Sprintf("%s | %s", op, err))
+			return nil, models.ErrNotFound
+		}
+		u.log.Error(op, zap.Error(err))
+		return nil, fmt.Errorf("%s : %w", op, err)
+	}
+	defer rows.Close()
+
+	users := make([]models.User, 0)
+	for rows.Next() {
+		var user models.User
+		if err := rows.Scan(
+			&user.ID,
+			&user.TelegramID,
+			&user.Username,
+			&user.FirstName,
+			&user.LastName,
+			&user.Role,
+		); err != nil {
+			u.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+			continue
+		}
+		users = append(users, user)
+	}
+	u.log.Info(fmt.Sprintf("%s : successfully got %d users", op, len(users)))
+	return users, nil
+}
+
 func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 	const op = "repository.User.GetAll"
 	query, args, err := u.storage.Builder.

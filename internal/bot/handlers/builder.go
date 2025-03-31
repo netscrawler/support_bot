@@ -40,6 +40,7 @@ func (hb *HandlerBuilder) Build() (*AdminHandler, *UserHandler, *TextHandler, *m
 		uService,
 		state,
 		nService,
+		unService,
 	)
 	tHL := NewTextHandler(
 		aHl,
