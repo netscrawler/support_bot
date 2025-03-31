@@ -13,13 +13,17 @@ type ChatProvider interface {
 	GetAll(ctx context.Context) ([]models.Chat, error)
 }
 
-type Notify struct {
+type UserProvider interface {
+	GetAll(ctx context.Context) ([]models.User, error)
+}
+
+type ChatNotify struct {
 	chat ChatProvider
 	log  *zap.Logger
 }
 
-func newNotify(c ChatProvider, log *zap.Logger) *Notify {
-	return &Notify{
+func newChatNotify(c ChatProvider, log *zap.Logger) *ChatNotify {
+	return &ChatNotify{
 		chat: c,
 		log:  log,
 	}
@@ -27,12 +31,12 @@ func newNotify(c ChatProvider, log *zap.Logger) *Notify {
 
 // Отправляет уведомление во все чаты, возвращает количество чатов, количество успешных, количество ошибок, ошибку если возникла.
 // При возникновении ошибки возвращает нули и ошибку
-func (n *Notify) Broadcast(
+func (n *ChatNotify) Broadcast(
 	ctx context.Context,
 	bot *telebot.Bot,
 	notify string,
 ) (string, error) {
-	const op = "service.Notify.Broadcast"
+	const op = "service.ChatNotify.Broadcast"
 	chats, err := n.chat.GetAll(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
@@ -58,4 +62,54 @@ func (n *Notify) Broadcast(
 	}
 
 	return resp.String(), nil
+}
+
+type UserNotify struct {
+	user UserProvider
+	log  *zap.Logger
+}
+
+func newUserNotify(up UserProvider, log *zap.Logger) *UserNotify {
+	return &UserNotify{
+		user: up,
+		log:  log,
+	}
+}
+
+func (n *UserNotify) Broadcast(ctx context.Context, bot *telebot.Bot, notify string) error {
+	const op = "service.UserNotify.Broadcast"
+
+	chats, err := n.user.GetAll(ctx)
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return models.ErrNotFound
+		}
+		return models.ErrInternal
+
+	}
+
+	for _, chat := range chats {
+		_, err := bot.Send(&telebot.Chat{ID: chat.TelegramID}, notify)
+		if err != nil {
+			n.log.Error(op, zap.Error(err))
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (n *UserNotify) SendNotify(
+	ctx context.Context,
+	bot *telebot.Bot,
+	tgId int64,
+	notify string,
+) error {
+	const op = "service.UserNotify.SendNotify"
+	_, err := bot.Send(&telebot.Chat{ID: tgId}, notify)
+	if err != nil {
+		n.log.Error(op, zap.Error(err))
+		return err
+	}
+	return nil
 }

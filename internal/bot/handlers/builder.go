@@ -8,7 +8,7 @@ import (
 )
 
 type serviceBuilder interface {
-	Build() (*service.User, *service.Chat, *service.Notify)
+	Build() (*service.User, *service.Chat, *service.ChatNotify, *service.UserNotify)
 }
 
 type HandlerBuilder struct {
@@ -25,12 +25,13 @@ func NewHB(bot *telebot.Bot, sb serviceBuilder) *HandlerBuilder {
 
 func (hb *HandlerBuilder) Build() (*AdminHandler, *UserHandler, *TextHandler, *middlewares.Mw) {
 	state := NewState()
-	uService, cService, nService := hb.sb.Build()
+	uService, cService, nService, unService := hb.sb.Build()
 	aHl := NewAdminHandler(
 		hb.bot,
 		uService,
 		cService,
 		nService,
+		unService,
 		state,
 	)
 	uHl := NewUserHandler(

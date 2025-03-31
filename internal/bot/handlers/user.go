@@ -16,7 +16,7 @@ type UserHandler struct {
 	chatService *service.Chat
 	userService *service.User
 	state       *State
-	notify      *service.Notify
+	notify      *service.ChatNotify
 }
 
 func NewUserHandler(
@@ -24,7 +24,7 @@ func NewUserHandler(
 	chatService *service.Chat,
 	userService *service.User,
 	state *State,
-	notify *service.Notify,
+	notify *service.ChatNotify,
 ) *UserHandler {
 	return &UserHandler{
 		bot:         bot,

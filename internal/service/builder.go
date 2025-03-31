@@ -25,10 +25,11 @@ func NewSB(log *zap.Logger, rb repoBuilder) *ServiceBuilder {
 }
 
 // Build собирает и возвращает сервисы
-func (sb *ServiceBuilder) Build() (*User, *Chat, *Notify) {
+func (sb *ServiceBuilder) Build() (*User, *Chat, *ChatNotify, *UserNotify) {
 	uRepo, cRepo := sb.rb.Build()
 	uService := newUser(uRepo, sb.log)
 	cService := newChat(cRepo, sb.log)
-	nService := newNotify(cRepo, sb.log)
-	return uService, cService, nService
+	nService := newChatNotify(cRepo, sb.log)
+	nuService := newUserNotify(uRepo, sb.log)
+	return uService, cService, nService, nuService
 }
