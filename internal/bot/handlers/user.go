@@ -55,6 +55,8 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 	menu.UserMenu.Reply(
 		menu.UserMenu.Row(menu.SendNotifyUser),
 	)
+	//nolint:errcheck
+	c.Delete()
 	h.state.Set(c.Sender().ID, MenuState)
 	return c.Send("Добро пожаловать!", menu.UserMenu)
 }
@@ -62,6 +64,8 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 func (h *UserHandler) RegisterUser(c tele.Context) error {
 	snd := c.Sender()
 	err := h.userService.AddUserComplete(snd)
+	//nolint:errcheck
+	c.Delete()
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
 	}
@@ -70,6 +74,8 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 
 func (h *UserHandler) SendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, SendNotificationState)
+	//nolint:errcheck
+	c.Delete()
 	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 }
 

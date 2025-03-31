@@ -49,12 +49,18 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 		menu.AdminMenu.Row(menu.SendNotifyAdmin),
 	)
 	h.state.Set(c.Sender().ID, MenuState)
+	//nolint:errcheck
+	c.Delete()
 
 	return c.Send("Добро пожаловать! Вы зарегистрированы как администратор", menu.AdminMenu)
 }
 
 func (h *AdminHandler) SendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, SendNotificationState)
+
+	//nolint:errcheck
+	c.Delete()
+
 	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 }
 
@@ -129,6 +135,8 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
 		menu.AdminMenu.Row(menu.ListUser, menu.Back))
 	h.state.Set(c.Sender().ID, MenuState)
+	//nolint:errcheck
+	c.Delete()
 	return c.Send("Управление пользователями", menu.AdminMenu)
 }
 
@@ -162,6 +170,8 @@ func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 // Мне нужно чтобы после срабатывания этого хендлера бот ждал пока пользователь не напишет в чат ник который нужно добавить
 func (h *AdminHandler) AddUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, AddUserState)
+	//nolint:errcheck
+	c.Delete()
 	return c.Send(
 		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
 	)
@@ -193,6 +203,8 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 // RemoveUser handles removing a user
 func (h *AdminHandler) RemoveUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, RemoveUserState)
+	//nolint:errcheck
+	c.Delete()
 	return c.Send(
 		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
 	)
@@ -241,6 +253,8 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 			fmt.Sprintf("%d. @%s - Role: %s\n", i+1, user.Username, user.Role),
 		)
 	}
+	//nolint:errcheck
+	c.Delete()
 
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
 }
@@ -250,6 +264,8 @@ func (h *AdminHandler) ManageChats(c tele.Context) error {
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.RemoveChat),
 		menu.AdminMenu.Row(menu.ListChats, menu.Back))
+	//nolint:errcheck
+	c.Delete()
 	return c.Send("Управление чатами", menu.AdminMenu)
 }
 
@@ -259,9 +275,11 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
+	// nolint:errcheck, в данном случае не важно смог он удалить сообщение или нет
 	c.Delete()
 	err := h.chatService.Add(ctx, c.Chat())
 	if err != nil {
+		// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
 		h.userNotify.SendNotify(
 			ctx,
 			h.bot,
@@ -271,6 +289,7 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 		return nil
 	}
 
+	// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
 	h.userNotify.Broadcast(
 		ctx,
 		h.bot,
@@ -282,6 +301,8 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 // RemoveChat handles removing a chat
 func (h *AdminHandler) RemoveChat(c tele.Context) error {
 	h.state.Set(c.Sender().ID, RemoveChatState)
+	//nolint:errcheck
+	c.Delete()
 	return c.Send("Пожалуйста пришлите имя чата (@title) который вы хотите удалить.")
 }
 
@@ -323,6 +344,8 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 			fmt.Sprintf("%d. @%s\n", i+1, chat.Title),
 		)
 	}
+	//nolint:errcheck
+	c.Delete()
 
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
 }
