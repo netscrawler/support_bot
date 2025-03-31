@@ -1,6 +1,10 @@
 package models
 
-import "gopkg.in/telebot.v4"
+import (
+	"math/rand/v2"
+
+	"gopkg.in/telebot.v4"
+)
 
 const (
 	AdminRole = "admin"
@@ -35,6 +39,14 @@ func NewUser(usr *telebot.User, isAdmin bool) *User {
 		Username:   usr.Username,
 		FirstName:  usr.FirstName,
 		LastName:   &usr.LastName,
+		Role:       UserRole,
+	}
+}
+
+func NewEmptyUser(username string) *User {
+	return &User{
+		TelegramID: rand.Int64(),
+		Username:   username,
 		Role:       UserRole,
 	}
 }

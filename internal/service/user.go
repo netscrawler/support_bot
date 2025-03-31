@@ -55,16 +55,23 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	return userIds, adminIds, nil
 }
 
-func (u *User) Create(ctx context.Context, tgId int64, username, firstName, lastName string) error {
+func (u *User) Create(ctx context.Context, usr *telebot.User) error {
 	const op = "service.User.Create"
 
-	user := &models.User{
-		TelegramID: tgId,
-		Username:   username,
-		FirstName:  firstName,
-		LastName:   &lastName,
-		Role:       models.UserRole,
+	user := models.NewUser(usr, false)
+	err := u.repo.Create(ctx, user)
+	if err != nil {
+		u.log.Info(op, zap.Error(err))
+		return err
 	}
+
+	return nil
+}
+
+func (u *User) CreateEmpty(ctx context.Context, username string) error {
+	const op = "service.User.Create"
+
+	user := models.NewEmptyUser(username)
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.Info(op, zap.Error(err))
@@ -91,6 +98,10 @@ func (u *User) Delete(ctx context.Context, username string) error {
 	}
 	if err != nil {
 		return models.ErrInternal
+	}
+
+	if user.IsAdmin() {
+		return errors.New("deleting admin is a sin")
 	}
 
 	err = u.repo.Delete(ctx, user.TelegramID)

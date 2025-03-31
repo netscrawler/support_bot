@@ -6,6 +6,7 @@ import (
 	"support_bot/internal/repository"
 
 	"go.uber.org/zap"
+	"gopkg.in/telebot.v4"
 )
 
 type Chat struct {
@@ -20,19 +21,16 @@ func newChat(repo *repository.Chat, log *zap.Logger) *Chat {
 	}
 }
 
-func (c *Chat) GetChatByTitle(username string) (*models.Chat, error) {
-	return nil, models.ErrInternal
-}
-
-func (c *Chat) Add(chat *models.Chat) error {
-	if err := c.repo.Create(context.TODO(), chat); err != nil {
+func (c *Chat) Add(ctx context.Context, chat *telebot.Chat) error {
+	chatToSave := models.NewChat(chat)
+	if err := c.repo.Create(ctx, chatToSave); err != nil {
 		return models.ErrInternal
 	}
 	return nil
 }
 
-func (c *Chat) Remove(title string) error {
-	ch, err := c.repo.GetByTitle(context.TODO(), title)
+func (c *Chat) Remove(ctx context.Context, title string) error {
+	ch, err := c.repo.GetByTitle(ctx, title)
 	if err != nil {
 		return err
 	}
@@ -40,8 +38,8 @@ func (c *Chat) Remove(title string) error {
 	return c.repo.Delete(context.TODO(), chID)
 }
 
-func (c *Chat) GetAll() ([]models.Chat, error) {
-	chats, err := c.repo.GetAll(context.TODO())
+func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
+	chats, err := c.repo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}

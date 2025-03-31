@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"support_bot/internal/bot/menu"
+	"support_bot/internal/models"
 	"support_bot/internal/service"
 
 	tele "gopkg.in/telebot.v4"
@@ -49,7 +51,6 @@ func (h *UserHandler) ProcessUserInput(c tele.Context) error {
 	}
 }
 
-// StartUser handles the start command for regular users
 func (h *UserHandler) StartUser(c tele.Context) error {
 	menu.UserMenu.Reply(
 		menu.UserMenu.Row(menu.SendNotifyUser),
@@ -74,28 +75,29 @@ func (h *UserHandler) SendNotification(c tele.Context) error {
 
 func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 	if h.state.Get(c.Sender().ID) != SendNotificationState {
-		return nil
+		return c.Edit("Время на отправку истекло, начните заново")
 	}
 
 	msg := c.Text()
 	if msg == "" {
-		return c.Send(
-			"Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.",
-		)
+		return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 	}
 
-	confirmBtn := menu.Selector.Data("✅ Отправить", "confirm_user_notification", msg)
+	h.state.SetMsgData(c.Sender().ID, msg)
+	confirmBtn := menu.Selector.Data(
+		"✅ Отправить",
+		"confirm_notification",
+	)
+	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_notification")
 
 	menu.Selector.Inline(
-		menu.Selector.Row(confirmBtn),
-		menu.Selector.Row(menu.Selector.Data("❌ Отменить", "cancel_user_notification", msg)),
+		menu.Selector.Row(cancelBtn, confirmBtn),
 	)
 
-	// Сохраняем состояние ожидания подтверждения
 	h.state.Set(c.Sender().ID, ConfirmNotificationState)
 
 	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
-	formated := fmt.Sprintf("%s```%s```", conf, msg)
+	formated := fmt.Sprintf("%s```\n%s```", conf, msg)
 
 	// Отправляем сообщение с клавиатурой
 	return c.Send(
@@ -105,32 +107,28 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 	)
 }
 
-// Confirm sending notification
 func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
-	if h.state.Get(c.Sender().ID) != ConfirmNotificationState {
-		return nil
+	ctx := context.Background()
+	msg, ok := h.state.GetMsgData(c.Sender().ID)
+	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
+		return c.Edit("Время на подтверждение истекло")
 	}
 
-	msg := c.Data()
-
-	num, successfully, witherror, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
+	resp, err := h.notify.Broadcast(ctx, h.bot, msg)
 	if err != nil {
-		return c.Send("Не удалось отправить уведомление: " + err.Error())
+		if errors.Is(err, models.ErrNotFound) {
+			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
+		}
+		if errors.Is(err, models.ErrInternal) {
+			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
+		}
+		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
 
 	h.state.Set(c.Sender().ID, MenuState)
-	formattedMsg := fmt.Sprintf(
-		"✅ **Уведомления отправлены**\n\n"+
-			"Всего чатов: **%d**\n"+
-			"Успешно: **%d**\n"+
-			"Не отправленно: **%d**\n\n"+
-			"*Note: Пожалуйста, проверьте, есть ли какие-либо особые проблемы в неудачных чатах.*",
-		num, successfully, witherror,
-	)
-	return c.Edit(formattedMsg, tele.ModeMarkdownV2)
+	return c.Edit(resp, tele.ModeMarkdownV2)
 }
 
-// Cancel sending notification
 func (h *UserHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
 	return c.Edit("❌ Отправка уведомления отменена.")
@@ -138,6 +136,7 @@ func (h *UserHandler) CancelSendNotification(c tele.Context) error {
 
 func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
 	return func(c tele.Context) error {
+		ctx := context.Background()
 		// Получаем username пользователя
 		username := c.Sender().Username
 		if username == "" {
@@ -145,7 +144,7 @@ func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc
 		}
 
 		// Проверяем пользователя в базе
-		user, err := h.userService.GetByUsername(context.Background(), username)
+		user, err := h.userService.GetByUsername(ctx, username)
 		if err != nil {
 			return nil
 		}

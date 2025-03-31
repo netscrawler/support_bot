@@ -22,7 +22,6 @@ func main() {
 		panic(err)
 	}
 	log := setupLogger(cfg.App.Debug)
-	log.Info("starting with config:", zap.Any("config", cfg))
 
 	ctx := context.Background()
 	app, err := app.New(ctx, cfg, log)

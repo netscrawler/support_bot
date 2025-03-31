@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"strings"
 	"support_bot/internal/bot/menu"
 	"support_bot/internal/models"
@@ -39,6 +38,9 @@ func NewAdminHandler(
 
 // StartAdmin handles the start command for admins
 func (h *AdminHandler) StartAdmin(c tele.Context) error {
+	if c.Chat().Type != tele.ChatPrivate {
+		return nil
+	}
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
 		menu.AdminMenu.Row(menu.SendNotifyAdmin),
@@ -55,7 +57,7 @@ func (h *AdminHandler) SendNotification(c tele.Context) error {
 
 func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	if h.state.Get(c.Sender().ID) != SendNotificationState {
-		return nil
+		return c.Edit("Время на отправку истекло, начните заново")
 	}
 
 	msg := c.Text()
@@ -63,19 +65,23 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 		return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 	}
 
+	h.state.SetMsgData(c.Sender().ID, msg)
 	// Создаем inline-клавиатуру с кнопками "Confirm" и "Cancel"
-	confirmBtn := menu.Selector.Data("✅ Отправить", "confirm_notification", msg)
+	confirmBtn := menu.Selector.Data(
+		"✅ Отправить",
+		"confirm_notification",
+	)
+	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_notification")
 
 	menu.Selector.Inline(
-		menu.Selector.Row(confirmBtn),
-		menu.Selector.Row(menu.Selector.Data("❌ Отменить", "cancel_notification", msg)),
+		menu.Selector.Row(cancelBtn, confirmBtn),
 	)
 
 	// Сохраняем состояние ожидания подтверждения
 	h.state.Set(c.Sender().ID, ConfirmNotificationState)
 
 	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
-	formated := fmt.Sprintf("%s```%s```", conf, msg)
+	formated := fmt.Sprintf("%s```\n%s```", conf, msg)
 
 	// Отправляем сообщение с клавиатурой
 	return c.Send(
@@ -87,26 +93,25 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 
 // Confirm sending notification
 func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
-	if h.state.Get(c.Sender().ID) != ConfirmNotificationState {
-		return nil
+	ctx := context.Background()
+	msg, ok := h.state.GetMsgData(c.Sender().ID)
+	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
+		return c.Edit("Время на подтверждение истекло")
 	}
 
-	msg := c.Data()
-	num, successfully, witherror, err := h.notify.Broadcast(context.TODO(), h.bot, msg)
+	resp, err := h.notify.Broadcast(ctx, h.bot, msg)
 	if err != nil {
-		return c.Send("Не удалось отправить уведомление: " + err.Error())
+		if errors.Is(err, models.ErrNotFound) {
+			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
+		}
+		if errors.Is(err, models.ErrInternal) {
+			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
+		}
+		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
 
 	h.state.Set(c.Sender().ID, MenuState)
-	formattedMsg := fmt.Sprintf(
-		"✅ **Уведомления отправлены**\n\n"+
-			"Всего чатов: **%d**\n"+
-			"Успешно: **%d**\n"+
-			"Не отправленно: **%d**\n\n"+
-			"*Note: Пожалуйста, проверьте, есть ли какие-либо особые проблемы в неудачных чатах.*",
-		num, successfully, witherror,
-	)
-	return c.Edit(formattedMsg, tele.ModeMarkdownV2)
+	return c.Edit(resp, tele.ModeMarkdownV2)
 }
 
 // Cancel sending notification
@@ -161,6 +166,7 @@ func (h *AdminHandler) AddUser(c tele.Context) error {
 
 // ProcessAddUser processes the username input for adding a user
 func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
+	ctx := context.Background()
 	userID := c.Sender().ID
 	if h.state.Get(userID) != AddUserState {
 		return nil
@@ -173,7 +179,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 
 	username = username[1:]
 
-	if err := h.userService.Create(context.Background(), rand.Int64(), username, "", ""); err != nil {
+	if err := h.userService.CreateEmpty(ctx, username); err != nil {
 		return c.Send("Не удалось добавить пользователя: " + err.Error())
 	}
 
@@ -191,6 +197,7 @@ func (h *AdminHandler) RemoveUser(c tele.Context) error {
 
 // ProcessRemoveUser processes the username input for removing a user
 func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
+	ctx := context.Background()
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
 		return c.Send("Пожалуйста пришлите username начинающийся с @")
@@ -198,7 +205,9 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 
 	// Remove @ and extract the username
 	username = username[1:]
-	ctx := context.Background()
+	if username == c.Sender().Username {
+		return c.Send("Ошибка удаления пользователя: нельзя удалить себя")
+	}
 
 	// Call service to remove user
 	err := h.userService.Delete(ctx, username)
@@ -212,7 +221,8 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 
 // ListUsers handles listing all users
 func (h *AdminHandler) ListUsers(c tele.Context) error {
-	users, err := h.userService.GetAll(context.TODO())
+	ctx := context.Background()
+	users, err := h.userService.GetAll(ctx)
 	if errors.Is(err, models.ErrNotFound) {
 		return c.Send("Пользователи не найдены.")
 	}
@@ -242,19 +252,12 @@ func (h *AdminHandler) ManageChats(c tele.Context) error {
 
 // ProcessAddChat processes the chat input for adding a chat
 func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
-	// Проверяем, откуда пришла команда (чат или личка)
+	ctx := context.Background()
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
 
-	chat := &models.Chat{
-		ChatID:      c.Chat().ID,
-		Title:       c.Chat().Title,
-		Type:        string(c.Chat().Type),
-		Description: c.Chat().Description,
-	}
-
-	err := h.chatService.Add(chat)
+	err := h.chatService.Add(ctx, c.Chat())
 	if err != nil {
 		return c.Send("Ошибка добавления чата: " + err.Error())
 	}
@@ -270,16 +273,15 @@ func (h *AdminHandler) RemoveChat(c tele.Context) error {
 
 // ProcessRemoveChat processes the chat input for removing a chat
 func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
+	ctx := context.Background()
 	chatName := c.Text()
 	if !strings.HasPrefix(chatName, "@") {
 		return c.Send("Пожалуйста пришлите имя чата начинающиеся с @")
 	}
 
-	// Remove @ and extract the username
 	chatName = chatName[1:]
 
-	// Call service to remove chat
-	err := h.chatService.Remove(chatName)
+	err := h.chatService.Remove(ctx, chatName)
 	if err != nil {
 		return c.Send("Ошибка удаления чата: " + err.Error())
 	}
@@ -289,7 +291,8 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 
 // ListChats handles listing all chats
 func (h *AdminHandler) ListChats(c tele.Context) error {
-	chats, err := h.chatService.GetAll()
+	ctx := context.Background()
+	chats, err := h.chatService.GetAll(ctx)
 	if err != nil {
 		return c.Send("Ошибка получения чатов: " + err.Error())
 	}

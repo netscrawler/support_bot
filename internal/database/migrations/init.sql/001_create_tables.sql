@@ -2,7 +2,7 @@ CREATE TYPE user_role AS ENUM ('admin', 'user');
 -- Таблица пользователей
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    telegram_id BIGINT NOT NULL,
+    telegram_id BIGINT UNIQUE NOT NULL,
     username VARCHAR(255),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
