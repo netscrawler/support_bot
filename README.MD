@@ -75,9 +75,9 @@ bot:
 
 3. Запустите контейнер:
    ```sh
-   docker run --env-file=config/example.env -p 8080:8080 support_bot
+   docker run -config=config/your_config.yaml -p 8080:8080 support_bot
    ```
-
+3.1 Таже можно указать путь к конфигу через переменную окружения CONFIG_PATH=путь к файлу к конфигурации
 
 1. Используйте команды для взаимодействия с ботом:
    - `/start` - Начало работы с ботом
