@@ -108,7 +108,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		return c.Edit("Время на подтверждение истекло")
 	}
 
-	resp, err := h.chatNotify.Broadcast(ctx, h.bot, msg)
+	resp, err := h.chatNotify.Broadcast(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
@@ -339,7 +339,6 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 		// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
 		h.userNotify.SendNotify(
 			ctx,
-			h.bot,
 			c.Sender().ID,
 			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
 		)
@@ -349,7 +348,6 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 	// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
 	h.userNotify.Broadcast(
 		ctx,
-		h.bot,
 		fmt.Sprintf("Добавлен новый чат для рассылки: %s", c.Chat().Title),
 	)
 	return nil

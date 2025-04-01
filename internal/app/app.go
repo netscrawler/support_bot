@@ -7,7 +7,6 @@ import (
 	"support_bot/internal/config"
 	"support_bot/internal/database/postgres"
 	"support_bot/internal/repository"
-	"support_bot/internal/service"
 
 	"go.uber.org/zap"
 )
@@ -26,13 +25,13 @@ func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error)
 		return nil, err
 	}
 
-	sb := service.NewSB(log, repository.NewRB(log, s))
+	rb := repository.NewRB(log, s)
 
 	b, err := bot.New(
 		log,
 		cfg.Bot.TelegramToken,
 		cfg.Timeout.BotPoll,
-		sb)
+		rb)
 	if err != nil {
 		return nil, err
 	}

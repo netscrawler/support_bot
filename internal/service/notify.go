@@ -18,15 +18,22 @@ type UserProvider interface {
 	GetAllAdmins(ctx context.Context) ([]models.User, error)
 }
 
-type ChatNotify struct {
-	chat ChatProvider
-	log  *zap.Logger
+type MessageSender interface {
+	Broadcast(chats []*telebot.Chat, msg string, opts ...interface{}) (*models.BroadcastResp, error)
+	Send(chat *telebot.Chat, msg string, opts ...interface{}) error
 }
 
-func newChatNotify(c ChatProvider, log *zap.Logger) *ChatNotify {
+type ChatNotify struct {
+	chat      ChatProvider
+	log       *zap.Logger
+	tgAdaptor MessageSender
+}
+
+func newChatNotify(c ChatProvider, log *zap.Logger, tgAdaptor MessageSender) *ChatNotify {
 	return &ChatNotify{
-		chat: c,
-		log:  log,
+		chat:      c,
+		log:       log,
+		tgAdaptor: tgAdaptor,
 	}
 }
 
@@ -34,7 +41,6 @@ func newChatNotify(c ChatProvider, log *zap.Logger) *ChatNotify {
 // При возникновении ошибки возвращает нули и ошибку
 func (n *ChatNotify) Broadcast(
 	ctx context.Context,
-	bot *telebot.Bot,
 	notify string,
 ) (string, error) {
 	const op = "service.ChatNotify.Broadcast"
@@ -51,36 +57,34 @@ func (n *ChatNotify) Broadcast(
 		return "", models.ErrNotFound
 	}
 
-	resp := models.NewBroadcastResp()
+	tgchats := []*telebot.Chat{}
 	for _, chat := range chats {
-		_, err := bot.Send(&telebot.Chat{ID: chat.ChatID}, notify)
-		if err != nil {
-			n.log.Error(op, zap.Error(err))
-			resp.AddError(chat.Title)
-			continue
-		}
-		resp.AddSuccess()
+		tgchat := telebot.Chat{ID: chat.ChatID, Title: chat.Title}
+		tgchats = append(tgchats, &tgchat)
 	}
 
-	return resp.String(), nil
+	resp, err := n.tgAdaptor.Broadcast(tgchats, notify)
+	return resp.String(), err
 }
 
 type UserNotify struct {
-	user UserProvider
-	log  *zap.Logger
+	user      UserProvider
+	log       *zap.Logger
+	tgAdaptor MessageSender
 }
 
-func newUserNotify(up UserProvider, log *zap.Logger) *UserNotify {
+func newUserNotify(up UserProvider, log *zap.Logger, tgAdaptor MessageSender) *UserNotify {
 	return &UserNotify{
-		user: up,
-		log:  log,
+		user:      up,
+		log:       log,
+		tgAdaptor: tgAdaptor,
 	}
 }
 
-func (n *UserNotify) Broadcast(ctx context.Context, bot *telebot.Bot, notify string) error {
+func (n *UserNotify) Broadcast(ctx context.Context, notify string) error {
 	const op = "service.UserNotify.Broadcast"
 
-	chats, err := n.user.GetAll(ctx)
+	users, err := n.user.GetAll(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound
@@ -89,25 +93,24 @@ func (n *UserNotify) Broadcast(ctx context.Context, bot *telebot.Bot, notify str
 
 	}
 
-	for _, chat := range chats {
-		_, err := bot.Send(&telebot.Chat{ID: chat.TelegramID}, notify)
-		if err != nil {
-			n.log.Error(op, zap.Error(err))
-			continue
-		}
+	tgchats := []*telebot.Chat{}
+	for _, user := range users {
+		tgchat := telebot.Chat{ID: user.TelegramID}
+		tgchats = append(tgchats, &tgchat)
 	}
 
-	return nil
+	_, err = n.tgAdaptor.Broadcast(tgchats, notify)
+
+	return err
 }
 
 func (n *UserNotify) SendNotify(
 	ctx context.Context,
-	bot *telebot.Bot,
 	tgId int64,
 	notify string,
 ) error {
 	const op = "service.UserNotify.SendNotify"
-	_, err := bot.Send(&telebot.Chat{ID: tgId}, notify)
+	err := n.tgAdaptor.Send(&telebot.Chat{ID: tgId}, notify)
 	if err != nil {
 		n.log.Error(op, zap.Error(err))
 		return err
@@ -118,8 +121,8 @@ func (n *UserNotify) SendNotify(
 func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, notify string) error {
 	const op = "service.UserNotify.SendAdminNotify"
 
-	chats, err := n.user.GetAllAdmins(ctx)
-	n.log.Info(op, zap.Any("chats", chats))
+	users, err := n.user.GetAllAdmins(ctx)
+	n.log.Info(op, zap.Any("chats", users))
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound
@@ -128,13 +131,13 @@ func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, noti
 
 	}
 
-	for _, user := range chats {
-		_, err := bot.Send(&telebot.Chat{ID: user.TelegramID}, notify, telebot.ModeMarkdownV2)
-		if err != nil {
-			n.log.Error(op, zap.Error(err))
-			continue
-		}
+	tgchats := []*telebot.Chat{}
+	for _, user := range users {
+		tgchat := telebot.Chat{ID: user.TelegramID}
+		tgchats = append(tgchats, &tgchat)
 	}
 
-	return nil
+	_, err = n.tgAdaptor.Broadcast(tgchats, notify, telebot.ModeMarkdownV2)
+
+	return err
 }

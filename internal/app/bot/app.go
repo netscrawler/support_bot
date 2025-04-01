@@ -1,8 +1,10 @@
 package bot
 
 import (
+	"support_bot/internal/adaptors"
 	"support_bot/internal/bot"
 	"support_bot/internal/bot/handlers"
+	"support_bot/internal/repository"
 	"support_bot/internal/service"
 	"time"
 
@@ -20,7 +22,7 @@ func New(
 	log *zap.Logger,
 	token string,
 	poll time.Duration,
-	sb *service.ServiceBuilder,
+	rb *repository.RepositoryBuilder,
 ) (*Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
@@ -30,6 +32,7 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+	sb := service.NewSB(log, rb, adaptors.New(b))
 
 	router := bot.NewRouter(b, handlers.NewHB(b, sb))
 

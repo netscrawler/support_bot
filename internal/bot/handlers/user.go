@@ -138,7 +138,7 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 	}
 
 	fmt.Println("start broadcast")
-	resp, err := h.chatNotify.Broadcast(ctx, h.bot, msg)
+	resp, err := h.chatNotify.Broadcast(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
