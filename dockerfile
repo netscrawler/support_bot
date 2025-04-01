@@ -16,6 +16,7 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /bot
 
 COPY --from=builder /bot/sbot .
+COPY --from=builder /bot/config/* ./config/
 
 
 EXPOSE 54821
