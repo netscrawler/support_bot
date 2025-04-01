@@ -43,11 +43,15 @@ func NewUser(usr *telebot.User, isAdmin bool) *User {
 	}
 }
 
-func NewEmptyUser(username string) *User {
+func NewEmptyUser(username string, isAdmin bool) *User {
+	role := UserRole
+	if isAdmin {
+		role = AdminRole
+	}
 	return &User{
 		TelegramID: rand.Int64(),
 		Username:   username,
-		Role:       UserRole,
+		Role:       role,
 	}
 }
 

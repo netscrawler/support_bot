@@ -78,4 +78,12 @@ func (r *Router) Setup() {
 		&telebot.InlineButton{Unique: "cancel_notification"},
 		r.adminHl.CancelSendNotification,
 	)
+	adminOnly.Handle(
+		&telebot.InlineButton{Unique: "add_admin"},
+		r.adminHl.AddUserWithAdminRole,
+	)
+	adminOnly.Handle(
+		&telebot.InlineButton{Unique: "add_user"},
+		r.adminHl.AddUserWithUserRole,
+	)
 }

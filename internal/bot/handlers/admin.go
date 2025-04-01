@@ -186,11 +186,12 @@ func (h *AdminHandler) AddUser(c tele.Context) error {
 
 // ProcessAddUser processes the username input for adding a user
 func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
-	ctx := context.Background()
 	userID := c.Sender().ID
 	if h.state.Get(userID) != AddUserState {
 		return nil
 	}
+	// nolint: errcheck
+	c.Delete()
 
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
@@ -198,13 +199,54 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 	}
 
 	username = username[1:]
+	confirmBtn := menu.Selector.Data(
+		"Admin",
+		"add_admin",
+		username,
+	)
+	cancelBtn := menu.Selector.Data("User", "add_user", username)
 
-	if err := h.userService.CreateEmpty(ctx, username); err != nil {
+	menu.Selector.Inline(
+		menu.Selector.Row(cancelBtn, confirmBtn),
+	)
+	// nolint: errcheck
+	c.Delete()
+
+	return c.Send("Выберите роль для пользователя @"+username+".", menu.Selector)
+}
+
+func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
+	ctx := context.Background()
+	userID := c.Sender().ID
+	if h.state.Get(userID) != AddUserState {
+		return nil
+	}
+
+	username := c.Data()
+
+	if err := h.userService.CreateEmpty(ctx, username, false); err != nil {
 		return c.Send("Не удалось добавить пользователя: " + err.Error())
 	}
 
 	h.state.Set(userID, MenuState) // Сбрасываем состояние
-	return c.Send("Пользователь @" + username + " добавлен.")
+	return c.Edit("Пользователь @" + username + " добавлен.")
+}
+
+func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
+	ctx := context.Background()
+	userID := c.Sender().ID
+	if h.state.Get(userID) != AddUserState {
+		return nil
+	}
+
+	username := c.Data()
+
+	if err := h.userService.CreateEmpty(ctx, username, true); err != nil {
+		return c.Edit("Не удалось добавить пользователя: " + err.Error())
+	}
+
+	h.state.Set(userID, MenuState) // Сбрасываем состояние
+	return c.Edit("Администратор @" + username + " добавлен.")
 }
 
 // RemoveUser handles removing a user

@@ -55,10 +55,10 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	return userIds, adminIds, nil
 }
 
-func (u *User) Create(ctx context.Context, usr *telebot.User) error {
+func (u *User) Create(ctx context.Context, usr *telebot.User, isAdmin bool) error {
 	const op = "service.User.Create"
 
-	user := models.NewUser(usr, false)
+	user := models.NewUser(usr, isAdmin)
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.Info(op, zap.Error(err))
@@ -68,10 +68,10 @@ func (u *User) Create(ctx context.Context, usr *telebot.User) error {
 	return nil
 }
 
-func (u *User) CreateEmpty(ctx context.Context, username string) error {
+func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) error {
 	const op = "service.User.Create"
 
-	user := models.NewEmptyUser(username)
+	user := models.NewEmptyUser(username, isAdmin)
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.Info(op, zap.Error(err))
