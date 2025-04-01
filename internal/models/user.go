@@ -22,7 +22,7 @@ type User struct {
 	Username   string  `json:"username"`
 	FirstName  string  `json:"first_name"`
 	LastName   *string `json:"last_name"`
-	Role       string  `json:"role"` // admin или user
+	Role       string  `json:"role"` // admin или user или primary
 }
 
 func NewUser(usr *telebot.User, isAdmin bool) *User {

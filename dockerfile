@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o sbot ./cmd/bot/main.go
+RUN CGO_ENABLED=0 GOOS=linux -ldflags="-s -w" go build -o sbot ./cmd/bot/main.go
 
 FROM gcr.io/distroless/static-debian12
 
