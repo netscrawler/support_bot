@@ -174,7 +174,6 @@ func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 	}
 }
 
-// Мне нужно чтобы после срабатывания этого хендлера бот ждал пока пользователь не напишет в чат ник который нужно добавить
 func (h *AdminHandler) AddUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, AddUserState)
 	//nolint:errcheck
@@ -262,6 +261,7 @@ func (h *AdminHandler) RemoveUser(c tele.Context) error {
 // ProcessRemoveUser processes the username input for removing a user
 func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	ctx := context.Background()
+	isPrimeReq := false
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
 		return c.Send("Пожалуйста пришлите username начинающийся с @")
@@ -273,8 +273,16 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 		return c.Send("Ошибка удаления пользователя: нельзя удалить себя")
 	}
 
+	role, err := h.userService.IsAllowed(ctx, c.Sender().ID)
+	if role == models.PrimaryAdminRole {
+		isPrimeReq = true
+	}
+	if err != nil {
+		return c.Send("Ошибка удаления пользователя: " + err.Error())
+	}
+
 	// Call service to remove user
-	err := h.userService.Delete(ctx, username)
+	err = h.userService.Delete(ctx, username, isPrimeReq)
 	if err != nil {
 		return c.Send("Ошибка удаления пользователя: " + err.Error())
 	}

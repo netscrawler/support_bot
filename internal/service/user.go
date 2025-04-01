@@ -46,7 +46,7 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	}
 	var userIds, adminIds []int64
 	for _, user := range users {
-		if user.Role == models.AdminRole {
+		if user.IsAdmin() {
 			adminIds = append(adminIds, user.TelegramID)
 			continue
 		}
@@ -91,7 +91,7 @@ func (s *User) AddUserComplete(user *telebot.User) error {
 	return s.Update(usr)
 }
 
-func (u *User) Delete(ctx context.Context, username string) error {
+func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {
 	user, err := u.repo.GetByUsername(ctx, username)
 	if errors.Is(err, models.ErrNotFound) {
 		return err
@@ -100,7 +100,11 @@ func (u *User) Delete(ctx context.Context, username string) error {
 		return models.ErrInternal
 	}
 
-	if user.IsAdmin() {
+	if user.IsPrimaryAdmin() {
+		return errors.New("not allowed")
+	}
+
+	if user.IsAdmin() && !primeReq {
 		return errors.New("deleting admin is a sin")
 	}
 

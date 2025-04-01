@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	AdminRole = "admin"
-	UserRole  = "user"
+	PrimaryAdminRole = "primary"
+	AdminRole        = "admin"
+	UserRole         = "user"
 )
 
 const (
@@ -56,5 +57,9 @@ func NewEmptyUser(username string, isAdmin bool) *User {
 }
 
 func (u *User) IsAdmin() bool {
-	return u.Role == AdminRole
+	return u.Role == AdminRole || u.Role == PrimaryAdminRole
+}
+
+func (u *User) IsPrimaryAdmin() bool {
+	return u.Role == PrimaryAdminRole
 }

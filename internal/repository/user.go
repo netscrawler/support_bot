@@ -176,7 +176,7 @@ func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 			"role",
 		).
 		From("users").
-		Where(squirrel.Eq{"role": models.AdminRole}).
+		Where(squirrel.Or{squirrel.Eq{"role": models.AdminRole}, squirrel.Eq{"role": models.PrimaryAdminRole}}).
 		ToSql()
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
