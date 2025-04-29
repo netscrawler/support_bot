@@ -20,6 +20,7 @@ func (ca *ChatAdaptor) Broadcast(
 	opts ...interface{},
 ) (*models.BroadcastResp, error) {
 	resp := models.NewBroadcastResp()
+
 	if len(chats) == 0 {
 		return nil, models.ErrNotFound
 	}
@@ -28,10 +29,11 @@ func (ca *ChatAdaptor) Broadcast(
 		_, err := ca.bot.Send(chat, msg, opts...)
 		if err != nil {
 			resp.AddError(chat.Title)
+
 			continue
 		}
-		resp.AddSuccess()
 
+		resp.AddSuccess()
 	}
 
 	return resp, nil
@@ -39,5 +41,6 @@ func (ca *ChatAdaptor) Broadcast(
 
 func (ca *ChatAdaptor) Send(chat *telebot.Chat, msg string, opts ...interface{}) error {
 	_, err := ca.bot.Send(chat, msg, opts...)
+
 	return err
 }

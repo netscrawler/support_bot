@@ -1,0 +1,47 @@
+version: "2"
+run:
+  issues-exit-code: 1
+linters:
+  default: all
+  disable:
+    - dupl
+    - tagliatelle
+    - gochecknoglobals
+    - exhaustruct
+    - wrapcheck
+    - depguard
+    - tagalign
+    - godox
+    - varnamelen
+  settings:
+    revive:
+      severity: warning
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

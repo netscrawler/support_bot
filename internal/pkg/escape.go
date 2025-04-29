@@ -7,5 +7,6 @@ func EscapeMarkdownV2(text string) string {
 	for _, char := range escapeChars {
 		text = strings.ReplaceAll(text, string(char), "\\"+string(char))
 	}
+
 	return text
 }

@@ -39,11 +39,12 @@ func NewAdminHandler(
 	}
 }
 
-// StartAdmin handles the start command for admins
+// StartAdmin handles the start command for admins.
 func (h *AdminHandler) StartAdmin(c tele.Context) error {
 	if c.Chat().Type != tele.ChatPrivate {
 		return nil
 	}
+
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
 		menu.AdminMenu.Row(menu.SendNotifyAdmin),
@@ -100,9 +101,10 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	)
 }
 
-// Confirm sending notification
+// Confirm sending notification.
 func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 	ctx := context.Background()
+
 	msg, ok := h.state.GetMsgData(c.Sender().ID)
 	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
 		return c.Edit("Время на подтверждение истекло")
@@ -113,9 +115,11 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
 		}
+
 		if errors.Is(err, models.ErrInternal) {
 			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
 		}
+
 		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
 
@@ -127,16 +131,18 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 	//nolint:errcheck
 	h.userNotify.SendAdminNotify(ctx, h.bot, formString)
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Edit(resp, tele.ModeMarkdownV2)
 }
 
-// Cancel sending notification
+// Cancel sending notification.
 func (h *AdminHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Edit("❌ Отправка уведомлений отменена.")
 }
 
-// ManageUsers handles the user management menu
+// ManageUsers handles the user management menu.
 func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
@@ -144,10 +150,11 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send("Управление пользователями", menu.AdminMenu)
 }
 
-// Универсальный обработчик текстовых сообщений
+// Универсальный обработчик текстовых сообщений.
 func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 	userID := c.Sender().ID
 
@@ -178,18 +185,19 @@ func (h *AdminHandler) AddUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, AddUserState)
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send(
 		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
 	)
 }
 
-// ProcessAddUser processes the username input for adding a user
+// ProcessAddUser processes the username input for adding a user.
 func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 	userID := c.Sender().ID
 	if h.state.Get(userID) != AddUserState {
 		return nil
 	}
-	// nolint: errcheck
+	//nolint: errcheck
 	c.Delete()
 
 	username := c.Text()
@@ -208,7 +216,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 	menu.Selector.Inline(
 		menu.Selector.Row(cancelBtn, confirmBtn),
 	)
-	// nolint: errcheck
+	//nolint: errcheck
 	c.Delete()
 
 	return c.Send("Выберите роль для пользователя @"+username+".", menu.Selector)
@@ -216,6 +224,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 
 func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
 	ctx := context.Background()
+
 	userID := c.Sender().ID
 	if h.state.Get(userID) != AddUserState {
 		return nil
@@ -228,11 +237,13 @@ func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
 	}
 
 	h.state.Set(userID, MenuState) // Сбрасываем состояние
+
 	return c.Edit("Пользователь @" + username + " добавлен.")
 }
 
 func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
 	ctx := context.Background()
+
 	userID := c.Sender().ID
 	if h.state.Get(userID) != AddUserState {
 		return nil
@@ -245,23 +256,26 @@ func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
 	}
 
 	h.state.Set(userID, MenuState) // Сбрасываем состояние
+
 	return c.Edit("Администратор @" + username + " добавлен.")
 }
 
-// RemoveUser handles removing a user
+// RemoveUser handles removing a user.
 func (h *AdminHandler) RemoveUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, RemoveUserState)
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send(
 		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
 	)
 }
 
-// ProcessRemoveUser processes the username input for removing a user
+// ProcessRemoveUser processes the username input for removing a user.
 func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	ctx := context.Background()
 	isPrimeReq := false
+
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
 		return c.Send("Пожалуйста пришлите username начинающийся с @")
@@ -277,6 +291,7 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	if role == models.PrimaryAdminRole {
 		isPrimeReq = true
 	}
+
 	if err != nil {
 		return c.Send("Ошибка удаления пользователя: " + err.Error())
 	}
@@ -286,23 +301,27 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	if err != nil {
 		return c.Send("Ошибка удаления пользователя: " + err.Error())
 	}
+
 	h.state.Set(c.Sender().ID, MenuState)
 
 	return c.Send("Пользователь @" + username + " успешно удален!")
 }
 
-// ListUsers handles listing all users
+// ListUsers handles listing all users.
 func (h *AdminHandler) ListUsers(c tele.Context) error {
 	ctx := context.Background()
+
 	users, err := h.userService.GetAll(ctx)
 	if errors.Is(err, models.ErrNotFound) {
 		return c.Send("Пользователи не найдены.")
 	}
+
 	if err != nil {
 		return c.Send("Ошибка получения пользователей: " + err.Error())
 	}
 
 	var response strings.Builder
+
 	response.WriteString("📋 *Список пользователей:*\n\n")
 
 	for i, user := range users {
@@ -316,54 +335,62 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
 }
 
-// ManageChats handles the chat management menu
+// ManageChats handles the chat management menu.
 func (h *AdminHandler) ManageChats(c tele.Context) error {
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.RemoveChat),
 		menu.AdminMenu.Row(menu.ListChats, menu.Back))
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send("Управление чатами", menu.AdminMenu)
 }
 
-// ProcessAddChat processes the chat input for adding a chat
+// ProcessAddChat processes the chat input for adding a chat.
 func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 	ctx := context.Background()
+
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
-	// nolint:errcheck, в данном случае не важно смог он удалить сообщение или нет
+	//nolint:errcheck
+	// в данном случае не важно смог он удалить сообщение или нет
 	c.Delete()
+
 	err := h.chatService.Add(ctx, c.Chat())
 	if err != nil {
-		// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
+		//nolint:errcheck
 		h.userNotify.SendNotify(
 			ctx,
 			c.Sender().ID,
 			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
 		)
+
 		return nil
 	}
 
-	// nolint:errcheck, возникновение ошибки не влияет на бизнес логику
+	//nolint:errcheck
 	h.userNotify.Broadcast(
 		ctx,
-		fmt.Sprintf("Добавлен новый чат для рассылки: %s", c.Chat().Title),
+		"Добавлен новый чат для рассылки: "+c.Chat().Title,
 	)
+
 	return nil
 }
 
-// RemoveChat handles removing a chat
+// RemoveChat handles removing a chat.
 func (h *AdminHandler) RemoveChat(c tele.Context) error {
 	h.state.Set(c.Sender().ID, RemoveChatState)
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send("Пожалуйста пришлите имя чата (@title) который вы хотите удалить.")
 }
 
-// ProcessRemoveChat processes the chat input for removing a chat
+// ProcessRemoveChat processes the chat input for removing a chat.
 func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 	ctx := context.Background()
+
 	chatName := c.Text()
 	if !strings.HasPrefix(chatName, "@") {
 		return c.Send("Пожалуйста пришлите имя чата начинающиеся с @")
@@ -375,13 +402,16 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 	if err != nil {
 		return c.Send("Ошибка удаления чата: " + err.Error())
 	}
+
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Send("Чат @" + chatName + " успешно удален!")
 }
 
-// ListChats handles listing all chats
+// ListChats handles listing all chats.
 func (h *AdminHandler) ListChats(c tele.Context) error {
 	ctx := context.Background()
+
 	chats, err := h.chatService.GetAll(ctx)
 	if err != nil {
 		return c.Send("Ошибка получения чатов: " + err.Error())
@@ -392,6 +422,7 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 	}
 
 	var response strings.Builder
+
 	response.WriteString("📋 *Список чатов:*\n\n")
 
 	for i, chat := range chats {

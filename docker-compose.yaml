@@ -1,31 +1,18 @@
 services:
   bottst:
     build: .
-    container_name: notifySupportBot
+    container_name: bottst
     ports:
-      - "54821:8080"
+      - "8080:8080"
     environment:
-      # енвы подключения к БД
-      - DATABASE_PORT=5432
-      - DATABASE_HOST=db
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_NAME=bottst
-      # порт сервиса
-      - SERVER_PORT=8080
-      - SERVER_HOST=0.0.0.0
-
-      # токен бота
-      - TELEGRAM_TOKEN=your_token
-      - BOT_POLL_TIMEOUT=10s
-      - SHUTDOWN_TIMEOUT=5s
-      # только для отладки, на бою лучше ставить false, тогда логи не будут выводиться
-      - APP_DEBUG=false
+      - CONFIG_PATH=/sbot/config/local.yaml
+    volumes:
+      - ./config:/sbot/config:ro
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - notifySupportBot
+      - internal
   db:
     image: postgres:latest
     container_name: db
@@ -48,4 +35,4 @@ services:
 
 networks:
   internal:
-    name: notifySupportBot
+    name: bottst

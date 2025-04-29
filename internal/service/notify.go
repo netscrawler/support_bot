@@ -37,20 +37,18 @@ func newChatNotify(c ChatProvider, log *zap.Logger, tgAdaptor MessageSender) *Ch
 	}
 }
 
-// Отправляет уведомление во все чаты, возвращает количество чатов, количество успешных, количество ошибок, ошибку если возникла.
-// При возникновении ошибки возвращает нули и ошибку
+// При возникновении ошибки возвращает нули и ошибку.
 func (n *ChatNotify) Broadcast(
 	ctx context.Context,
 	notify string,
 ) (string, error) {
-	const op = "service.ChatNotify.Broadcast"
 	chats, err := n.chat.GetAll(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return "", models.ErrNotFound
 		}
-		return "", models.ErrInternal
 
+		return "", models.ErrInternal
 	}
 
 	if len(chats) == 0 {
@@ -58,12 +56,14 @@ func (n *ChatNotify) Broadcast(
 	}
 
 	tgchats := []*telebot.Chat{}
+
 	for _, chat := range chats {
 		tgchat := telebot.Chat{ID: chat.ChatID, Title: chat.Title}
 		tgchats = append(tgchats, &tgchat)
 	}
 
 	resp, err := n.tgAdaptor.Broadcast(tgchats, notify)
+
 	return resp.String(), err
 }
 
@@ -82,18 +82,17 @@ func newUserNotify(up UserProvider, log *zap.Logger, tgAdaptor MessageSender) *U
 }
 
 func (n *UserNotify) Broadcast(ctx context.Context, notify string) error {
-	const op = "service.UserNotify.Broadcast"
-
 	users, err := n.user.GetAll(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound
 		}
-		return models.ErrInternal
 
+		return models.ErrInternal
 	}
 
 	tgchats := []*telebot.Chat{}
+
 	for _, user := range users {
 		tgchat := telebot.Chat{ID: user.TelegramID}
 		tgchats = append(tgchats, &tgchat)
@@ -106,15 +105,18 @@ func (n *UserNotify) Broadcast(ctx context.Context, notify string) error {
 
 func (n *UserNotify) SendNotify(
 	ctx context.Context,
-	tgId int64,
+	tgID int64,
 	notify string,
 ) error {
 	const op = "service.UserNotify.SendNotify"
-	err := n.tgAdaptor.Send(&telebot.Chat{ID: tgId}, notify)
+
+	err := n.tgAdaptor.Send(&telebot.Chat{ID: tgID}, notify)
 	if err != nil {
 		n.log.Error(op, zap.Error(err))
+
 		return err
 	}
+
 	return nil
 }
 
@@ -123,15 +125,17 @@ func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, noti
 
 	users, err := n.user.GetAllAdmins(ctx)
 	n.log.Info(op, zap.Any("chats", users))
+
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound
 		}
-		return models.ErrInternal
 
+		return models.ErrInternal
 	}
 
 	tgchats := []*telebot.Chat{}
+
 	for _, user := range users {
 		tgchat := telebot.Chat{ID: user.TelegramID}
 		tgchats = append(tgchats, &tgchat)

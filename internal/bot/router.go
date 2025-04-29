@@ -25,6 +25,7 @@ func NewRouter(
 	hb handlerBuilder,
 ) *Router {
 	aHl, uHl, tHl, mw := hb.Build()
+
 	return &Router{
 		bot:     bot,
 		adminHl: aHl,

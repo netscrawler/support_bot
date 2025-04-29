@@ -26,6 +26,7 @@ func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 		userID := c.Sender().ID
 
 		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
+		//nolint:nilerr
 		if err != nil || role == models.Denied {
 			return nil // Не выдаём ошибку пользователю
 		}
@@ -41,6 +42,7 @@ func (mw *Mw) TextAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 		userID := c.Sender().ID
 
 		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
+		//nolint:nilerr
 		if err != nil || role == models.Denied {
 			return nil // Не выдаём ошибку пользователю
 		}
@@ -54,7 +56,9 @@ func (mw *Mw) TextAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
+
 		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
+		//nolint:nilerr
 		if err != nil || role == models.Denied || role == models.UserRole {
 			return nil // Не выдаём ошибку пользователю
 		}

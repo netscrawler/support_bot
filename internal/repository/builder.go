@@ -21,5 +21,6 @@ func NewRB(log *zap.Logger, s *postgres.Storage) *RepositoryBuilder {
 func (rb *RepositoryBuilder) Build() (*User, *Chat) {
 	uRepo := NewUser(rb.s, rb.log)
 	cRepo := NewChat(rb.s, rb.log)
+
 	return &uRepo, &cRepo
 }

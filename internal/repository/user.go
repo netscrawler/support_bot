@@ -26,6 +26,7 @@ func NewUser(s *postgres.Storage, log *zap.Logger) User {
 
 func (u *User) Update(ctx context.Context, usr *models.User) error {
 	const op = "repository.User.Update"
+
 	query, args, err := u.storage.Builder.
 		Update("users").
 		Set("telegram_id", usr.TelegramID).
@@ -35,12 +36,14 @@ func (u *User) Update(ctx context.Context, usr *models.User) error {
 		ToSql()
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
 		return err
 	}
 
-	_, err = u.storage.Db.Exec(ctx, query, args...)
+	_, err = u.storage.DB.Exec(ctx, query, args...)
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error exec query: %s", op, err.Error()))
+
 		return err
 	}
 
@@ -49,6 +52,7 @@ func (u *User) Update(ctx context.Context, usr *models.User) error {
 
 func (u *User) Create(ctx context.Context, usr *models.User) error {
 	const op = "repository.User.Create"
+
 	query, args, err := u.storage.Builder.
 		Insert("users").
 		Columns(
@@ -68,12 +72,14 @@ func (u *User) Create(ctx context.Context, usr *models.User) error {
 		ToSql()
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
 		return err
 	}
 
-	_, err = u.storage.Db.Exec(ctx, query, args...)
+	_, err = u.storage.DB.Exec(ctx, query, args...)
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error exec query: %s", op, err.Error()))
+
 		return err
 	}
 
@@ -100,8 +106,11 @@ func (u *User) GetByUsername(ctx context.Context, uname string) (*models.User, e
 
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
+
 	var user models.User
-	row := u.storage.Db.QueryRow(ctx, query, args...)
+
+	row := u.storage.DB.QueryRow(ctx, query, args...)
+
 	err = row.Scan(
 		&user.ID,
 		&user.TelegramID,
@@ -111,18 +120,21 @@ func (u *User) GetByUsername(ctx context.Context, uname string) (*models.User, e
 		&user.Role,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			u.log.Error(fmt.Sprintf("%s not found user with username: %s", op, uname))
+
 			return nil, models.ErrNotFound
 		}
+
 		u.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+
 		return nil, err
 	}
 
 	return &user, nil
 }
 
-func (u *User) GetByTgId(ctx context.Context, id int64) (*models.User, error) {
+func (u *User) GetByTgID(ctx context.Context, id int64) (*models.User, error) {
 	const op = "repository.User.GetByTgId"
 
 	query, args, err := u.storage.Builder.
@@ -142,8 +154,11 @@ func (u *User) GetByTgId(ctx context.Context, id int64) (*models.User, error) {
 
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
+
 	var user models.User
-	row := u.storage.Db.QueryRow(ctx, query, args...)
+
+	row := u.storage.DB.QueryRow(ctx, query, args...)
+
 	err = row.Scan(
 		&user.ID,
 		&user.TelegramID,
@@ -153,11 +168,14 @@ func (u *User) GetByTgId(ctx context.Context, id int64) (*models.User, error) {
 		&user.Role,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			u.log.Info(fmt.Sprintf("%s not found user with id:%d", op, id))
+
 			return nil, models.ErrNotFound
 		}
+
 		u.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+
 		return nil, err
 	}
 
@@ -166,6 +184,7 @@ func (u *User) GetByTgId(ctx context.Context, id int64) (*models.User, error) {
 
 func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 	const op = "repository.User.GetAllAdmins"
+
 	query, args, err := u.storage.Builder.
 		Select(
 			"id",
@@ -184,18 +203,22 @@ func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
 
-	rows, err := u.storage.Db.Query(ctx, query, args...)
+	rows, err := u.storage.DB.Query(ctx, query, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			u.log.Error(fmt.Sprintf("%s | %s", op, err))
+
 			return nil, models.ErrNotFound
 		}
+
 		u.log.Error(op, zap.Error(err))
+
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
 	defer rows.Close()
 
 	users := make([]models.User, 0)
+
 	for rows.Next() {
 		var user models.User
 		if err := rows.Scan(
@@ -207,16 +230,21 @@ func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 			&user.Role,
 		); err != nil {
 			u.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+
 			continue
 		}
+
 		users = append(users, user)
 	}
+
 	u.log.Info(fmt.Sprintf("%s : successfully got %d users", op, len(users)))
+
 	return users, nil
 }
 
 func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 	const op = "repository.User.GetAll"
+
 	query, args, err := u.storage.Builder.
 		Select(
 			"id",
@@ -234,18 +262,22 @@ func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
 
-	rows, err := u.storage.Db.Query(ctx, query, args...)
+	rows, err := u.storage.DB.Query(ctx, query, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			u.log.Error(fmt.Sprintf("%s | %s", op, err))
+
 			return nil, models.ErrNotFound
 		}
+
 		u.log.Error(op, zap.Error(err))
+
 		return nil, fmt.Errorf("%s : %w", op, err)
 	}
 	defer rows.Close()
 
 	users := make([]models.User, 0)
+
 	for rows.Next() {
 		var user models.User
 		if err := rows.Scan(
@@ -257,29 +289,35 @@ func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 			&user.Role,
 		); err != nil {
 			u.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+
 			continue
 		}
+
 		users = append(users, user)
 	}
+
 	u.log.Info(fmt.Sprintf("%s : successfully got %d users", op, len(users)))
+
 	return users, nil
 }
 
-func (u *User) Delete(ctx context.Context, tgId int64) error {
+func (u *User) Delete(ctx context.Context, tgID int64) error {
 	const op = "repository.User.Delete"
 
 	query, args, err := u.storage.Builder.
 		Delete("users").
-		Where(squirrel.Eq{"telegram_id": tgId}).
+		Where(squirrel.Eq{"telegram_id": tgID}).
 		ToSql()
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
 		return err
 	}
 
-	_, err = u.storage.Db.Exec(ctx, query, args...)
+	_, err = u.storage.DB.Exec(ctx, query, args...)
 	if err != nil {
 		u.log.Error(fmt.Sprintf("%s error exec query: %s", op, err.Error()))
+
 		return err
 	}
 

@@ -65,15 +65,18 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Send("Добро пожаловать!", menu.UserMenu)
 }
 
 func (h *UserHandler) RegisterUser(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
+
 	if c.Chat().Type != tele.ChatPrivate {
 		return nil
 	}
+
 	ctx := context.Background()
 	snd := c.Sender()
 	err := h.userService.AddUserComplete(snd)
@@ -81,11 +84,13 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 		"Пользователь с ником @%s успешно прошел регистрацию",
 		c.Sender().Username,
 	)
-	// nolint:errcheck
+	//nolint:errcheck
 	h.userNotify.SendAdminNotify(ctx, h.bot, formatedString)
+
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
 	}
+
 	return nil
 }
 
@@ -93,6 +98,7 @@ func (h *UserHandler) SendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, SendNotificationState)
 	//nolint:errcheck
 	c.Delete()
+
 	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
 }
 
@@ -107,6 +113,7 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 	}
 
 	h.state.SetMsgData(c.Sender().ID, msg)
+
 	confirmBtn := menu.Selector.Data(
 		"✅ Отправить",
 		"confirm_user_notification",
@@ -132,20 +139,22 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 
 func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 	ctx := context.Background()
+
 	msg, ok := h.state.GetMsgData(c.Sender().ID)
 	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
 		return c.Edit("Время на подтверждение истекло")
 	}
 
-	fmt.Println("start broadcast")
 	resp, err := h.chatNotify.Broadcast(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
 		}
+
 		if errors.Is(err, models.ErrInternal) {
 			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
 		}
+
 		return c.Edit("Не удалось отправить уведомление: " + err.Error())
 	}
 
@@ -158,11 +167,13 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 	go h.userNotify.SendAdminNotify(ctx, h.bot, formString)
 
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Edit(resp, tele.ModeMarkdownV2)
 }
 
 func (h *UserHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
+
 	return c.Edit("❌ Отправка уведомления отменена.")
 }
 
@@ -177,12 +188,14 @@ func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc
 
 		// Проверяем пользователя в базе
 		user, err := h.userService.GetByUsername(ctx, username)
+		//nolint:nilerr
 		if err != nil {
 			return nil
 		}
 
 		// Сохраняем пользователя в context
 		c.Set("user", user)
+
 		return next(c)
 	}
 }

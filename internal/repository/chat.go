@@ -40,12 +40,14 @@ func (c *Chat) Create(ctx context.Context, chat *models.Chat) error {
 		ToSql()
 	if err != nil {
 		c.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
 		return err
 	}
 
-	_, err = c.storage.Db.Exec(ctx, query, args...)
+	_, err = c.storage.DB.Exec(ctx, query, args...)
 	if err != nil {
 		c.log.Error(fmt.Sprintf("%s error exec query: %s", op, err.Error()))
+
 		return err
 	}
 
@@ -54,6 +56,7 @@ func (c *Chat) Create(ctx context.Context, chat *models.Chat) error {
 
 func (c *Chat) GetByTitle(ctx context.Context, title string) (*models.Chat, error) {
 	const op = "repository.Chat.GetByTitle"
+
 	query, args, err := c.storage.Builder.
 		Select(
 			"id",
@@ -72,7 +75,7 @@ func (c *Chat) GetByTitle(ctx context.Context, title string) (*models.Chat, erro
 		return nil, models.ErrInternal
 	}
 
-	row := c.storage.Db.QueryRow(ctx, query, args...)
+	row := c.storage.DB.QueryRow(ctx, query, args...)
 
 	var chat models.Chat
 	if err := row.Scan(
@@ -85,15 +88,19 @@ func (c *Chat) GetByTitle(ctx context.Context, title string) (*models.Chat, erro
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.log.Debug(fmt.Sprintf("%s | Not found chat with title %s", op, title))
+
 			return nil, models.ErrNotFound
 		}
+
 		return nil, models.ErrInternal
 	}
+
 	return &chat, nil
 }
 
 func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
 	const op = "repository.Chat.GetAll"
+
 	query, args, err := c.storage.Builder.
 		Select(
 			"id",
@@ -111,18 +118,22 @@ func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
 		return nil, models.ErrInternal
 	}
 
-	rows, err := c.storage.Db.Query(ctx, query, args...)
+	rows, err := c.storage.DB.Query(ctx, query, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.log.Error(fmt.Sprintf("%s | %s", op, err))
+
 			return nil, models.ErrNotFound
 		}
+
 		c.log.Error(op, zap.Error(err))
+
 		return nil, models.ErrInternal
 	}
 	defer rows.Close()
 
 	chats := make([]models.Chat, 0)
+
 	for rows.Next() {
 		var chat models.Chat
 		if err := rows.Scan(
@@ -134,11 +145,15 @@ func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
 			&chat.IsActive,
 		); err != nil {
 			c.log.Error(fmt.Sprintf("%s | %s", op, err.Error()))
+
 			continue
 		}
+
 		chats = append(chats, chat)
 	}
+
 	c.log.Info(fmt.Sprintf("%s : successfully got %d chats", op, len(chats)))
+
 	return chats, nil
 }
 
@@ -151,12 +166,14 @@ func (c *Chat) Delete(ctx context.Context, chatID int64) error {
 		ToSql()
 	if err != nil {
 		c.log.Error(fmt.Sprintf("%s error building query: %s", op, err.Error()))
+
 		return err
 	}
 
-	_, err = c.storage.Db.Exec(ctx, query, args...)
+	_, err = c.storage.DB.Exec(ctx, query, args...)
 	if err != nil {
 		c.log.Error(fmt.Sprintf("%s error exec query: %s", op, err.Error()))
+
 		return err
 	}
 

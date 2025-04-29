@@ -2,7 +2,7 @@ package models
 
 import "gopkg.in/telebot.v4"
 
-// Chat представляет чат для отправки уведомлений
+// Chat представляет чат для отправки уведомлений.
 type Chat struct {
 	ID          int    `json:"id"`
 	ChatID      int64  `json:"chat_id"`

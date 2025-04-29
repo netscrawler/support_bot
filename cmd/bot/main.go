@@ -11,23 +11,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// О, Великий Бог Алгоритмов, который контролирует все нули и единицы,
-// Услышь мой зов и снисходи на этот код! Прими мои вызовы и примени паттерны!
-// Пусть мои баги исчезнут, как старые библиотеки, что больше не поддерживаются!
-// Пусть мое подключение к API не вернет мне ошибку 500, а сервер не упадет в день релиза!
-// Дай сил этому говну позорному запустится
+// Дай сил этому говну позорному запустится.
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
+
 	log := setupLogger(cfg.App.Debug)
 
 	ctx := context.Background()
+
 	app, err := app.New(ctx, cfg, log)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+
 	err = app.Start()
 	if err != nil {
 		log.Fatal(err.Error())
@@ -43,11 +42,13 @@ func main() {
 
 func setupLogger(isDebug bool) *zap.Logger {
 	var log *zap.Logger
+
 	switch {
 	case isDebug:
 		log, _ = zap.NewDevelopment()
 	case !isDebug:
 		log = zap.NewNop()
 	}
+
 	return log
 }

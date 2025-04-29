@@ -40,8 +40,9 @@ func (br *BroadcastResp) String() string {
 			"Успешно: *%d*\n\n",
 		br.ChatsCount, br.SuccessCount,
 	)
+
 	if br.ErrorCount != 0 {
-		formattedMsg = formattedMsg + fmt.Sprintf(
+		formattedMsg += fmt.Sprintf(
 			"Не отправлено: *%d*\n"+
 				"В чаты: %s/n"+
 				"Note: Пожалуйста, проверьте, есть ли какие-либо особые проблемы в неудачных чатах.",

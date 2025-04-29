@@ -16,7 +16,8 @@ type Config struct {
 	Timeout  configTimeout  `yaml:"timeout"`
 }
 type configBot struct {
-	TelegramToken string `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`
+	TelegramToken string        `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`
+	CleanUpTime   time.Duration `yaml:"CleanUpTime"                         env-default:"10m"`
 }
 type configDatabase struct {
 	Port     int    `yaml:"port"     env:"DATABASE_PORT"     env-default:"5432"`
@@ -39,7 +40,7 @@ type configTimeout struct {
 	Shutdown        time.Duration `yaml:"shutdown"         env:"SHUTDOWN_TIMEOUT"         env-default:"5s"`
 }
 
-// Load загружает конфигурацию из файла или из переменных окружения
+// Load загружает конфигурацию из файла или из переменных окружения.
 func Load() (*Config, error) {
 	var cfg Config
 
@@ -58,23 +59,20 @@ func Load() (*Config, error) {
 		}
 	}
 
+	//nolint:nosprintfhostport
 	cfg.Database.URL = fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		cfg.Database.User, cfg.Database.Password, cfg.Database.Host,
 		cfg.Database.Port, cfg.Database.Name,
 	)
 
-	cfg.Timeout.DatabaseConnect = time.Duration(cfg.Timeout.DatabaseConnect) * time.Second
-	cfg.Timeout.BotPoll = time.Duration(cfg.Timeout.BotPoll) * time.Second
-	cfg.Timeout.Shutdown = time.Duration(cfg.Timeout.Shutdown) * time.Second
-
 	return &cfg, nil
 }
 
-// fetchConfigPath определяет путь к файлу конфигурации
-// Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию
+// Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию.
 func fetchConfigPath() string {
 	var configPath string
+
 	flag.StringVar(&configPath, "config", "", "Путь к файлу конфигурации")
 	flag.Parse()
 

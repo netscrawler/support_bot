@@ -10,7 +10,7 @@ import (
 	"gopkg.in/telebot.v4"
 )
 
-// User репозиторий для работы с данными пользователя
+// User репозиторий для работы с данными пользователя.
 type User struct {
 	repo *repository.User
 	log  *zap.Logger
@@ -28,14 +28,16 @@ func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return users, nil
 }
 
 func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
-	user, err := u.repo.GetByTgId(ctx, id)
+	user, err := u.repo.GetByTgID(ctx, id)
 	if err != nil {
 		return models.Denied, err
 	}
+
 	return user.Role, nil
 }
 
@@ -44,14 +46,19 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	var userIds, adminIds []int64
+
 	for _, user := range users {
 		if user.IsAdmin() {
 			adminIds = append(adminIds, user.TelegramID)
+
 			continue
 		}
+
 		userIds = append(userIds, user.TelegramID)
 	}
+
 	return userIds, adminIds, nil
 }
 
@@ -59,9 +66,11 @@ func (u *User) Create(ctx context.Context, usr *telebot.User, isAdmin bool) erro
 	const op = "service.User.Create"
 
 	user := models.NewUser(usr, isAdmin)
+
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.Info(op, zap.Error(err))
+
 		return err
 	}
 
@@ -72,9 +81,11 @@ func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) e
 	const op = "service.User.Create"
 
 	user := models.NewEmptyUser(username, isAdmin)
+
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.Info(op, zap.Error(err))
+
 		return err
 	}
 
@@ -85,10 +96,10 @@ func (u *User) Update(usr *models.User) error {
 	return u.repo.Update(context.Background(), usr)
 }
 
-func (s *User) AddUserComplete(user *telebot.User) error {
+func (u *User) AddUserComplete(user *telebot.User) error {
 	usr := models.NewUser(user, false)
 
-	return s.Update(usr)
+	return u.Update(usr)
 }
 
 func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {
@@ -96,6 +107,7 @@ func (u *User) Delete(ctx context.Context, username string, primeReq bool) error
 	if errors.Is(err, models.ErrNotFound) {
 		return err
 	}
+
 	if err != nil {
 		return models.ErrInternal
 	}
@@ -112,6 +124,7 @@ func (u *User) Delete(ctx context.Context, username string, primeReq bool) error
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"support_bot/internal/bot/middlewares"
 	"support_bot/internal/service"
+	"time"
 
 	"gopkg.in/telebot.v4"
 )
@@ -12,19 +13,21 @@ type serviceBuilder interface {
 }
 
 type HandlerBuilder struct {
-	sb  serviceBuilder
-	bot *telebot.Bot
+	cleanUpTime time.Duration
+	sb          serviceBuilder
+	bot         *telebot.Bot
 }
 
-func NewHB(bot *telebot.Bot, sb serviceBuilder) *HandlerBuilder {
+func NewHB(bot *telebot.Bot, cleanUpTime time.Duration, sb serviceBuilder) *HandlerBuilder {
 	return &HandlerBuilder{
-		sb:  sb,
-		bot: bot,
+		sb:          sb,
+		bot:         bot,
+		cleanUpTime: cleanUpTime,
 	}
 }
 
 func (hb *HandlerBuilder) Build() (*AdminHandler, *UserHandler, *TextHandler, *middlewares.Mw) {
-	state := NewState()
+	state := NewState(hb.cleanUpTime)
 	uService, cService, nService, unService := hb.sb.Build()
 	aHl := NewAdminHandler(
 		hb.bot,

@@ -14,3 +14,4 @@ timeout:
   shutdown: 5s
 bot:
   telegram_token: your_telegram_token
+  CleanUpTime: 5m

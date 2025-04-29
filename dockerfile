@@ -8,7 +8,12 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux -ldflags="-s -w" go build -o sbot ./cmd/bot/main.go
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags="-s -w -buildid= -extldflags=-static" \
+    -buildvcs=false \
+    -o sbot ./cmd/bot
+
 
 FROM gcr.io/distroless/static-debian12
 
@@ -19,7 +24,7 @@ COPY --from=builder /bot/sbot .
 COPY --from=builder /bot/config/* ./config/
 
 
-EXPOSE 54821
+EXPOSE 8080
 
 CMD ["./sbot"]
 

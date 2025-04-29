@@ -15,14 +15,14 @@ type adaptorBuilder interface {
 	Build() *telegram.ChatAdaptor
 }
 
-// Билдер для создания сервисов
+// Билдер для создания сервисов.
 type ServiceBuilder struct {
 	log *zap.Logger
 	rb  repoBuilder
 	ab  adaptorBuilder
 }
 
-// NewSB Возвращает новый инстанс билдера
+// NewSB Возвращает новый инстанс билдера.
 func NewSB(log *zap.Logger, rb repoBuilder, ab adaptorBuilder) *ServiceBuilder {
 	return &ServiceBuilder{
 		log: log,
@@ -31,7 +31,7 @@ func NewSB(log *zap.Logger, rb repoBuilder, ab adaptorBuilder) *ServiceBuilder {
 	}
 }
 
-// Build собирает и возвращает сервисы
+// Build собирает и возвращает сервисы.
 func (sb *ServiceBuilder) Build() (*User, *Chat, *ChatNotify, *UserNotify) {
 	uRepo, cRepo := sb.rb.Build()
 	tgAdaptor := sb.ab.Build()
@@ -39,5 +39,6 @@ func (sb *ServiceBuilder) Build() (*User, *Chat, *ChatNotify, *UserNotify) {
 	cService := newChat(cRepo, sb.log)
 	nService := newChatNotify(cRepo, sb.log, tgAdaptor)
 	nuService := newUserNotify(uRepo, sb.log, tgAdaptor)
+
 	return uService, cService, nService, nuService
 }

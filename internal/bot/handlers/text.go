@@ -28,8 +28,10 @@ func (h *TextHandler) ProcessTextInput(c tele.Context) error {
 	if c.Get("isAdmin") == models.UserRole {
 		return h.userhandler.ProcessUserInput(c)
 	}
+
 	if c.Get("isAdmin") == models.AdminRole || c.Get("isAdmin") == models.PrimaryAdminRole {
 		return h.adminhandler.ProcessAdminInput(c)
 	}
+
 	return nil
 }
