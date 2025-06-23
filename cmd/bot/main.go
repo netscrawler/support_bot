@@ -4,9 +4,10 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
-	"syscall"
 
 	"go.uber.org/zap"
 )
@@ -47,7 +48,9 @@ func setupLogger(isDebug bool) *zap.Logger {
 	case isDebug:
 		log, _ = zap.NewDevelopment()
 	case !isDebug:
-		log = zap.NewNop()
+		log, _ = zap.NewProduction()
+	default:
+		log, _ = zap.NewDevelopment()
 	}
 
 	return log

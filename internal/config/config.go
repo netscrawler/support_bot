@@ -80,6 +80,10 @@ func fetchConfigPath() string {
 		configPath = os.Getenv("CONFIG_PATH")
 	}
 
+	if configPath == "" {
+		configPath = "./config.yaml"
+	}
+
 	if configPath != "" {
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			return ""
