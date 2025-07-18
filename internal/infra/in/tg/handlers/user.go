@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"support_bot/internal/bot/menu"
+
+	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/service"
 

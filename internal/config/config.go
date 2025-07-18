@@ -10,9 +10,9 @@ import (
 )
 
 type Config struct {
+	LogLevel string         `yaml:"log_level" env:"LOG_LEVEL"`
 	Database configDatabase `yaml:"database"`
 	Bot      configBot      `yaml:"bot"`
-	App      configApp      `yaml:"app"`
 	Timeout  configTimeout  `yaml:"timeout"`
 }
 type configBot struct {
@@ -26,12 +26,6 @@ type configDatabase struct {
 	Password string `yaml:"password" env:"DATABASE_PASSWORD"`
 	Name     string `yaml:"name"     env:"DATABASE_NAME"     env-default:"postgres"`
 	URL      string
-}
-
-type configApp struct {
-	Debug bool   `yaml:"debug" env:"APP_DEBUG" env-default:"false"`
-	Host  string `yaml:"host"  env:"APP_HOST"  env-default:"localhost"`
-	Port  string `yaml:"port"  env:"APP_PORT"  env-default:"8080"`
 }
 
 type configTimeout struct {

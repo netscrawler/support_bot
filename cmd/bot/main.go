@@ -12,6 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	debug string = "debug"
+	prod  string = "prod"
+)
+
 // Дай сил этому говну позорному запустится.
 func main() {
 	cfg, err := config.Load()
@@ -19,11 +24,11 @@ func main() {
 		panic(err)
 	}
 
-	log := setupLogger(cfg.App.Debug)
+	log := setupLogger(cfg.LogLevel)
 
 	ctx := context.Background()
 
-	app, err := app.New(ctx, cfg, log)
+	app, err := app.New(ctx, cfg)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -41,13 +46,13 @@ func main() {
 	app.GracefulShutdown(ctx)
 }
 
-func setupLogger(isDebug bool) *zap.Logger {
+func setupLogger(isDebug string) *zap.Logger {
 	var log *zap.Logger
 
-	switch {
-	case isDebug:
+	switch isDebug {
+	case debug:
 		log, _ = zap.NewDevelopment()
-	case !isDebug:
+	case prod:
 		log, _ = zap.NewProduction()
 	default:
 		log, _ = zap.NewDevelopment()

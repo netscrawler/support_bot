@@ -1,13 +1,10 @@
+log_level: prod
 database:
   port: 5432
   host: localhost
   user: your_user
   password: your_password
   name: notification_bot
-app:
-  debug: false
-  host: 0.0.0.0
-  port: 8080
 timeout:
   database_connect: 10s
   bot_poll: 10s

@@ -2,22 +2,26 @@ package service
 
 import (
 	"context"
-	"support_bot/internal/models"
-	"support_bot/internal/repository"
 
-	"go.uber.org/zap"
+	"support_bot/internal/models"
+
 	"gopkg.in/telebot.v4"
 )
 
-type Chat struct {
-	repo *repository.Chat
-	log  *zap.Logger
+type ChatProvider interface {
+	Create(ctx context.Context, chat *models.Chat) error
+	GetByTitle(ctx context.Context, title string) (*models.Chat, error)
+	GetAll(ctx context.Context) ([]models.Chat, error)
+	Delete(ctx context.Context, chatID int64) error
 }
 
-func newChat(repo *repository.Chat, log *zap.Logger) *Chat {
+type Chat struct {
+	repo ChatProvider
+}
+
+func NewChat(repo ChatProvider) *Chat {
 	return &Chat{
 		repo: repo,
-		log:  log,
 	}
 }
 

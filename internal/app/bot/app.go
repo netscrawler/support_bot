@@ -1,29 +1,29 @@
 package bot
 
 import (
-	"support_bot/internal/adaptors"
-	"support_bot/internal/bot"
-	"support_bot/internal/bot/handlers"
-	"support_bot/internal/repository"
-	"support_bot/internal/service"
 	"time"
 
-	"go.uber.org/zap"
+	bot "support_bot/internal/infra/in/tg"
+	"support_bot/internal/infra/in/tg/handlers"
+	"support_bot/internal/infra/in/tg/middlewares"
+	pgrepo "support_bot/internal/infra/out/pg/repo"
+	telegram "support_bot/internal/infra/out/tg"
+	"support_bot/internal/service"
+
+	"github.com/jackc/pgx/v5"
 	"gopkg.in/telebot.v4"
 )
 
 type Bot struct {
 	bot    *telebot.Bot
-	log    *zap.Logger
 	router *bot.Router
 }
 
 func New(
-	log *zap.Logger,
 	token string,
 	poll time.Duration,
 	cleanupTime time.Duration,
-	rb *repository.RepositoryBuilder,
+	storage *pgx.Conn,
 ) (*Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
@@ -35,21 +35,52 @@ func New(
 		return nil, err
 	}
 
-	sb := service.NewSB(log, rb, adaptors.New(b))
+	chatRepo := pgrepo.NewChat(storage)
+	userRepo := pgrepo.NewUser(storage)
 
-	router := bot.NewRouter(b, handlers.NewHB(b, cleanupTime, sb))
+	chatService := service.NewChat(chatRepo)
+	userService := service.NewUser(userRepo)
+
+	messageSender := telegram.NewChatAdaptor(b)
+
+	notifyier := service.NewChatNotify(chatRepo, messageSender)
+	userNotifier := service.NewUserNotify(userRepo, messageSender)
+
+	state := handlers.NewState(cleanupTime)
+
+	adminHandler := handlers.NewAdminHandler(
+		b,
+		userService,
+		chatService,
+		notifyier,
+		userNotifier,
+		state,
+	)
+
+	userHandler := handlers.NewUserHandler(
+		b,
+		chatService,
+		userService,
+		state,
+		notifyier,
+		userNotifier,
+	)
+
+	textHandler := handlers.NewTextHandler(adminHandler, userHandler, state)
+
+	mw := middlewares.NewMw(userService)
+
+	router := bot.NewRouter(b, adminHandler, userHandler, textHandler, mw)
 
 	router.Setup()
 
 	return &Bot{
 		bot:    b,
-		log:    log,
 		router: router,
 	}, nil
 }
 
 func (b *Bot) Start() error {
-	b.log.Info("Bot started")
 	b.bot.Start()
 
 	return nil

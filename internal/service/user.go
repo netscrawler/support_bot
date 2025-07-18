@@ -3,23 +3,31 @@ package service
 import (
 	"context"
 	"errors"
-	"support_bot/internal/models"
-	"support_bot/internal/repository"
 
-	"go.uber.org/zap"
+	"support_bot/internal/models"
+
 	"gopkg.in/telebot.v4"
 )
 
-// User репозиторий для работы с данными пользователя.
-type User struct {
-	repo *repository.User
-	log  *zap.Logger
+type UserProvider interface {
+	Create(ctx context.Context, user *models.User) error
+
+	GetByUsername(ctx context.Context, username string) (*models.User, error)
+	GetAll(ctx context.Context) ([]models.User, error)
+	GetByTgID(ctx context.Context, id int64) (*models.User, error)
+
+	Update(ctx context.Context, user *models.User) error
+	Delete(ctx context.Context, tgID int64) error
 }
 
-func newUser(repo *repository.User, log *zap.Logger) *User {
+// User репозиторий для работы с данными пользователя.
+type User struct {
+	repo UserProvider
+}
+
+func NewUser(repo UserProvider) *User {
 	return &User{
 		repo: repo,
-		log:  log,
 	}
 }
 
@@ -69,8 +77,6 @@ func (u *User) Create(ctx context.Context, usr *telebot.User, isAdmin bool) erro
 
 	err := u.repo.Create(ctx, user)
 	if err != nil {
-		u.log.Info(op, zap.Error(err))
-
 		return err
 	}
 
@@ -84,8 +90,6 @@ func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) e
 
 	err := u.repo.Create(ctx, user)
 	if err != nil {
-		u.log.Info(op, zap.Error(err))
-
 		return err
 	}
 

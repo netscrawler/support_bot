@@ -3,17 +3,18 @@ package service
 import (
 	"context"
 	"errors"
+
 	"support_bot/internal/models"
 
 	"go.uber.org/zap"
 	"gopkg.in/telebot.v4"
 )
 
-type ChatProvider interface {
+type ChatGetter interface {
 	GetAll(ctx context.Context) ([]models.Chat, error)
 }
 
-type UserProvider interface {
+type UserGetter interface {
 	GetAll(ctx context.Context) ([]models.User, error)
 	GetAllAdmins(ctx context.Context) ([]models.User, error)
 }
@@ -24,15 +25,13 @@ type MessageSender interface {
 }
 
 type ChatNotify struct {
-	chat      ChatProvider
-	log       *zap.Logger
+	chat      ChatGetter
 	tgAdaptor MessageSender
 }
 
-func newChatNotify(c ChatProvider, log *zap.Logger, tgAdaptor MessageSender) *ChatNotify {
+func NewChatNotify(c ChatGetter, tgAdaptor MessageSender) *ChatNotify {
 	return &ChatNotify{
 		chat:      c,
-		log:       log,
 		tgAdaptor: tgAdaptor,
 	}
 }
@@ -68,15 +67,14 @@ func (n *ChatNotify) Broadcast(
 }
 
 type UserNotify struct {
-	user      UserProvider
+	user      UserGetter
 	log       *zap.Logger
 	tgAdaptor MessageSender
 }
 
-func newUserNotify(up UserProvider, log *zap.Logger, tgAdaptor MessageSender) *UserNotify {
+func NewUserNotify(up UserGetter, tgAdaptor MessageSender) *UserNotify {
 	return &UserNotify{
 		user:      up,
-		log:       log,
 		tgAdaptor: tgAdaptor,
 	}
 }

@@ -17,7 +17,7 @@ func NewChatAdaptor(bot *telebot.Bot) *ChatAdaptor {
 func (ca *ChatAdaptor) Broadcast(
 	chats []*telebot.Chat,
 	msg string,
-	opts ...interface{},
+	opts ...any,
 ) (*models.BroadcastResp, error) {
 	resp := models.NewBroadcastResp()
 
@@ -39,7 +39,7 @@ func (ca *ChatAdaptor) Broadcast(
 	return resp, nil
 }
 
-func (ca *ChatAdaptor) Send(chat *telebot.Chat, msg string, opts ...interface{}) error {
+func (ca *ChatAdaptor) Send(chat *telebot.Chat, msg string, opts ...any) error {
 	_, err := ca.bot.Send(chat, msg, opts...)
 
 	return err

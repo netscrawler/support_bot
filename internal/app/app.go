@@ -2,44 +2,37 @@ package app
 
 import (
 	"context"
+
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
-	"support_bot/internal/database/postgres"
-	"support_bot/internal/repository"
+	postgres "support_bot/internal/infra/out/pg"
 
-	"go.uber.org/zap"
+	"github.com/jackc/pgx/v5"
 )
 
 type App struct {
 	bot     *bot.Bot
-	log     *zap.Logger
-	storage *postgres.Storage
+	storage *pgx.Conn
 }
 
-func New(ctx context.Context, cfg *config.Config, log *zap.Logger) (*App, error) {
-	s := postgres.New(log)
-
-	err := s.Init(ctx, cfg.Database.URL)
+func New(ctx context.Context, cfg *config.Config) (*App, error) {
+	conn, err := postgres.New(context.TODO(), cfg.Database.URL)
 	if err != nil {
 		return nil, err
 	}
 
-	rb := repository.NewRB(log, s)
-
 	b, err := bot.New(
-		log,
 		cfg.Bot.TelegramToken,
 		cfg.Timeout.BotPoll,
 		cfg.Bot.CleanUpTime,
-		rb)
+		conn)
 	if err != nil {
 		return nil, err
 	}
 
 	return &App{
 		bot:     b,
-		log:     log,
-		storage: s,
+		storage: conn,
 	}, nil
 }
 
@@ -55,8 +48,8 @@ func (a *App) Start() error {
 func (a *App) GracefulShutdown(ctx context.Context) {
 	const op = "app.GracefulShutdown"
 
-	a.log.Info(op + " : shutting down application")
-	a.bot.Stop()
-	a.storage.Close(ctx)
-	a.log.Info(op + " : application stopped")
+	// a.log.Info(op + " : shutting down application")
+	// a.bot.Stop()
+	// a.storage.Close(ctx)
+	// a.log.Info(op + " : application stopped")
 }

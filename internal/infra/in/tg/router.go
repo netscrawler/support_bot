@@ -1,16 +1,12 @@
 package bot
 
 import (
-	"support_bot/internal/bot/handlers"
-	"support_bot/internal/bot/menu"
-	"support_bot/internal/bot/middlewares"
+	"support_bot/internal/infra/in/tg/handlers"
+	"support_bot/internal/infra/in/tg/menu"
+	"support_bot/internal/infra/in/tg/middlewares"
 
 	"gopkg.in/telebot.v4"
 )
-
-type handlerBuilder interface {
-	Build() (*handlers.AdminHandler, *handlers.UserHandler, *handlers.TextHandler, *middlewares.Mw)
-}
 
 type Router struct {
 	bot     *telebot.Bot
@@ -22,15 +18,16 @@ type Router struct {
 
 func NewRouter(
 	bot *telebot.Bot,
-	hb handlerBuilder,
+	admin *handlers.AdminHandler,
+	user *handlers.UserHandler,
+	text *handlers.TextHandler,
+	mw *middlewares.Mw,
 ) *Router {
-	aHl, uHl, tHl, mw := hb.Build()
-
 	return &Router{
 		bot:     bot,
-		adminHl: aHl,
-		userHl:  uHl,
-		textHl:  tHl,
+		adminHl: admin,
+		userHl:  user,
+		textHl:  text,
 		mw:      mw,
 	}
 }

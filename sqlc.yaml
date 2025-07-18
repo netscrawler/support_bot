@@ -1,0 +1,22 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./db/query/chat.sql"
+    schema: "./db/schema/schema.sql"
+    gen:
+      go:
+        package: "chatrepo"
+        out: "./internal/infra/out/pg/gen/chat/"
+        sql_package: "pgx/v5"
+        emit_interface: true
+
+  - engine: "postgresql"
+    queries: "./db/query/user.sql"
+    schema: "./db/schema/schema.sql"
+    gen:
+      go:
+        package: "userrepo"
+        out: "./internal/infra/out/pg/gen/user/"
+        sql_package: "pgx/v5"
+        emit_enum_valid_method: true
+        emit_interface: true

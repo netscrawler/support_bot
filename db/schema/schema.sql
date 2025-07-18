@@ -18,4 +18,3 @@ CREATE TABLE chats (
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true
 );
-

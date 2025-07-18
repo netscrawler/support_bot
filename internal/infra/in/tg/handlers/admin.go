@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"support_bot/internal/bot/menu"
+
+	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/service"
 
@@ -101,7 +102,6 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	)
 }
 
-// Confirm sending notification.
 func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 	ctx := context.Background()
 
@@ -135,7 +135,6 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 	return c.Edit(resp, tele.ModeMarkdownV2)
 }
 
-// Cancel sending notification.
 func (h *AdminHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
 
@@ -154,7 +153,6 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	return c.Send("Управление пользователями", menu.AdminMenu)
 }
 
-// Универсальный обработчик текстовых сообщений.
 func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 	userID := c.Sender().ID
 
