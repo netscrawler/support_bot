@@ -16,6 +16,7 @@ services:
   db:
     image: postgres:latest
     container_name: db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

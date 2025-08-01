@@ -1,3 +1,4 @@
+// Package postgres
 package postgres
 
 import (
@@ -9,33 +10,25 @@ import (
 )
 
 func New(ctx context.Context, connStr string) (*pgx.Conn, error) {
-	const op = "storage.postgres.Init"
+	l := slog.Default()
 
-	log := slog.Default()
-
-	var err error
+	l.DebugContext(ctx, "connecting to: ", slog.String("DSN", connStr))
 
 	connCfg, err := pgx.ParseConfig(connStr)
 	if err != nil {
-		log.Error("%s unable to ParseConfig")
-
-		return nil, err
+		return nil, fmt.Errorf("unable to parse connection string: %w", err)
 	}
 
 	conn, err := pgx.ConnectConfig(ctx, connCfg)
 	if err != nil {
-		log.Error(op, slog.Any("error", err))
-
-		return nil, fmt.Errorf("%s : %w", op, err)
+		return nil, fmt.Errorf("connection error: %w", err)
 	}
 
 	if err := conn.Ping(ctx); err != nil {
-		log.Error(op, slog.Any("error", err))
-
-		return nil, fmt.Errorf("%s : %w", op, err)
+		return nil, fmt.Errorf("database unreacheble: %w", err)
 	}
 
-	log.Info(op + " : successfully connected")
+	l.InfoContext(ctx, "successfully connected")
 
 	return conn, nil
 }

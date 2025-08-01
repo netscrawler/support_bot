@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/service"
@@ -19,6 +18,7 @@ type AdminHandler struct {
 	chatService *service.Chat
 	chatNotify  *service.ChatNotify
 	userNotify  *service.UserNotify
+	stats       *service.Stats
 	state       *State
 }
 
@@ -28,6 +28,7 @@ func NewAdminHandler(
 	chatService *service.Chat,
 	notificationService *service.ChatNotify,
 	userNotify *service.UserNotify,
+	stats *service.Stats,
 	state *State,
 ) *AdminHandler {
 	return &AdminHandler{
@@ -37,6 +38,7 @@ func NewAdminHandler(
 		state:       state,
 		chatNotify:  notificationService,
 		userNotify:  userNotify,
+		stats:       stats,
 	}
 }
 
@@ -48,13 +50,13 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
-		menu.AdminMenu.Row(menu.SendNotifyAdmin),
+		menu.AdminMenu.Row(menu.SendNotifyAdmin, menu.RestartCron),
 	)
 	h.state.Set(c.Sender().ID, MenuState)
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send("Добро пожаловать! Вы зарегистрированы как администратор", menu.AdminMenu)
+	return c.Send(HelloAdminRegistration, menu.AdminMenu)
 }
 
 func (h *AdminHandler) SendNotification(c tele.Context) error {
@@ -63,17 +65,17 @@ func (h *AdminHandler) SendNotification(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
+	return c.Send(PleaseSendMessage)
 }
 
 func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 	if h.state.Get(c.Sender().ID) != SendNotificationState {
-		return c.Edit("Время на отправку истекло, начните заново")
+		return c.Edit(SendTimeExpired)
 	}
 
 	msg := c.Text()
 	if msg == "" {
-		return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
+		return c.Send(PleaseSendMessage)
 	}
 
 	h.state.SetMsgData(c.Sender().ID, msg)
@@ -82,7 +84,10 @@ func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
 		"✅ Отправить",
 		"confirm_notification",
 	)
-	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_notification")
+	cancelBtn := menu.Selector.Data(
+		"❌ Отменить",
+		"cancel_notification",
+	)
 
 	menu.Selector.Inline(
 		menu.Selector.Row(cancelBtn, confirmBtn),
@@ -107,20 +112,20 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 
 	msg, ok := h.state.GetMsgData(c.Sender().ID)
 	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
-		return c.Edit("Время на подтверждение истекло")
+		return c.Edit(SendTimeExpired)
 	}
 
 	resp, err := h.chatNotify.Broadcast(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
+			return c.Edit(UnableCauseNotFound)
 		}
 
 		if errors.Is(err, models.ErrInternal) {
-			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
+			return c.Edit(UnableCauseInternal)
 		}
 
-		return c.Edit("Не удалось отправить уведомление: " + err.Error())
+		return c.Edit(UnableSendMessages + err.Error())
 	}
 
 	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
@@ -138,7 +143,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 func (h *AdminHandler) CancelSendNotification(c tele.Context) error {
 	h.state.Set(c.Sender().ID, MenuState)
 
-	return c.Edit("❌ Отправка уведомлений отменена.")
+	return c.Edit(SendNotifyAborted)
 }
 
 // ManageUsers handles the user management menu.
@@ -150,7 +155,7 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send("Управление пользователями", menu.AdminMenu)
+	return c.Send(ManageUsers, menu.AdminMenu)
 }
 
 func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
@@ -185,7 +190,7 @@ func (h *AdminHandler) AddUser(c tele.Context) error {
 	c.Delete()
 
 	return c.Send(
-		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
+		UserAddRemove,
 	)
 }
 
@@ -200,7 +205,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
-		return c.Send("Пожалуйста пришлите username начинающийся с @")
+		return c.Send(PleaseSendCorrectUsername)
 	}
 
 	username = username[1:]
@@ -265,7 +270,7 @@ func (h *AdminHandler) RemoveUser(c tele.Context) error {
 	c.Delete()
 
 	return c.Send(
-		"Пожалуйста, отправьте мне username пользователя (@username) в Telegram, которого вы хотите добавить.",
+		UserAddRemove,
 	)
 }
 
@@ -276,13 +281,13 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
-		return c.Send("Пожалуйста пришлите username начинающийся с @")
+		return c.Send(PleaseSendCorrectUsername)
 	}
 
 	// Remove @ and extract the username
 	username = username[1:]
 	if username == c.Sender().Username {
-		return c.Send("Ошибка удаления пользователя: нельзя удалить себя")
+		return c.Send(ErrDeleteUserCauseSuicide)
 	}
 
 	role, err := h.userService.IsAllowed(ctx, c.Sender().ID)
@@ -291,13 +296,13 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	}
 
 	if err != nil {
-		return c.Send("Ошибка удаления пользователя: " + err.Error())
+		return c.Send(ErrDeleteUser + err.Error())
 	}
 
 	// Call service to remove user
 	err = h.userService.Delete(ctx, username, isPrimeReq)
 	if err != nil {
-		return c.Send("Ошибка удаления пользователя: " + err.Error())
+		return c.Send(ErrDeleteUser + err.Error())
 	}
 
 	h.state.Set(c.Sender().ID, MenuState)
@@ -308,6 +313,8 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 // ListUsers handles listing all users.
 func (h *AdminHandler) ListUsers(c tele.Context) error {
 	ctx := context.Background()
+	//nolint:errcheck
+	c.Delete()
 
 	users, err := h.userService.GetAll(ctx)
 	if errors.Is(err, models.ErrNotFound) {
@@ -327,8 +334,6 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 			fmt.Sprintf("%d. @%s - Role: %s\n", i+1, user.Username, user.Role),
 		)
 	}
-	//nolint:errcheck
-	c.Delete()
 
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
 }
@@ -382,7 +387,7 @@ func (h *AdminHandler) RemoveChat(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send("Пожалуйста пришлите имя чата (@title) который вы хотите удалить.")
+	return c.Send("Пожалуйста пришлите имя чата который вы хотите удалить.")
 }
 
 // ProcessRemoveChat processes the chat input for removing a chat.
@@ -390,11 +395,6 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 	ctx := context.Background()
 
 	chatName := c.Text()
-	if !strings.HasPrefix(chatName, "@") {
-		return c.Send("Пожалуйста пришлите имя чата начинающиеся с @")
-	}
-
-	chatName = chatName[1:]
 
 	err := h.chatService.Remove(ctx, chatName)
 	if err != nil {
@@ -403,7 +403,7 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 
 	h.state.Set(c.Sender().ID, MenuState)
 
-	return c.Send("Чат @" + chatName + " успешно удален!")
+	return c.Send("Чат " + chatName + " успешно удален!")
 }
 
 // ListChats handles listing all chats.
@@ -425,11 +425,34 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 
 	for i, chat := range chats {
 		response.WriteString(
-			fmt.Sprintf("%d. @%s\n", i+1, chat.Title),
+			fmt.Sprintf("%d. %s\n", i+1, chat.Title),
 		)
 	}
 	//nolint:errcheck
 	c.Delete()
 
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+}
+
+// ManageCron handles the chat management menu.
+func (h *AdminHandler) ManageCron(c tele.Context) error {
+	menu.AdminMenu.Reply(
+		menu.AdminMenu.Row(menu.RestartCron),
+		menu.AdminMenu.Row(menu.ListNotify, menu.Back))
+
+	c.Delete()
+
+	return c.Send("Управление чатами", menu.AdminMenu)
+}
+
+// RestartCronJobs перезапускает крон-задачи для уведомлений.
+func (h *AdminHandler) RestartCronJobs(c tele.Context) error {
+	ctx := context.Background()
+
+	err := h.stats.Start(ctx)
+	if err != nil {
+		return c.Send(fmt.Sprintf("❌ Ошибка перезапуска крон-задач: %v", err))
+	}
+
+	return c.Send("✅ Крон-задачи успешно перезапущены")
 }

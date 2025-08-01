@@ -60,6 +60,7 @@ func (s *State) SetMsgData(chatID int64, msg string) {
 func (s *State) GetMsgData(chatID int64) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	data, ok := s.msg[chatID]
 
 	return data, ok
@@ -68,6 +69,7 @@ func (s *State) GetMsgData(chatID int64) (string, bool) {
 func (s *State) Delete(chatID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	delete(s.s, chatID)
 	delete(s.msg, chatID)
 

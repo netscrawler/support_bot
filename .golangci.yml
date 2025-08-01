@@ -2,17 +2,37 @@ version: "2"
 run:
   issues-exit-code: 1
 linters:
-  default: all
+  enable:
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - spancheck
+    - rowserrcheck
+    - sqlclosecheck
+    - gosec
+    - cyclop
+    - gocognit
+    - nestif
+    - asciicheck
+    - errname
+    - errcheck
+    - errchkjson
+    - nilerr
+    - ineffassign
+    - unused
+    - unparam
+    - unconvert	
+    - perfsprint
+    - usestdlibvars
+    - noctx
+    - ireturn
+    - tparallel
+    - revive
+    - staticcheck
+    - gocritic
+    - loggercheck
+  default: none
   disable:
-    - dupl
-    - tagliatelle
-    - gochecknoglobals
-    - exhaustruct
-    - wrapcheck
-    - depguard
-    - tagalign
-    - godox
-    - varnamelen
   settings:
     revive:
       severity: warning
@@ -32,7 +52,6 @@ linters:
       - examples$
 formatters:
   enable:
-    - gofmt
     - gofumpt
     - goimports
     - golines

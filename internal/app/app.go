@@ -2,10 +2,17 @@ package app
 
 import (
 	"context"
-
+	"log/slog"
+	"net/http"
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
+	"support_bot/internal/pkg/logger"
+	"support_bot/internal/service"
+	"time"
+
 	postgres "support_bot/internal/infra/out/pg"
+	pgrepo "support_bot/internal/infra/out/pg/repo"
+	telegram "support_bot/internal/infra/out/tg"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -13,19 +20,54 @@ import (
 type App struct {
 	bot     *bot.Bot
 	storage *pgx.Conn
+	stats   *service.Stats
 }
 
 func New(ctx context.Context, cfg *config.Config) (*App, error) {
-	conn, err := postgres.New(context.TODO(), cfg.Database.URL)
+	connCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	log := slog.Default()
+
+	connCtx = logger.AppendCtx(connCtx, slog.Any("function", "connecting to database"))
+
+	conn, err := postgres.New(connCtx, cfg.Database.URL)
+	if err != nil {
+		log.InfoContext(connCtx, "unable to create connection", slog.Any("error", err))
+
+		return nil, err
+	}
+
+	tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll)
 	if err != nil {
 		return nil, err
 	}
 
+	chatRepo := pgrepo.NewChat(conn)
+	userRepo := pgrepo.NewUser(conn)
+	notifyRepo := pgrepo.NewQuery(conn)
+
+	chatService := service.NewChat(chatRepo)
+	userService := service.NewUser(userRepo)
+
+	messageSender := telegram.NewChatAdaptor(tgBot)
+
+	notifyier := service.NewChatNotify(chatRepo, messageSender)
+	userNotifier := service.NewUserNotify(userRepo, messageSender)
+
+	// Создаем Metabase клиент
+	metabaseClient := service.NewMetabase(cfg.MetabaseDomain, &http.Client{})
+	statsService := service.New(notifyRepo, messageSender, metabaseClient)
+
 	b, err := bot.New(
-		cfg.Bot.TelegramToken,
-		cfg.Timeout.BotPoll,
 		cfg.Bot.CleanUpTime,
-		conn)
+		tgBot,
+		userService,
+		chatService,
+		notifyier,
+		userNotifier,
+		statsService,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -33,23 +75,40 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	return &App{
 		bot:     b,
 		storage: conn,
+		stats:   statsService,
 	}, nil
 }
 
 func (a *App) Start() error {
-	err := a.bot.Start()
-	if err != nil {
-		return err
+	go a.bot.Start()
+
+	log := slog.Default()
+
+	if err := a.stats.Start(context.Background()); err != nil {
+		log.Error("unable start cron", slog.Any("error", err))
 	}
+
+	log.Info("application successfully started")
 
 	return nil
 }
 
 func (a *App) GracefulShutdown(ctx context.Context) {
-	const op = "app.GracefulShutdown"
+	log := slog.Default()
+	log.InfoContext(ctx, "start")
+	a.stats.Stop()
 
-	// a.log.Info(op + " : shutting down application")
-	// a.bot.Stop()
-	// a.storage.Close(ctx)
-	// a.log.Info(op + " : application stopped")
+	log.InfoContext(ctx, "cron stopped")
+
+	a.bot.Stop()
+	log.InfoContext(ctx, "bot stopped")
+
+	err := a.storage.Close(ctx)
+	if err != nil {
+		log.InfoContext(ctx, "unable to close db connection", slog.Any("error", err))
+
+		return
+	}
+
+	log.InfoContext(ctx, "successfully stop")
 }

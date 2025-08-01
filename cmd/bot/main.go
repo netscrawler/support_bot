@@ -2,14 +2,14 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
-	"syscall"
-
 	"support_bot/internal/app"
 	"support_bot/internal/config"
-
-	"go.uber.org/zap"
+	"support_bot/internal/pkg/logger"
+	"syscall"
+	"time"
 )
 
 const (
@@ -28,14 +28,18 @@ func main() {
 
 	ctx := context.Background()
 
+	log.Debug("starting with config", slog.Any("config", cfg))
+
 	app, err := app.New(ctx, cfg)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Error("failing creating app", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	err = app.Start()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Error("failing start app", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -43,20 +47,48 @@ func main() {
 
 	<-stop
 
-	app.GracefulShutdown(ctx)
+	sCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	shutdownCtx := logger.AppendCtx(sCtx,
+		slog.Any("function", "shutting down"))
+	app.GracefulShutdown(shutdownCtx)
 }
 
-func setupLogger(isDebug string) *zap.Logger {
-	var log *zap.Logger
+func setupLogger(isDebug string) *slog.Logger {
+	var log *slog.Logger
 
 	switch isDebug {
 	case debug:
-		log, _ = zap.NewDevelopment()
+		log = slog.New(
+			logger.ContextHandler{
+				Handler: slog.NewTextHandler(
+					os.Stdout,
+					&slog.HandlerOptions{Level: slog.LevelDebug},
+				),
+			},
+		)
 	case prod:
-		log, _ = zap.NewProduction()
+		log = slog.New(
+			logger.ContextHandler{
+				Handler: slog.NewTextHandler(
+					os.Stdout,
+					&slog.HandlerOptions{Level: slog.LevelInfo},
+				),
+			},
+		)
 	default:
-		log, _ = zap.NewDevelopment()
+		log = slog.New(
+			logger.ContextHandler{
+				Handler: slog.NewTextHandler(
+					os.Stdout,
+					&slog.HandlerOptions{Level: slog.LevelInfo},
+				),
+			},
+		)
 	}
+
+	slog.SetDefault(log)
 
 	return log
 }

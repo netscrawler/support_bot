@@ -3,7 +3,7 @@
 //   sqlc v1.29.0
 // source: chat.sql
 
-package chatrepo
+package repogen
 
 import (
 	"context"

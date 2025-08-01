@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-
 	"support_bot/internal/models"
 
 	"gopkg.in/telebot.v4"

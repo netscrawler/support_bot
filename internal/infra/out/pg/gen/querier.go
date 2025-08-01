@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.29.0
 
-package userrepo
+package repogen
 
 import (
 	"context"
@@ -11,12 +11,18 @@ import (
 )
 
 type Querier interface {
+	CreateChat(ctx context.Context, arg CreateChatParams) (Chat, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteChatByID(ctx context.Context, chatID int64) error
 	DeleteUserbyTgID(ctx context.Context, telegramID int64) error
 	GetAllAdmins(ctx context.Context) ([]User, error)
+	GetAllChats(ctx context.Context) ([]Chat, error)
 	GetAllUsers(ctx context.Context) ([]User, error)
+	GetChatByTitle(ctx context.Context, title pgtype.Text) (Chat, error)
 	GetUserByTgID(ctx context.Context, telegramID int64) (User, error)
 	GetUserByUsername(ctx context.Context, username pgtype.Text) (User, error)
+	ListAllActiveNotifies(ctx context.Context) ([]Notify, error)
+	ListAllNotifies(ctx context.Context) ([]Notify, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 }
 

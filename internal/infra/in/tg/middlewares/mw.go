@@ -2,7 +2,9 @@ package middlewares
 
 import (
 	"context"
+	"log/slog"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/logger"
 
 	"gopkg.in/telebot.v4"
 )
@@ -13,10 +15,14 @@ type UserProvider interface {
 
 type Mw struct {
 	userPr UserProvider
+	l      *slog.Logger
 }
 
 func NewMw(uPr UserProvider) *Mw {
+	l := slog.Default()
+
 	return &Mw{
+		l:      l,
 		userPr: uPr,
 	}
 }
@@ -24,26 +30,13 @@ func NewMw(uPr UserProvider) *Mw {
 func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
+		ctx := logger.AppendCtx(context.Background(), slog.Any("userID", userID))
 
-		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
+		role, err := mw.userPr.IsAllowed(ctx, userID)
 		//nolint:nilerr
 		if err != nil || role == models.Denied {
-			return nil // Не выдаём ошибку пользователю
-		}
+			mw.l.InfoContext(ctx, "unauthorized access attempt", slog.Any("from", c.Sender()))
 
-		c.Set("isAdmin", role)
-
-		return next(c)
-	}
-}
-
-func (mw *Mw) TextAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
-	return func(c telebot.Context) error {
-		userID := c.Sender().ID
-
-		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
-		//nolint:nilerr
-		if err != nil || role == models.Denied {
 			return nil // Не выдаём ошибку пользователю
 		}
 
@@ -57,9 +50,13 @@ func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc 
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
 
-		role, err := mw.userPr.IsAllowed(context.TODO(), userID)
-		//nolint:nilerr
+		ctx := logger.AppendCtx(context.Background(), slog.Any("userID", userID))
+
+		role, err := mw.userPr.IsAllowed(ctx, userID)
+
 		if err != nil || role == models.Denied || role == models.UserRole {
+			mw.l.InfoContext(ctx, "unauthorized admin access attempt", slog.Any("from", c.Sender()))
+
 			return nil // Не выдаём ошибку пользователю
 		}
 

@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	LogLevel string         `yaml:"log_level" env:"LOG_LEVEL"`
-	Database configDatabase `yaml:"database"`
-	Bot      configBot      `yaml:"bot"`
-	Timeout  configTimeout  `yaml:"timeout"`
+	LogLevel       string         `yaml:"log_level"       env:"LOG_LEVEL"`
+	MetabaseDomain string         `yaml:"metabase_domain"`
+	Database       configDatabase `yaml:"database"`
+	Bot            configBot      `yaml:"bot"`
+	Timeout        configTimeout  `yaml:"timeout"`
 }
 type configBot struct {
 	TelegramToken string        `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`

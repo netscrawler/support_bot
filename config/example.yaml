@@ -1,4 +1,5 @@
 log_level: prod
+metabase_domain: https://your-metabase-instance.com
 database:
   port: 5432
   host: localhost

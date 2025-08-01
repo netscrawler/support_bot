@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-
 	"support_bot/internal/models"
 
 	"gopkg.in/telebot.v4"
@@ -48,7 +47,7 @@ func (c *Chat) Remove(ctx context.Context, title string) error {
 
 	chID := ch.ChatID
 
-	return c.repo.Delete(context.Background(), chID)
+	return c.repo.Delete(ctx, chID)
 }
 
 func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {

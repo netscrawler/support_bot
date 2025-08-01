@@ -2,3 +2,4 @@ docker-compose.yml
 config/local.yaml
 doc/Schemas.mdj
 bin/
+private_*

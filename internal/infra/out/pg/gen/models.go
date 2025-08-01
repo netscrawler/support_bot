@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.29.0
 
-package userrepo
+package repogen
 
 import (
 	"database/sql/driver"
@@ -10,6 +10,50 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type NotifyFormat string
+
+const (
+	NotifyFormatText NotifyFormat = "text"
+	NotifyFormatPng  NotifyFormat = "png"
+	NotifyFormatCsv  NotifyFormat = "csv"
+	NotifyFormatXlsx NotifyFormat = "xlsx"
+)
+
+func (e *NotifyFormat) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotifyFormat(s)
+	case string:
+		*e = NotifyFormat(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotifyFormat: %T", src)
+	}
+	return nil
+}
+
+type NullNotifyFormat struct {
+	NotifyFormat NotifyFormat
+	Valid        bool // Valid is true if NotifyFormat is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotifyFormat) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotifyFormat, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotifyFormat.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotifyFormat) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotifyFormat), nil
+}
 
 type UserRole string
 
@@ -54,16 +98,6 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
-func (e UserRole) Valid() bool {
-	switch e {
-	case UserRoleAdmin,
-		UserRoleUser,
-		UserRolePrimary:
-		return true
-	}
-	return false
-}
-
 type Chat struct {
 	ID          int32
 	ChatID      int64
@@ -71,6 +105,20 @@ type Chat struct {
 	Type        string
 	Description pgtype.Text
 	IsActive    bool
+}
+
+type Notify struct {
+	ID           int32
+	Name         string
+	GroupID      pgtype.Text
+	CardUuid     string
+	Cron         string
+	TemplateText pgtype.Text
+	Title        pgtype.Text
+	GroupTitle   pgtype.Text
+	ChatID       int64
+	Active       bool
+	Format       []string
 }
 
 type User struct {

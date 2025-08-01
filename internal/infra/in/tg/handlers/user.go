@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/service"
@@ -100,7 +99,7 @@ func (h *UserHandler) SendNotification(c tele.Context) error {
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
+	return c.Send(PleaseSendMessage)
 }
 
 func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
@@ -110,7 +109,7 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 
 	msg := c.Text()
 	if msg == "" {
-		return c.Send("Пожалуйста, пришлите мне сообщение, которое вы хотите отправить.")
+		return c.Send(PleaseSendMessage)
 	}
 
 	h.state.SetMsgData(c.Sender().ID, msg)
@@ -149,14 +148,14 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 	resp, err := h.chatNotify.Broadcast(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return c.Edit("Не удалось отправить уведомление: не нашлось чатов для отправки")
+			return c.Edit(UnableCauseNotFound)
 		}
 
 		if errors.Is(err, models.ErrInternal) {
-			return c.Edit("Не удалось отправить уведомление: внутренняя ошибка")
+			return c.Edit(UnableCauseInternal)
 		}
 
-		return c.Edit("Не удалось отправить уведомление: " + err.Error())
+		return c.Edit(UnableSendMessages + err.Error())
 	}
 
 	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)

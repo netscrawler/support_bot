@@ -1,18 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
-
+	"log/slog"
 	"support_bot/internal/models"
 
-	"go.uber.org/zap"
 	"gopkg.in/telebot.v4"
 )
-
-type ChatGetter interface {
-	GetAll(ctx context.Context) ([]models.Chat, error)
-}
 
 type UserGetter interface {
 	GetAll(ctx context.Context) ([]models.User, error)
@@ -20,55 +16,20 @@ type UserGetter interface {
 }
 
 type MessageSender interface {
-	Broadcast(chats []*telebot.Chat, msg string, opts ...interface{}) (*models.BroadcastResp, error)
-	Send(chat *telebot.Chat, msg string, opts ...interface{}) error
-}
-
-type ChatNotify struct {
-	chat      ChatGetter
-	tgAdaptor MessageSender
-}
-
-func NewChatNotify(c ChatGetter, tgAdaptor MessageSender) *ChatNotify {
-	return &ChatNotify{
-		chat:      c,
-		tgAdaptor: tgAdaptor,
-	}
-}
-
-// При возникновении ошибки возвращает нули и ошибку.
-func (n *ChatNotify) Broadcast(
-	ctx context.Context,
-	notify string,
-) (string, error) {
-	chats, err := n.chat.GetAll(ctx)
-	if err != nil {
-		if errors.Is(err, models.ErrNotFound) {
-			return "", models.ErrNotFound
-		}
-
-		return "", models.ErrInternal
-	}
-
-	if len(chats) == 0 {
-		return "", models.ErrNotFound
-	}
-
-	tgchats := []*telebot.Chat{}
-
-	for _, chat := range chats {
-		tgchat := telebot.Chat{ID: chat.ChatID, Title: chat.Title}
-		tgchats = append(tgchats, &tgchat)
-	}
-
-	resp, err := n.tgAdaptor.Broadcast(tgchats, notify)
-
-	return resp.String(), err
+	Broadcast(chats []*telebot.Chat, msg string, opts ...any) (*models.BroadcastResp, error)
+	Send(chat *telebot.Chat, msg string, opts ...any) error
+	SendDocument(
+		chat *telebot.Chat,
+		buf *bytes.Buffer,
+		filename string,
+		opts ...any,
+	) error
+	SendMedia(chat *telebot.Chat, imgs []*bytes.Buffer, opts ...any) error
 }
 
 type UserNotify struct {
-	user      UserGetter
-	log       *zap.Logger
+	user UserGetter
+	// log       *zap.Logger
 	tgAdaptor MessageSender
 }
 
@@ -108,9 +69,11 @@ func (n *UserNotify) SendNotify(
 ) error {
 	const op = "service.UserNotify.SendNotify"
 
+	l := slog.Default()
+
 	err := n.tgAdaptor.Send(&telebot.Chat{ID: tgID}, notify)
 	if err != nil {
-		n.log.Error(op, zap.Error(err))
+		l.ErrorContext(ctx, "Send notify error", slog.Any("error", err))
 
 		return err
 	}
@@ -122,8 +85,7 @@ func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, noti
 	const op = "service.UserNotify.SendAdminNotify"
 
 	users, err := n.user.GetAllAdmins(ctx)
-	n.log.Info(op, zap.Any("chats", users))
-
+	// n.log.Info(op, zap.Any("chats", users))
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound

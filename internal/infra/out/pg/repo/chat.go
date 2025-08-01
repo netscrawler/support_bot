@@ -4,18 +4,19 @@ import (
 	"context"
 	"support_bot/internal/models"
 
-	chatrepo "support_bot/internal/infra/out/pg/gen/chat"
+	gen "support_bot/internal/infra/out/pg/gen"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Chat struct {
-	q *chatrepo.Queries
+	q *gen.Queries
 }
 
 func NewChat(s *pgx.Conn) *Chat {
-	q := chatrepo.New(s)
+	q := gen.New(s)
+
 	return &Chat{
 		q: q,
 	}
@@ -23,24 +24,32 @@ func NewChat(s *pgx.Conn) *Chat {
 
 func (c *Chat) Create(ctx context.Context, chat *models.Chat) error {
 	title := pgtype.Text{}
-	title.Scan(chat.Title)
+
+	if err := title.Scan(chat.Title); err != nil {
+		return err
+	}
 
 	desc := pgtype.Text{}
-	desc.Scan(chat.Description)
+	if err := desc.Scan(chat.Description); err != nil {
+		return err
+	}
 
-	_, err := c.q.CreateChat(ctx, chatrepo.CreateChatParams{
+	_, err := c.q.CreateChat(ctx, gen.CreateChatParams{
 		ChatID:      chat.ChatID,
 		Title:       title,
 		Type:        chat.Type,
 		Description: desc,
 		IsActive:    chat.IsActive,
 	})
+
 	return err
 }
 
 func (c *Chat) GetByTitle(ctx context.Context, title string) (*models.Chat, error) {
 	pgTitle := pgtype.Text{}
-	pgTitle.Scan(title)
+	if err := pgTitle.Scan(title); err != nil {
+		return nil, err
+	}
 
 	chat, err := c.q.GetChatByTitle(ctx, pgTitle)
 	if err != nil {
@@ -69,10 +78,11 @@ func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
 
 func (c *Chat) Delete(ctx context.Context, chatID int64) error {
 	err := c.q.DeleteChatByID(ctx, chatID)
+
 	return err
 }
 
-func chatFromGenModel(c chatrepo.Chat) models.Chat {
+func chatFromGenModel(c gen.Chat) models.Chat {
 	return models.Chat{
 		ID:          int(c.ID),
 		ChatID:      c.ChatID,

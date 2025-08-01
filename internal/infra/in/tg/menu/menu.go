@@ -14,8 +14,11 @@ var (
 )
 
 var (
-	ManageUsers = AdminMenu.Text("👥 Управление пользователями")
-	ManageChats = AdminMenu.Text("💬 Управление чатами")
+	ManageUsers   = AdminMenu.Text("👥 Управление пользователями")
+	ManageChats   = AdminMenu.Text("💬 Управление чатами")
+	RestartCron   = AdminMenu.Text("🔄 Перезапустить крон-задачи")
+	DisableNotify = AdminMenu.Text("🔄 Выключить рассылку")
+	EnableNotify  = AdminMenu.Text("🔄 Выключить рассылку")
 
 	ListUser   = AdminMenu.Text("📋 Список пользователей")
 	AddUser    = AdminMenu.Text("➕ Добавить пользователя")
@@ -23,6 +26,8 @@ var (
 
 	ListChats  = AdminMenu.Text("📋 Список чатов")
 	RemoveChat = AdminMenu.Text("➖ Удалить чат")
+
+	ListNotify = AdminMenu.Text("📋 Список уведомлений")
 
 	Back = AdminMenu.Text("🔙 Назад")
 )

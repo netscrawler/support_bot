@@ -37,7 +37,7 @@ func (r *Router) Setup() {
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
 
 	text := r.bot.Group()
-	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.mw.TextAuthMiddleware)
+	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.mw.UserAuthMiddleware)
 
 	userOnly := r.bot.Group()
 
@@ -56,6 +56,7 @@ func (r *Router) Setup() {
 	)
 
 	adminOnly := r.bot.Group()
+
 	adminOnly.Use(r.mw.AdminAuthMiddleware)
 	adminOnly.Handle(menu.StartCommand, r.adminHl.StartAdmin)
 	adminOnly.Handle(&menu.ManageUsers, r.adminHl.ManageUsers)
@@ -68,6 +69,7 @@ func (r *Router) Setup() {
 	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
 	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)
+	adminOnly.Handle(&menu.RestartCron, r.adminHl.RestartCronJobs)
 	adminOnly.Handle(
 		&telebot.InlineButton{Unique: "confirm_notification"},
 		r.adminHl.ConfirmSendNotification,

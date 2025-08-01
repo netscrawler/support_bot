@@ -1,16 +1,14 @@
 package bot
 
 import (
+	"log/slog"
+	"support_bot/internal/infra/in/tg/handlers"
+	"support_bot/internal/infra/in/tg/middlewares"
+	"support_bot/internal/service"
 	"time"
 
 	bot "support_bot/internal/infra/in/tg"
-	"support_bot/internal/infra/in/tg/handlers"
-	"support_bot/internal/infra/in/tg/middlewares"
-	pgrepo "support_bot/internal/infra/out/pg/repo"
-	telegram "support_bot/internal/infra/out/tg"
-	"support_bot/internal/service"
 
-	"github.com/jackc/pgx/v5"
 	"gopkg.in/telebot.v4"
 )
 
@@ -19,12 +17,7 @@ type Bot struct {
 	router *bot.Router
 }
 
-func New(
-	token string,
-	poll time.Duration,
-	cleanupTime time.Duration,
-	storage *pgx.Conn,
-) (*Bot, error) {
+func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: poll},
@@ -35,30 +28,32 @@ func New(
 		return nil, err
 	}
 
-	chatRepo := pgrepo.NewChat(storage)
-	userRepo := pgrepo.NewUser(storage)
+	return b, nil
+}
 
-	chatService := service.NewChat(chatRepo)
-	userService := service.NewUser(userRepo)
-
-	messageSender := telegram.NewChatAdaptor(b)
-
-	notifyier := service.NewChatNotify(chatRepo, messageSender)
-	userNotifier := service.NewUserNotify(userRepo, messageSender)
-
+func New(
+	cleanupTime time.Duration,
+	tgBot *telebot.Bot,
+	userService *service.User,
+	chatService *service.Chat,
+	notifyier *service.ChatNotify,
+	userNotifier *service.UserNotify,
+	statsService *service.Stats,
+) (*Bot, error) {
 	state := handlers.NewState(cleanupTime)
 
 	adminHandler := handlers.NewAdminHandler(
-		b,
+		tgBot,
 		userService,
 		chatService,
 		notifyier,
 		userNotifier,
+		statsService,
 		state,
 	)
 
 	userHandler := handlers.NewUserHandler(
-		b,
+		tgBot,
 		chatService,
 		userService,
 		state,
@@ -70,22 +65,35 @@ func New(
 
 	mw := middlewares.NewMw(userService)
 
-	router := bot.NewRouter(b, adminHandler, userHandler, textHandler, mw)
+	router := bot.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
 
 	router.Setup()
 
 	return &Bot{
-		bot:    b,
+		bot:    tgBot,
 		router: router,
 	}, nil
 }
 
-func (b *Bot) Start() error {
-	b.bot.Start()
+func (b *Bot) Start() {
+	slog.Info("starting bot polling")
 
-	return nil
+	// // Запускаем статистику и крон-задачи
+	// ctx := context.Background()
+	// if err := b.stats.GetStats(ctx); err != nil {
+	// 	slog.Error("failed to start stats service", slog.Any("error", err))
+	// }
+
+	b.bot.Start()
 }
 
 func (b *Bot) Stop() {
+	slog.Info("stop bot polling")
+
+	// Останавливаем статистику
+	// if b.stats != nil {
+	// 	b.stats.Stop()
+	// }
+
 	b.bot.Stop()
 }
