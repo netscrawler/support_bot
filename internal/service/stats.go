@@ -10,6 +10,7 @@ import (
 	"strings"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/xlsx"
+	"text/template"
 	"time"
 
 	pngpkg "support_bot/internal/pkg/png"
@@ -19,7 +20,6 @@ import (
 )
 
 type StatsQueryGetter interface {
-	GetAll(ctx context.Context) ([]models.Notify, error)
 	GetAllActive(ctx context.Context) ([]models.Notify, error)
 }
 
@@ -61,6 +61,7 @@ func (s *Stats) Start(ctx context.Context) error {
 
 	// Группируем уведомления по GroupID
 	groupedNotifies := make(map[string][]models.Notify)
+	groupCron := make(map[string]string)
 
 	for _, notify := range notifies {
 		groupID := notify.GroupID
@@ -69,11 +70,12 @@ func (s *Stats) Start(ctx context.Context) error {
 		}
 
 		groupedNotifies[groupID] = append(groupedNotifies[groupID], notify)
+		groupCron[groupID] = string(notify.Cron)
 	}
 
 	// Создаем крон-задачи для каждой группы
 	for groupID, groupNotifies := range groupedNotifies {
-		_, err := s.cron.AddFunc("* * * * *", func() {
+		_, err := s.cron.AddFunc(groupCron[groupID], func() {
 			s.sendGroupNotifications(ctx, groupNotifies)
 		})
 		if err != nil {
@@ -101,6 +103,7 @@ func (s *Stats) Start(ctx context.Context) error {
 // Stop останавливает все крон-задачи.
 func (s *Stats) Stop() {
 	if s.cron != nil {
+		slog.Info("stopping crong jobs")
 		s.cron.Stop()
 	}
 }
@@ -114,20 +117,19 @@ func (s *Stats) getMetabaseData(ctx context.Context, notify models.Notify) ([][]
 	return s.metabase.GetDataMatrix(ctx, notify.CardUUID)
 }
 
-// fillTemplateWithData заполняет шаблон данными из Metabase.
-func (s *Stats) fillTemplateWithData(template string, data map[string]any) string {
-	// Простая реализация замены плейсхолдеров
-	// Можно использовать более сложные библиотеки для шаблонизации
-	result := template
-
-	// Заменяем плейсхолдеры вида {{key}} на значения из data
-	for key, value := range data {
-		placeholder := fmt.Sprintf("{{.%s}}", key)
-		valueStr := fmt.Sprintf("%v", value)
-		result = strings.ReplaceAll(result, placeholder, valueStr)
+func (s *Stats) fillTemplateWithData(templateStr string, data map[string]any) string {
+	tmpl, err := template.New("").Parse(templateStr)
+	if err != nil {
+		slog.Error("unable parse template", slog.Any("error", err))
+		return templateStr
 	}
-
-	return result
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		slog.Error("unable fill template", slog.Any("error", err))
+		return templateStr
+	}
+	return buf.String()
 }
 
 // formatDataAsText форматирует данные как текстовую таблицу.
@@ -304,18 +306,20 @@ func (s *Stats) sendData(
 		}
 	}
 
-	xlsxBook, err := xlsx.CreateXlsxBook(xlsxData)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create xlsx book", slog.Any("error", err))
+	if len(xlsxData) > 0 {
+		xlsxBook, err := xlsx.CreateXlsxBook(xlsxData)
+		if err != nil {
+			logger.ErrorContext(ctx, "failed to create xlsx book", slog.Any("error", err))
 
-		return err
-	}
+			return err
+		}
+		err = s.message.SendDocument(chat, xlsxBook, title+".xlsx")
+		if err != nil {
+			logger.ErrorContext(ctx, "failed to send xlsx file", slog.Any("error", err))
 
-	err = s.message.SendDocument(chat, xlsxBook, title+".xlsx")
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to send xlsx file", slog.Any("error", err))
+			return err
+		}
 
-		return err
 	}
 
 	// Отправляем текстовые сообщения

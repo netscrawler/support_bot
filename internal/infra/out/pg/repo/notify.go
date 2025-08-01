@@ -53,7 +53,7 @@ func (q *Notify) GetAll(ctx context.Context) ([]models.Notify, error) {
 }
 
 func (q *Notify) GetAllActive(ctx context.Context) ([]models.Notify, error) {
-	g, err := q.q.ListAllNotifies(ctx)
+	g, err := q.q.ListAllActiveNotifies(ctx)
 	if err != nil {
 		return nil, err
 	}

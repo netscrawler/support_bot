@@ -5,6 +5,8 @@ import (
 	"errors"
 	"text/template"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 type Cron string
@@ -28,11 +30,10 @@ var FormatMap = map[string]NotifyFormat{
 }
 
 func NewCron(cronExpr string) (Cron, error) {
-	// cron.NewParser(cron.ParseOption(1))
-	// _, err := cron.ParseStandard(cronExpr) // 5 полей (без секунд)
-	// if err != nil {
-	// 	return "", ErrInvalidCron
-	// }
+	_, err := cron.ParseStandard(cronExpr) // 5 полей (без секунд)
+	if err != nil {
+		return "", ErrInvalidCron
+	}
 	return Cron(cronExpr), nil
 }
 
