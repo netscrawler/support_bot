@@ -30,12 +30,25 @@ func NewMw(uPr UserProvider) *Mw {
 func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
-		ctx := logger.AppendCtx(context.Background(), slog.Any("userID", userID))
+		ctx := logger.AppendCtx(
+			context.Background(),
+			slog.Any("userID", userID),
+			slog.Any("username", c.Sender().Username),
+			slog.Any("name", c.Sender().FirstName),
+			slog.Any("from_id", c.Chat().ID),
+			slog.Any("chat_name", c.Chat().Title),
+		)
 
 		role, err := mw.userPr.IsAllowed(ctx, userID)
 		//nolint:nilerr
 		if err != nil || role == models.Denied {
-			mw.l.InfoContext(ctx, "unauthorized access attempt", slog.Any("from", c.Sender()))
+			mw.l.InfoContext(
+				ctx,
+				"unauthorized access attempt",
+			)
+			if err != nil {
+				mw.l.InfoContext(ctx, "error check user", slog.Any("error", err))
+			}
 
 			return nil // Не выдаём ошибку пользователю
 		}
@@ -50,12 +63,24 @@ func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc 
 	return func(c telebot.Context) error {
 		userID := c.Sender().ID
 
-		ctx := logger.AppendCtx(context.Background(), slog.Any("userID", userID))
+		ctx := logger.AppendCtx(context.Background(),
+			slog.Any("userID", userID),
+			slog.Any("username", c.Sender().Username),
+			slog.Any("name", c.Sender().FirstName),
+			slog.Any("from_id", c.Chat().ID),
+			slog.Any("chat_name", c.Chat().Title),
+		)
 
 		role, err := mw.userPr.IsAllowed(ctx, userID)
 
 		if err != nil || role == models.Denied || role == models.UserRole {
-			mw.l.InfoContext(ctx, "unauthorized admin access attempt", slog.Any("from", c.Sender()))
+			mw.l.InfoContext(
+				ctx,
+				"unauthorized admin access attempt",
+			)
+			if err != nil {
+				mw.l.InfoContext(ctx, "error check user", slog.Any("error", err))
+			}
 
 			return nil // Не выдаём ошибку пользователю
 		}

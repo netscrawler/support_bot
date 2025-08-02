@@ -41,6 +41,16 @@ func TestNewCron(t *testing.T) {
 		assert.Equal(t, models.Cron("5 1 * * *"), c, "cron must be equal to '5 1 * * *'")
 	})
 
+	t.Run("valid cron with /", func(t *testing.T) {
+		t.Parallel()
+		assert.New(t)
+
+		c, err := models.NewCron("5 0/10 * * *")
+
+		assert.NoError(t, err)
+		assert.Equal(t, models.Cron("5 0/10 * * *"), c, "cron must be equal to '5 0/10 * * *'")
+	})
+
 	t.Run("invalid cron", func(t *testing.T) {
 		t.Parallel()
 		assert.New(t)

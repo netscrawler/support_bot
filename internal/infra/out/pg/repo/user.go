@@ -7,7 +7,6 @@ import (
 
 	gen "support_bot/internal/infra/out/pg/gen"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -16,7 +15,7 @@ type User struct {
 	l *slog.Logger
 }
 
-func NewUser(s *pgx.Conn) *User {
+func NewUser(s gen.DBTX) *User {
 	q := gen.New(s)
 	l := slog.Default()
 

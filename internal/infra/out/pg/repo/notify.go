@@ -5,15 +5,13 @@ import (
 	"support_bot/internal/models"
 
 	gen "support_bot/internal/infra/out/pg/gen"
-
-	"github.com/jackc/pgx/v5"
 )
 
 type Notify struct {
 	q *gen.Queries
 }
 
-func NewQuery(s *pgx.Conn) *Notify {
+func NewQuery(s gen.DBTX) *Notify {
 	q := gen.New(s)
 
 	return &Notify{

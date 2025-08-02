@@ -6,7 +6,6 @@ import (
 
 	gen "support_bot/internal/infra/out/pg/gen"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -14,7 +13,7 @@ type Chat struct {
 	q *gen.Queries
 }
 
-func NewChat(s *pgx.Conn) *Chat {
+func NewChat(s gen.DBTX) *Chat {
 	q := gen.New(s)
 
 	return &Chat{
