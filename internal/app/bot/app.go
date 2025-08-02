@@ -77,23 +77,11 @@ func New(
 
 func (b *Bot) Start() {
 	slog.Info("starting bot polling")
-
-	// // Запускаем статистику и крон-задачи
-	// ctx := context.Background()
-	// if err := b.stats.GetStats(ctx); err != nil {
-	// 	slog.Error("failed to start stats service", slog.Any("error", err))
-	// }
-
-	b.bot.Start()
+	go b.bot.Start()
 }
 
 func (b *Bot) Stop() {
 	slog.Info("stop bot polling")
-
-	// Останавливаем статистику
-	// if b.stats != nil {
-	// 	b.stats.Stop()
-	// }
 
 	b.bot.Stop()
 }

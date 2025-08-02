@@ -26,7 +26,8 @@ func main() {
 
 	log := setupLogger(cfg.LogLevel)
 
-	ctx := context.Background()
+	ctx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
 
 	log.Debug("starting with config", slog.Any("config", cfg))
 
@@ -36,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = app.Start()
+	err = app.Start(ctx)
 	if err != nil {
 		log.Error("failing start app", slog.Any("error", err))
 		os.Exit(1)
@@ -55,38 +56,27 @@ func main() {
 	app.GracefulShutdown(shutdownCtx)
 }
 
-func setupLogger(isDebug string) *slog.Logger {
+func setupLogger(logLevel string) *slog.Logger {
 	var log *slog.Logger
+	var opts *slog.HandlerOptions
 
-	switch isDebug {
+	switch logLevel {
 	case debug:
-		log = slog.New(
-			logger.ContextHandler{
-				Handler: slog.NewTextHandler(
-					os.Stdout,
-					&slog.HandlerOptions{Level: slog.LevelDebug},
-				),
-			},
-		)
+		opts = &slog.HandlerOptions{Level: slog.LevelDebug}
 	case prod:
-		log = slog.New(
-			logger.ContextHandler{
-				Handler: slog.NewTextHandler(
-					os.Stdout,
-					&slog.HandlerOptions{Level: slog.LevelInfo},
-				),
-			},
-		)
+		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
 	default:
-		log = slog.New(
-			logger.ContextHandler{
-				Handler: slog.NewTextHandler(
-					os.Stdout,
-					&slog.HandlerOptions{Level: slog.LevelInfo},
-				),
-			},
-		)
+		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
 	}
+
+	log = slog.New(
+		logger.ContextHandler{
+			Handler: slog.NewTextHandler(
+				os.Stdout,
+				opts,
+			),
+		},
+	)
 
 	slog.SetDefault(log)
 
