@@ -26,7 +26,7 @@ type App struct {
 }
 
 func New(ctx context.Context, cfg *config.Config) (*App, error) {
-	connCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	connCtx, cancel := context.WithTimeout(ctx, cfg.Timeout.DatabaseConnect)
 	defer cancel()
 
 	log := slog.Default()
