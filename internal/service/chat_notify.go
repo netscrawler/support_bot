@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"support_bot/internal/models"
 
 	"gopkg.in/telebot.v4"
@@ -10,17 +11,20 @@ import (
 
 type ChatGetter interface {
 	GetAll(ctx context.Context) ([]models.Chat, error)
+	GetAllActive(ctx context.Context) ([]models.Chat, error)
 }
 
 type ChatNotify struct {
 	chat      ChatGetter
 	tgAdaptor MessageSender
+	log       slog.Logger
 }
 
 func NewChatNotify(c ChatGetter, tgAdaptor MessageSender) *ChatNotify {
 	return &ChatNotify{
 		chat:      c,
 		tgAdaptor: tgAdaptor,
+		log:       *slog.Default(),
 	}
 }
 
@@ -29,8 +33,9 @@ func (n *ChatNotify) Broadcast(
 	ctx context.Context,
 	notify string,
 ) (string, error) {
-	chats, err := n.chat.GetAll(ctx)
+	chats, err := n.chat.GetAllActive(ctx)
 	if err != nil {
+		n.log.ErrorContext(ctx, "error broadcast messages", slog.Any("error", err))
 		if errors.Is(err, models.ErrNotFound) {
 			return "", models.ErrNotFound
 		}

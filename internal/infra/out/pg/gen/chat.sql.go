@@ -56,6 +56,37 @@ func (q *Queries) DeleteChatByID(ctx context.Context, chatID int64) error {
 	return err
 }
 
+const getAllActiveChats = `-- name: GetAllActiveChats :many
+SELECT id, chat_id, title, type, description, is_active FROM chats where is_active=true
+`
+
+func (q *Queries) GetAllActiveChats(ctx context.Context) ([]Chat, error) {
+	rows, err := q.db.Query(ctx, getAllActiveChats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Chat
+	for rows.Next() {
+		var i Chat
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.Title,
+			&i.Type,
+			&i.Description,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllChats = `-- name: GetAllChats :many
 SELECT id, chat_id, title, type, description, is_active FROM chats
 `

@@ -75,6 +75,21 @@ func (c *Chat) GetAll(ctx context.Context) ([]models.Chat, error) {
 	return retChats, nil
 }
 
+func (c *Chat) GetAllActive(ctx context.Context) ([]models.Chat, error) {
+	chats, err := c.q.GetAllActiveChats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	retChats := make([]models.Chat, 0, len(chats))
+
+	for _, c := range chats {
+		retChats = append(retChats, chatFromGenModel(c))
+	}
+
+	return retChats, nil
+}
+
 func (c *Chat) Delete(ctx context.Context, chatID int64) error {
 	err := c.q.DeleteChatByID(ctx, chatID)
 

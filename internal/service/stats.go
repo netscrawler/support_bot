@@ -188,14 +188,20 @@ func (s *Stats) formatDataAsText(data [][]string) string {
 	return result.String()
 }
 
+type chat struct {
+	ChatId   int64
+	ThreadID int64
+}
+
 // sendGroupNotifications отправляет группу уведомлений.
 func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.Notify) {
 	logger := slog.Default()
 
 	// Группируем уведомления по ChatID
-	chatGroups := make(map[int64][]models.Notify)
+	chatGroups := make(map[chat][]models.Notify)
 	for _, notify := range notifies {
-		chatGroups[notify.ChatID] = append(chatGroups[notify.ChatID], notify)
+		chat := chat{ChatId: notify.ChatID, ThreadID: notify.ThreadID}
+		chatGroups[chat] = append(chatGroups[chat], notify)
 	}
 
 	// Отправляем каждому чату
@@ -203,7 +209,8 @@ func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.No
 		err := s.sendChatNotifications(ctx, chatID, chatNotifies)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send chat notifications",
-				slog.Int64("chatID", chatID),
+				slog.Int64("chatID", chatID.ChatId),
+				slog.Int64("threadID", chatID.ThreadID),
 				slog.Any("error", err))
 		}
 	}
@@ -212,13 +219,13 @@ func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.No
 // sendChatNotifications отправляет все уведомления в один чат.
 func (s *Stats) sendChatNotifications(
 	ctx context.Context,
-	chatID int64,
+	target chat,
 	notifies []models.Notify,
 ) error {
 	logger := slog.Default()
 
 	// Создаем чат для отправки
-	chat := &telebot.Chat{ID: chatID}
+	chat := &telebot.Chat{ID: target.ChatId}
 
 	// Собираем данные для каждого формата
 	var pngImages []*bytes.Buffer
@@ -286,7 +293,16 @@ func (s *Stats) sendChatNotifications(
 		}
 	}
 
-	return s.sendData(ctx, xlsxData, csvData, textMessages, pngImages, groupName, chat)
+	return s.sendData(
+		ctx,
+		xlsxData,
+		csvData,
+		textMessages,
+		pngImages,
+		groupName,
+		chat,
+		target.ThreadID,
+	)
 }
 
 func (s *Stats) sendData(
@@ -297,6 +313,7 @@ func (s *Stats) sendData(
 	pngImages []*bytes.Buffer,
 	title string,
 	chat *telebot.Chat,
+	threadID int64,
 ) error {
 	logger := slog.Default()
 	if len(pngImages) > 0 {
@@ -326,6 +343,7 @@ func (s *Stats) sendData(
 	for _, textMsg := range textMessages {
 		err := s.message.Send(chat, textMsg, &telebot.SendOptions{
 			ParseMode: telebot.ModeMarkdown,
+			ThreadID:  int(threadID),
 		})
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send text message", slog.Any("error", err))
@@ -333,7 +351,12 @@ func (s *Stats) sendData(
 	}
 
 	if len(csvData) > 0 {
-		err := s.message.SendDocument(chat, csvData[0], title+".csv")
+		err := s.message.SendDocument(
+			chat,
+			csvData[0],
+			title+".csv",
+			&telebot.SendOptions{ThreadID: int(threadID)},
+		)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send csv file", slog.Any("error", err))
 		}

@@ -31,12 +31,13 @@ func (q *Notify) GetAll(ctx context.Context) ([]models.Notify, error) {
 		q, err := models.NewNotify(
 			g.Name,
 			g.GroupID.String,
-			g.CardUuid,
+			g.CardUuid.String,
 			g.Cron,
 			&g.TemplateText.String,
-			g.Title.String,
+			g.Title,
 			g.GroupTitle.String,
-			g.ChatID,
+			g.ChatID.Int64,
+			g.ThreadID,
 			g.Active,
 			g.Format,
 		)
@@ -62,12 +63,13 @@ func (q *Notify) GetAllActive(ctx context.Context) ([]models.Notify, error) {
 		q, err := models.NewNotify(
 			g.Name,
 			g.GroupID.String,
-			g.CardUuid,
+			g.CardUuid.String,
 			g.Cron,
 			&g.TemplateText.String,
-			g.Title.String,
+			g.Title,
 			g.GroupTitle.String,
-			g.ChatID,
+			g.ChatID.Int64,
+			g.ThreadID,
 			g.Active,
 			g.Format,
 		)

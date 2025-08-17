@@ -7,23 +7,57 @@ package repogen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const listAllActiveNotifies = `-- name: ListAllActiveNotifies :many
-SELECT id, name, group_id, card_uuid, cron, template_text, title, group_title, chat_id, active, format
-FROM notify
-WHERE active = TRUE
+SELECT
+    n.id,
+    n.name,
+    ng.name  AS group_id,
+    nq.card_uuid,
+    n.cron,
+    nq.template_text,
+    n.title,
+    ng.title AS group_title,
+    c.chat_id,
+    n.active,
+    n.format,
+	n.thread_id
+
+FROM notify n
+LEFT JOIN chats c ON n.chat_id = c.id
+LEFT JOIN notify_groups ng ON n.group_id = ng.id
+LEFT JOIN notify_query nq ON nq.id = n.query_id
+WHERE n.active = TRUE
+ORDER BY n.id
 `
 
-func (q *Queries) ListAllActiveNotifies(ctx context.Context) ([]Notify, error) {
+type ListAllActiveNotifiesRow struct {
+	ID           int32
+	Name         string
+	GroupID      pgtype.Text
+	CardUuid     pgtype.Text
+	Cron         string
+	TemplateText pgtype.Text
+	Title        string
+	GroupTitle   pgtype.Text
+	ChatID       pgtype.Int8
+	Active       bool
+	Format       []string
+	ThreadID     int64
+}
+
+func (q *Queries) ListAllActiveNotifies(ctx context.Context) ([]ListAllActiveNotifiesRow, error) {
 	rows, err := q.db.Query(ctx, listAllActiveNotifies)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Notify
+	var items []ListAllActiveNotifiesRow
 	for rows.Next() {
-		var i Notify
+		var i ListAllActiveNotifiesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -36,6 +70,7 @@ func (q *Queries) ListAllActiveNotifies(ctx context.Context) ([]Notify, error) {
 			&i.ChatID,
 			&i.Active,
 			&i.Format,
+			&i.ThreadID,
 		); err != nil {
 			return nil, err
 		}
@@ -48,19 +83,50 @@ func (q *Queries) ListAllActiveNotifies(ctx context.Context) ([]Notify, error) {
 }
 
 const listAllNotifies = `-- name: ListAllNotifies :many
-SELECT id, name, group_id, card_uuid, cron, template_text, title, group_title, chat_id, active, format
-FROM notify
+SELECT
+    n.id,
+    n.name,
+    ng.name  AS group_id,
+    nq.card_uuid,
+    n.cron,
+    nq.template_text,
+    n.title,
+    ng.title AS group_title,
+    c.chat_id,
+    n.active,
+    n.format,
+    n.thread_id
+FROM notify n
+LEFT JOIN chats c ON n.chat_id = c.id
+LEFT JOIN notify_groups ng ON n.group_id = ng.id
+LEFT JOIN notify_query nq ON nq.id = n.query_id
+ORDER BY n.id
 `
 
-func (q *Queries) ListAllNotifies(ctx context.Context) ([]Notify, error) {
+type ListAllNotifiesRow struct {
+	ID           int32
+	Name         string
+	GroupID      pgtype.Text
+	CardUuid     pgtype.Text
+	Cron         string
+	TemplateText pgtype.Text
+	Title        string
+	GroupTitle   pgtype.Text
+	ChatID       pgtype.Int8
+	Active       bool
+	Format       []string
+	ThreadID     int64
+}
+
+func (q *Queries) ListAllNotifies(ctx context.Context) ([]ListAllNotifiesRow, error) {
 	rows, err := q.db.Query(ctx, listAllNotifies)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Notify
+	var items []ListAllNotifiesRow
 	for rows.Next() {
-		var i Notify
+		var i ListAllNotifiesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -73,6 +139,7 @@ func (q *Queries) ListAllNotifies(ctx context.Context) ([]Notify, error) {
 			&i.ChatID,
 			&i.Active,
 			&i.Format,
+			&i.ThreadID,
 		); err != nil {
 			return nil, err
 		}

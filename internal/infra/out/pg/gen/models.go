@@ -11,50 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type NotifyFormat string
-
-const (
-	NotifyFormatText NotifyFormat = "text"
-	NotifyFormatPng  NotifyFormat = "png"
-	NotifyFormatCsv  NotifyFormat = "csv"
-	NotifyFormatXlsx NotifyFormat = "xlsx"
-)
-
-func (e *NotifyFormat) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = NotifyFormat(s)
-	case string:
-		*e = NotifyFormat(s)
-	default:
-		return fmt.Errorf("unsupported scan type for NotifyFormat: %T", src)
-	}
-	return nil
-}
-
-type NullNotifyFormat struct {
-	NotifyFormat NotifyFormat
-	Valid        bool // Valid is true if NotifyFormat is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullNotifyFormat) Scan(value interface{}) error {
-	if value == nil {
-		ns.NotifyFormat, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.NotifyFormat.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullNotifyFormat) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.NotifyFormat), nil
-}
-
 type UserRole string
 
 const (
@@ -108,17 +64,29 @@ type Chat struct {
 }
 
 type Notify struct {
+	ID       int32
+	Name     string
+	Cron     string
+	Active   bool
+	Format   []string
+	Title    string
+	ThreadID int64
+	ChatID   int32
+	GroupID  pgtype.Int4
+	QueryID  pgtype.Int4
+}
+
+type NotifyGroup struct {
+	ID    int32
+	Name  string
+	Title string
+}
+
+type NotifyQuery struct {
 	ID           int32
-	Name         string
-	GroupID      pgtype.Text
 	CardUuid     string
-	Cron         string
 	TemplateText pgtype.Text
 	Title        pgtype.Text
-	GroupTitle   pgtype.Text
-	ChatID       int64
-	Active       bool
-	Format       []string
 }
 
 type User struct {

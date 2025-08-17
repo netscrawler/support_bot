@@ -12,6 +12,10 @@ Limit 1;
 -- name: GetAllChats :many
 SELECT * FROM chats;
 
+-- name: GetAllActiveChats :many
+SELECT * FROM chats where is_active=true;
+
+
 -- name: DeleteChatByID :exec
 DELETE FROM chats
     WHERE chat_id = $1;

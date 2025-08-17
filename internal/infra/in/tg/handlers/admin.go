@@ -152,7 +152,7 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
 		menu.AdminMenu.Row(menu.ListUser, menu.Back))
 	h.state.Set(c.Sender().ID, MenuState)
-	//nolint:errcheck
+
 	c.Delete()
 
 	return c.Send(ManageUsers, menu.AdminMenu)
@@ -161,7 +161,6 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 	userID := c.Sender().ID
 
-	// Проверяем, что юзер в состоянии
 	if h.state.Get(userID) == MenuState {
 		return nil
 	}
@@ -186,7 +185,7 @@ func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
 
 func (h *AdminHandler) AddUser(c tele.Context) error {
 	h.state.Set(c.Sender().ID, AddUserState)
-	//nolint:errcheck
+
 	c.Delete()
 
 	return c.Send(
@@ -200,7 +199,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 	if h.state.Get(userID) != AddUserState {
 		return nil
 	}
-	//nolint: errcheck
+
 	c.Delete()
 
 	username := c.Text()
@@ -313,8 +312,8 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 // ListUsers handles listing all users.
 func (h *AdminHandler) ListUsers(c tele.Context) error {
 	ctx := context.Background()
-	//nolint:errcheck
-	c.Delete()
+
+	// c.Delete()
 
 	users, err := h.userService.GetAll(ctx)
 	if errors.Is(err, models.ErrNotFound) {
@@ -349,20 +348,19 @@ func (h *AdminHandler) ManageChats(c tele.Context) error {
 	return c.Send("Управление чатами", menu.AdminMenu)
 }
 
-// ProcessAddChat processes the chat input for adding a chat.
-func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
+// ProcessAddActiveChat processes the chat input for adding a chat.
+func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 	ctx := context.Background()
 
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
-	//nolint:errcheck
-	// в данном случае не важно смог он удалить сообщение или нет
+
 	c.Delete()
 
-	err := h.chatService.Add(ctx, c.Chat())
+	err := h.chatService.AddActive(ctx, c.Chat())
 	if err != nil {
-		//nolint:errcheck
+
 		h.userNotify.SendNotify(
 			ctx,
 			c.Sender().ID,
@@ -372,19 +370,67 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 		return nil
 	}
 
-	//nolint:errcheck
 	h.userNotify.Broadcast(
 		ctx,
-		"Добавлен новый чат для рассылки: "+c.Chat().Title,
+		"Добавлен новый чат в рассылку: "+c.Chat().Title,
 	)
 
 	return nil
 }
 
+// ProcessAddChat processes the chat input for adding a chat.
+func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
+	ctx := context.Background()
+
+	if c.Chat().Type == tele.ChatPrivate {
+		return c.Send("Эта команда может использоваться только в чатах")
+	}
+
+	c.Delete()
+
+	err := h.chatService.Add(ctx, c.Chat())
+	if err != nil {
+
+		h.userNotify.SendNotify(
+			ctx,
+			c.Sender().ID,
+			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
+		)
+
+		return nil
+	}
+
+	h.userNotify.Broadcast(
+		ctx,
+		"Добавлен новый чат: "+c.Chat().Title,
+	)
+
+	return nil
+}
+
+// ProcessInfoCommand processes the chat input for adding a chat.
+func (h *AdminHandler) ProcessInfoCommand(c tele.Context) error {
+	// ctx := context.Background()
+
+	if c.Chat().Type == tele.ChatPrivate {
+		return c.Send("Эта команда может использоваться только в чатах")
+	}
+
+	c.Delete()
+
+	ans := fmt.Sprintf(
+		"*Информация о чате:*\n Title: `%s`\n ID: `%d`\n Thread: `%d`",
+		c.Chat().Title,
+		c.Chat().ID,
+		c.ThreadID(),
+	)
+
+	return c.Send(ans, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
+}
+
 // RemoveChat handles removing a chat.
 func (h *AdminHandler) RemoveChat(c tele.Context) error {
 	h.state.Set(c.Sender().ID, RemoveChatState)
-	//nolint:errcheck
 	c.Delete()
 
 	return c.Send("Пожалуйста пришлите имя чата который вы хотите удалить.")
@@ -428,8 +474,8 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 			fmt.Sprintf("%d. %s\n", i+1, chat.Title),
 		)
 	}
-	//nolint:errcheck
-	c.Delete()
+	// //nolint:errcheck
+	// c.Delete()
 
 	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
 }

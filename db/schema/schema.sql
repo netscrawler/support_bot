@@ -1,5 +1,6 @@
+-- Роли пользователей
 CREATE TYPE user_role AS ENUM ('admin', 'user', 'primary');
-CREATE TYPE notify_format AS ENUM ('text', 'png', 'csv', 'xlsx');
+
 -- Таблица пользователей
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -20,16 +21,55 @@ CREATE TABLE chats (
     is_active BOOLEAN NOT NULL DEFAULT true
 );
 
+-- Группы уведомлений
+CREATE TABLE notify_groups (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE, -- уникальный идентификатор группы
+    title TEXT NOT NULL
+);
+
+-- Запросы для уведомлений
+CREATE TABLE notify_query (
+    id SERIAL PRIMARY KEY,
+    card_uuid TEXT NOT NULL,
+    template_text TEXT,
+    title TEXT
+);
+
+-- Уведомления
 CREATE TABLE notify (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL, --Имя уведомления
-    group_id TEXT, -- Идентификатор группы
-    card_uuid TEXT NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
     cron TEXT NOT NULL,
-    template_text TEXT,
-    title TEXT,
-    group_title TEXT,
-    chat_id BIGINT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT FALSE,
-    format TEXT[]
+    format TEXT[],
+    title TEXT NOT NULL,
+    thread_id BIGINT NOT NULL DEFAULT 0,
+    chat_id INT NOT NULL,   -- связь с чатом
+    group_id INT,           -- связь с группой (опционально)
+    query_id INT UNIQUE,    -- связь с запросом (один к одному)
+    CONSTRAINT fk_notify_chat FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_notify_group FOREIGN KEY (group_id) REFERENCES notify_groups(id) ON DELETE SET NULL,
+    CONSTRAINT fk_notify_query FOREIGN KEY (query_id) REFERENCES notify_query(id) ON DELETE CASCADE
 );
+
+-- Индексы
+CREATE INDEX idx_notify_chat_id ON notify(chat_id);
+CREATE INDEX idx_notify_group_id ON notify(group_id);
+CREATE INDEX idx_notify_query_notify_id ON notify_query(notify_id);
+
+
+-- Триггер: при удалении чата уведомления становятся неактивными
+CREATE OR REPLACE FUNCTION deactivate_notify_on_chat_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE notify SET active = FALSE WHERE chat_id = OLD.id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_deactivate_notify_on_chat_delete
+BEFORE DELETE ON chats
+FOR EACH ROW
+EXECUTE FUNCTION deactivate_notify_on_chat_delete();
+

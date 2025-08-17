@@ -51,6 +51,7 @@ type Notify struct {
 	Title        string
 	GroupTitle   string
 	ChatID       int64 // telegram chat id
+	ThreadID     int64 // telegram chat id
 	Active       bool
 	NotifyFormat []NotifyFormat // format of notification [png | xlsx | text | csv | or many]
 }
@@ -63,6 +64,7 @@ func NewNotify(
 	title string,
 	groupTitle string,
 	chatID int64,
+	threadID int64,
 	active bool,
 	notifyFormat []string,
 ) (Notify, error) {
@@ -90,6 +92,7 @@ func NewNotify(
 		Active:       active,
 		NotifyFormat: nf,
 		GroupTitle:   groupTitle,
+		ThreadID:     threadID,
 	}, nil
 }
 

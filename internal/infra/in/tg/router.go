@@ -59,6 +59,7 @@ func (r *Router) Setup() {
 
 	adminOnly.Use(r.mw.AdminAuthMiddleware)
 	adminOnly.Handle(menu.StartCommand, r.adminHl.StartAdmin)
+	adminOnly.Handle(menu.InfoCommand, r.adminHl.ProcessInfoCommand)
 	adminOnly.Handle(&menu.ManageUsers, r.adminHl.ManageUsers)
 	adminOnly.Handle(&menu.ManageChats, r.adminHl.ManageChats)
 	adminOnly.Handle(&menu.ListUser, r.adminHl.ListUsers)
@@ -66,6 +67,7 @@ func (r *Router) Setup() {
 	adminOnly.Handle(&menu.RemoveUser, r.adminHl.RemoveUser)
 	adminOnly.Handle(&menu.ListChats, r.adminHl.ListChats)
 	adminOnly.Handle(menu.AddChat, r.adminHl.ProcessAddChat)
+	adminOnly.Handle(menu.AddActiveChat, r.adminHl.ProcessAddActiveChat)
 	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
 	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)

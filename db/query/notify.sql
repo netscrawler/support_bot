@@ -1,8 +1,42 @@
 -- name: ListAllNotifies :many
-SELECT	*
-FROM notify;
+SELECT
+    n.id,
+    n.name,
+    ng.name  AS group_id,
+    nq.card_uuid,
+    n.cron,
+    nq.template_text,
+    n.title,
+    ng.title AS group_title,
+    c.chat_id,
+    n.active,
+    n.format,
+    n.thread_id
+FROM notify n
+LEFT JOIN chats c ON n.chat_id = c.id
+LEFT JOIN notify_groups ng ON n.group_id = ng.id
+LEFT JOIN notify_query nq ON nq.id = n.query_id
+ORDER BY n.id;
 
 -- name: ListAllActiveNotifies :many
-SELECT	*
-FROM notify
-WHERE active = TRUE;
+SELECT
+    n.id,
+    n.name,
+    ng.name  AS group_id,
+    nq.card_uuid,
+    n.cron,
+    nq.template_text,
+    n.title,
+    ng.title AS group_title,
+    c.chat_id,
+    n.active,
+    n.format,
+	n.thread_id
+
+FROM notify n
+LEFT JOIN chats c ON n.chat_id = c.id
+LEFT JOIN notify_groups ng ON n.group_id = ng.id
+LEFT JOIN notify_query nq ON nq.id = n.query_id
+WHERE n.active = TRUE
+ORDER BY n.id;
+

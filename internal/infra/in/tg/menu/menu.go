@@ -34,7 +34,9 @@ var (
 
 var (
 	StartCommand    = "/admin"
+	InfoCommand     = "/info"
 	UserStart       = "/start"
-	AddChat         = "/subscribe"
+	AddChat         = "/add"
+	AddActiveChat   = "/sub"
 	RegisterCommand = "/register"
 )

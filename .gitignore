@@ -4,3 +4,4 @@ doc/Schemas.mdj
 bin/
 private_*
 local_*
+tmp/

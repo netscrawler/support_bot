@@ -24,6 +24,22 @@ func NewChat(repo ChatProvider) *Chat {
 	}
 }
 
+func (c *Chat) AddActive(ctx context.Context, chat *telebot.Chat) error {
+	chatToSave := models.NewChat(chat)
+	chatToSave.IsActive = true
+
+	ch, _ := c.repo.GetByTitle(ctx, chat.Title)
+	if ch != nil {
+		return models.ErrAlreadyExist
+	}
+
+	if err := c.repo.Create(ctx, chatToSave); err != nil {
+		return models.ErrInternal
+	}
+
+	return nil
+}
+
 func (c *Chat) Add(ctx context.Context, chat *telebot.Chat) error {
 	chatToSave := models.NewChat(chat)
 
