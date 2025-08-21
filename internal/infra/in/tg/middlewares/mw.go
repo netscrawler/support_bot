@@ -29,17 +29,21 @@ func NewMw(uPr UserProvider) *Mw {
 
 func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
-		userID := c.Sender().ID
-		ctx := logger.AppendCtx(
-			context.Background(),
-			slog.Any("userID", userID),
-			slog.Any("username", c.Sender().Username),
-			slog.Any("name", c.Sender().FirstName),
+		var user *telebot.User
+		user = c.Sender()
+		if c.Query() != nil {
+			user = c.Query().Sender
+		}
+
+		ctx := logger.AppendCtx(context.Background(),
+			slog.Any("userID", user.ID),
+			slog.Any("username", user.Username),
+			slog.Any("name", user.FirstName),
 			slog.Any("from_id", c.Chat().ID),
 			slog.Any("chat_name", c.Chat().Title),
 		)
 
-		role, err := mw.userPr.IsAllowed(ctx, userID)
+		role, err := mw.userPr.IsAllowed(ctx, user.ID)
 		//nolint:nilerr
 		if err != nil || role == models.Denied {
 			mw.l.InfoContext(
@@ -61,17 +65,21 @@ func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 
 func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
-		userID := c.Sender().ID
+		var user *telebot.User
+		user = c.Sender()
+		if c.Query() != nil {
+			user = c.Query().Sender
+		}
 
 		ctx := logger.AppendCtx(context.Background(),
-			slog.Any("userID", userID),
-			slog.Any("username", c.Sender().Username),
-			slog.Any("name", c.Sender().FirstName),
+			slog.Any("userID", user.ID),
+			slog.Any("username", user.Username),
+			slog.Any("name", user.FirstName),
 			slog.Any("from_id", c.Chat().ID),
 			slog.Any("chat_name", c.Chat().Title),
 		)
 
-		role, err := mw.userPr.IsAllowed(ctx, userID)
+		role, err := mw.userPr.IsAllowed(ctx, user.ID)
 
 		if err != nil || role == models.Denied || role == models.UserRole {
 			mw.l.InfoContext(

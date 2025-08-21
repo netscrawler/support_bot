@@ -1,11 +1,13 @@
 package bot
 
 import (
+	"log/slog"
 	"support_bot/internal/infra/in/tg/handlers"
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/infra/in/tg/middlewares"
 
 	"gopkg.in/telebot.v4"
+	telemw "gopkg.in/telebot.v4/middleware"
 )
 
 type Router struct {
@@ -33,6 +35,10 @@ func NewRouter(
 }
 
 func (r *Router) Setup() {
+	r.bot.Use(telemw.Recover(func(err error, c telebot.Context) {
+		l := slog.Default()
+		l.Error("recovered from panic", slog.Any("error", err))
+	}))
 	register := r.bot.Group()
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
 
@@ -71,7 +77,9 @@ func (r *Router) Setup() {
 	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
 	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)
-	adminOnly.Handle(&menu.RestartCron, r.adminHl.RestartCronJobs)
+	adminOnly.Handle(&menu.StartCron, r.adminHl.StartCronJobs)
+	adminOnly.Handle(&menu.ManageCron, r.adminHl.ManageCron)
+	adminOnly.Handle(&menu.StopCron, r.adminHl.StopCronJobs)
 	adminOnly.Handle(
 		&telebot.InlineButton{Unique: "confirm_notification"},
 		r.adminHl.ConfirmSendNotification,

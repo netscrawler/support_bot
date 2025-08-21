@@ -14,11 +14,12 @@ var (
 )
 
 var (
-	ManageUsers   = AdminMenu.Text("👥 Управление пользователями")
-	ManageChats   = AdminMenu.Text("💬 Управление чатами")
-	RestartCron   = AdminMenu.Text("🔄 Перезапустить крон-задачи")
-	DisableNotify = AdminMenu.Text("🔄 Выключить рассылку")
-	EnableNotify  = AdminMenu.Text("🔄 Выключить рассылку")
+	ManageUsers  = AdminMenu.Text("👥 Управление пользователями")
+	ManageChats  = AdminMenu.Text("💬 Управление чатами")
+	ManageCron   = AdminMenu.Text("🔄 Управление рассылками")
+	StartCron    = AdminMenu.Text("🔄 Перезапустить рассылки")
+	StopCron     = AdminMenu.Text("🔄 Выключить рассылку")
+	EnableNotify = AdminMenu.Text("🔄 Выключить рассылку")
 
 	ListUser   = AdminMenu.Text("📋 Список пользователей")
 	AddUser    = AdminMenu.Text("➕ Добавить пользователя")

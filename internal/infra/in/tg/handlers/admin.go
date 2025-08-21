@@ -50,7 +50,7 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
-		menu.AdminMenu.Row(menu.SendNotifyAdmin, menu.RestartCron),
+		menu.AdminMenu.Row(menu.SendNotifyAdmin, menu.ManageCron),
 	)
 	h.state.Set(c.Sender().ID, MenuState)
 	//nolint:errcheck
@@ -410,8 +410,6 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 
 // ProcessInfoCommand processes the chat input for adding a chat.
 func (h *AdminHandler) ProcessInfoCommand(c tele.Context) error {
-	// ctx := context.Background()
-
 	if c.Chat().Type == tele.ChatPrivate {
 		return c.Send("Эта команда может использоваться только в чатах")
 	}
@@ -483,22 +481,50 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 // ManageCron handles the chat management menu.
 func (h *AdminHandler) ManageCron(c tele.Context) error {
 	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.RestartCron),
-		menu.AdminMenu.Row(menu.ListNotify, menu.Back))
+		menu.AdminMenu.Row(menu.StartCron),
+		menu.AdminMenu.Row(menu.StopCron, menu.Back))
 
 	c.Delete()
 
 	return c.Send("Управление чатами", menu.AdminMenu)
 }
 
-// RestartCronJobs перезапускает крон-задачи для уведомлений.
-func (h *AdminHandler) RestartCronJobs(c tele.Context) error {
+// StartCronJobs перезапускает крон-задачи для уведомлений.
+func (h *AdminHandler) StartCronJobs(c tele.Context) error {
 	ctx := context.Background()
 
-	err := h.stats.Start(ctx)
+	ans := h.startJobs(ctx)
+
+	return c.Send(ans)
+}
+
+func (h *AdminHandler) startJobs(ctx context.Context) string {
+	j, err := h.stats.Start(ctx)
 	if err != nil {
-		return c.Send(fmt.Sprintf("❌ Ошибка перезапуска крон-задач: %v", err))
+		return fmt.Sprintf("❌ Ошибка запуска крон-задач: %v", err)
 	}
 
-	return c.Send("✅ Крон-задачи успешно перезапущены")
+	var build strings.Builder
+	if len(j.Unsucess) > 0 {
+		for g, e := range j.Unsucess {
+			build.WriteString(fmt.Sprintf("\n❌ Ошибка при запуске: %d\n", len(j.Unsucess)))
+			build.WriteString("*Не запущены:*")
+			build.WriteString(fmt.Sprintf("Группа: %s - Ошибка: %s", g, e.Error()))
+		}
+	}
+
+	ans := fmt.Sprintf(
+		"Всего задач: %d\n✅ Успешно запущено: %d задач%s",
+		j.Total,
+		j.Success,
+		build.String(),
+	)
+	return ans
+}
+
+// StopCronJobs перезапускает крон-задачи для уведомлений.
+func (h *AdminHandler) StopCronJobs(c tele.Context) error {
+	h.stats.Stop()
+
+	return c.Send("Задачи успешно остановлены")
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
+	"support_bot/internal/infra/out/metabase"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/service"
 	"time"
@@ -67,7 +68,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	userNotifier := service.NewUserNotify(userRepo, messageSender)
 
 	// Создаем Metabase клиент
-	metabaseClient := service.NewMetabase(cfg.MetabaseDomain, &http.Client{})
+	metabaseClient := metabase.New(cfg.MetabaseDomain, &http.Client{})
 	statsService := service.New(notifyRepo, messageSender, metabaseClient)
 
 	b, err := bot.New(
@@ -94,7 +95,7 @@ func (a *App) Start(ctx context.Context) error {
 
 	log := slog.Default()
 
-	if err := a.stats.Start(context.Background()); err != nil {
+	if _, err := a.stats.Start(context.Background()); err != nil {
 		log.Error("unable start cron", slog.Any("error", err))
 	}
 

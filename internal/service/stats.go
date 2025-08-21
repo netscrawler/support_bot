@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/xlsx"
 	"text/template"
@@ -44,11 +42,22 @@ func New(q StatsQueryGetter, mess MessageSender, mb MetabaseDataGetter) *Stats {
 	}
 }
 
+type CronJobs struct {
+	Total    int
+	Success  int
+	Unsucess map[string]error
+}
+
 // Start запускает крон-задачи для всех активных уведомлений.
-func (s *Stats) Start(ctx context.Context) error {
+func (s *Stats) Start(ctx context.Context) (CronJobs, error) {
+	c := CronJobs{
+		Total:    0,
+		Success:  0,
+		Unsucess: make(map[string]error),
+	}
 	notifies, err := s.query.GetAllActive(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get notifies: %w", err)
+		return c, fmt.Errorf("failed to get notifies: %w", err)
 	}
 
 	logger := slog.Default()
@@ -75,16 +84,19 @@ func (s *Stats) Start(ctx context.Context) error {
 
 	// Создаем крон-задачи для каждой группы
 	for groupID, groupNotifies := range groupedNotifies {
+		c.Total++
 		_, err := s.cron.AddFunc(groupCron[groupID], func() {
 			s.sendGroupNotifications(ctx, groupNotifies)
 		})
 		if err != nil {
+			c.Unsucess[groupID] = err
 			logger.ErrorContext(ctx, "failed to add cron job for group",
 				slog.String("groupID", groupID),
 				slog.Any("error", err))
 
 			continue
 		}
+		c.Success++
 
 		logger.InfoContext(ctx, "added cron job for group",
 			slog.String("groupID", groupID),
@@ -97,7 +109,7 @@ func (s *Stats) Start(ctx context.Context) error {
 	logger.InfoContext(ctx, "started cron scheduler",
 		slog.Int("activeJobs", len(s.cron.Entries())))
 
-	return nil
+	return c, nil
 }
 
 // Stop останавливает все крон-задачи.
@@ -106,15 +118,6 @@ func (s *Stats) Stop() {
 		slog.Info("stopping crong jobs")
 		s.cron.Stop()
 	}
-}
-
-// getMetabaseData получает данные из Metabase.
-func (s *Stats) getMetabaseData(ctx context.Context, notify models.Notify) ([][]string, error) {
-	if s.metabase == nil {
-		return nil, errors.New("metabase data getter not implemented")
-	}
-
-	return s.metabase.GetDataMatrix(ctx, notify.CardUUID)
 }
 
 func (s *Stats) fillTemplateWithData(templateStr string, data map[string]any) string {
@@ -132,64 +135,8 @@ func (s *Stats) fillTemplateWithData(templateStr string, data map[string]any) st
 	return buf.String()
 }
 
-// formatDataAsText форматирует данные как текстовую таблицу.
-func (s *Stats) formatDataAsText(data [][]string) string {
-	if len(data) == 0 {
-		return "Нет данных для отображения"
-	}
-
-	var result strings.Builder
-
-	result.WriteString("📋 *Данные:*\n\n")
-
-	// Определяем максимальную ширину для каждой колонки
-	columnWidths := make([]int, len(data[0]))
-
-	for _, row := range data {
-		for i, cell := range row {
-			if len(cell) > columnWidths[i] {
-				columnWidths[i] = len(cell)
-			}
-		}
-	}
-
-	// Выводим заголовки (первая строка)
-	if len(data) > 0 {
-		result.WriteString("| ")
-
-		for i, cell := range data[0] {
-			result.WriteString(fmt.Sprintf("%-*s | ", columnWidths[i], cell))
-		}
-
-		result.WriteString("\n")
-
-		// Разделитель
-		result.WriteString("|")
-
-		for _, width := range columnWidths {
-			result.WriteString(strings.Repeat("-", width+2))
-			result.WriteString("|")
-		}
-
-		result.WriteString("\n")
-
-		// Данные
-		for _, row := range data[1:] {
-			result.WriteString("| ")
-
-			for i, cell := range row {
-				result.WriteString(fmt.Sprintf("%-*s | ", columnWidths[i], cell))
-			}
-
-			result.WriteString("\n")
-		}
-	}
-
-	return result.String()
-}
-
 type chat struct {
-	ChatId   int64
+	ChatID   int64
 	ThreadID int64
 }
 
@@ -200,8 +147,8 @@ func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.No
 	// Группируем уведомления по ChatID
 	chatGroups := make(map[chat][]models.Notify)
 	for _, notify := range notifies {
-		chat := chat{ChatId: notify.ChatID, ThreadID: notify.ThreadID}
-		chatGroups[chat] = append(chatGroups[chat], notify)
+		c := chat{ChatID: notify.ChatID, ThreadID: notify.ThreadID}
+		chatGroups[c] = append(chatGroups[c], notify)
 	}
 
 	// Отправляем каждому чату
@@ -209,7 +156,7 @@ func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.No
 		err := s.sendChatNotifications(ctx, chatID, chatNotifies)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send chat notifications",
-				slog.Int64("chatID", chatID.ChatId),
+				slog.Int64("chatID", chatID.ChatID),
 				slog.Int64("threadID", chatID.ThreadID),
 				slog.Any("error", err))
 		}
@@ -224,10 +171,8 @@ func (s *Stats) sendChatNotifications(
 ) error {
 	logger := slog.Default()
 
-	// Создаем чат для отправки
-	chat := &telebot.Chat{ID: target.ChatId}
+	chat := &telebot.Chat{ID: target.ChatID}
 
-	// Собираем данные для каждого формата
 	var pngImages []*bytes.Buffer
 
 	xlsxData := make(map[string][][]string)
@@ -238,9 +183,9 @@ func (s *Stats) sendChatNotifications(
 	var textMessages []string
 
 	for _, notify := range notifies {
-		// Получаем данные из Metabase
+
 		groupName, _ = notify.GetGroupTitle()
-		data, err := s.getMetabaseData(ctx, notify)
+		data, err := s.metabase.GetDataMatrix(ctx, notify.CardUUID)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to get metabase data",
 				slog.String("name", notify.Name),
@@ -250,7 +195,6 @@ func (s *Stats) sendChatNotifications(
 			continue
 		}
 
-		// Обрабатываем каждый формат
 		for _, format := range notify.NotifyFormat {
 			switch format {
 			case models.NotifyFormatPng:
@@ -273,7 +217,7 @@ func (s *Stats) sendChatNotifications(
 
 			case models.NotifyFormatText:
 				// Форматируем текстовое сообщение
-				textMsg, err := s.formatTextMessage(notify, data)
+				jsonData, err := s.metabase.GetDataMap(ctx, notify.CardUUID)
 				if err != nil {
 					logger.ErrorContext(ctx, "failed to format text message",
 						slog.String("name", notify.Name),
@@ -281,6 +225,8 @@ func (s *Stats) sendChatNotifications(
 
 					continue
 				}
+
+				textMsg := s.fillTemplateWithData(*notify.TemplateText, jsonData)
 
 				textMessages = append(textMessages, textMsg)
 
@@ -330,8 +276,8 @@ func (s *Stats) sendData(
 
 			return err
 		}
-		err = s.message.SendDocument(chat, xlsxBook, title+".xlsx")
-		if err != nil {
+
+		if err = s.message.SendDocument(chat, xlsxBook, title+".xlsx"); err != nil {
 			logger.ErrorContext(ctx, "failed to send xlsx file", slog.Any("error", err))
 
 			return err
@@ -339,7 +285,6 @@ func (s *Stats) sendData(
 
 	}
 
-	// Отправляем текстовые сообщения
 	for _, textMsg := range textMessages {
 		err := s.message.Send(chat, textMsg, &telebot.SendOptions{
 			ParseMode: telebot.ModeMarkdown,
@@ -363,25 +308,6 @@ func (s *Stats) sendData(
 	}
 
 	return nil
-}
-
-// formatTextMessage форматирует текстовое сообщение.
-func (s *Stats) formatTextMessage(notify models.Notify, data [][]string) (string, error) {
-	if notify.TemplateText != nil {
-		// Получаем JSON данные для шаблона
-		jsonData, err := s.metabase.GetDataMap(context.Background(), notify.CardUUID)
-		if err != nil {
-			return "", err
-		}
-
-		// Заполняем шаблон данными из Metabase
-		filledTemplate := s.fillTemplateWithData(*notify.TemplateText, jsonData)
-
-		return filledTemplate, nil
-	} else {
-		// Форматируем данные как таблицу
-		return s.formatDataAsText(data), nil
-	}
 }
 
 // formatDataAsCSV форматирует данные как CSV.

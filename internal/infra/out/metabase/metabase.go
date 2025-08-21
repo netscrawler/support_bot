@@ -1,4 +1,4 @@
-package service
+package metabase
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ type Metabase struct {
 	client *metabase.Client
 }
 
-func NewMetabase(baseUrl string, client *http.Client) *Metabase {
-	return &Metabase{client: metabase.NewClient(baseUrl, client)}
+func New(baseURL string, client *http.Client) *Metabase {
+	return &Metabase{client: metabase.NewClient(baseURL, client)}
 }
 
 func (m *Metabase) GetDataMatrix(ctx context.Context, cardUUID string) ([][]string, error) {
