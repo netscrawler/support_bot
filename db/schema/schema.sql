@@ -29,12 +29,19 @@ CREATE TABLE notify_groups (
 );
 
 -- Запросы для уведомлений
-CREATE TABLE notify_query (
+CREATE TABLE queries (
     id SERIAL PRIMARY KEY,
     card_uuid TEXT NOT NULL,
+    -- template_text TEXT,
+    title TEXT
+);
+
+CREATE TABLE templates (
+    id SERIAL PRIMARY KEY,
     template_text TEXT,
     title TEXT
 );
+
 
 -- Уведомления
 CREATE TABLE notify (
@@ -47,16 +54,17 @@ CREATE TABLE notify (
     thread_id BIGINT NOT NULL DEFAULT 0,
     chat_id INT NOT NULL,   -- связь с чатом
     group_id INT,           -- связь с группой (опционально)
-    query_id INT UNIQUE,    -- связь с запросом (один к одному)
+    query_id INT,    -- связь с запросом (один к одному)
+    template_id INT,    -- связь с запросом (один к одному)
     CONSTRAINT fk_notify_chat FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE RESTRICT,
     CONSTRAINT fk_notify_group FOREIGN KEY (group_id) REFERENCES notify_groups(id) ON DELETE SET NULL,
-    CONSTRAINT fk_notify_query FOREIGN KEY (query_id) REFERENCES notify_query(id) ON DELETE CASCADE
+    CONSTRAINT fk_notify_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE,
+    CONSTRAINT fk_notify_template FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
 );
 
 -- Индексы
 CREATE INDEX idx_notify_chat_id ON notify(chat_id);
 CREATE INDEX idx_notify_group_id ON notify(group_id);
-CREATE INDEX idx_notify_query_notify_id ON notify_query(notify_id);
 
 
 -- Триггер: при удалении чата уведомления становятся неактивными

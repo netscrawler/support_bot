@@ -152,12 +152,12 @@ func (s *Stats) sendGroupNotifications(ctx context.Context, notifies []models.No
 	}
 
 	// Отправляем каждому чату
-	for chatID, chatNotifies := range chatGroups {
-		err := s.sendChatNotifications(ctx, chatID, chatNotifies)
+	for targetChat, chatNotifies := range chatGroups {
+		err := s.sendChatNotifications(ctx, targetChat, chatNotifies)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send chat notifications",
-				slog.Int64("chatID", chatID.ChatID),
-				slog.Int64("threadID", chatID.ThreadID),
+				slog.Int64("chatID", targetChat.ChatID),
+				slog.Int64("threadID", targetChat.ThreadID),
 				slog.Any("error", err))
 		}
 	}
@@ -262,8 +262,10 @@ func (s *Stats) sendData(
 	threadID int64,
 ) error {
 	logger := slog.Default()
+
+	sendOpts := &telebot.SendOptions{ThreadID: int(threadID)}
 	if len(pngImages) > 0 {
-		err := s.message.SendMedia(chat, pngImages)
+		err := s.message.SendMedia(chat, pngImages, sendOpts)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send png caption", slog.Any("error", err))
 		}
@@ -277,7 +279,7 @@ func (s *Stats) sendData(
 			return err
 		}
 
-		if err = s.message.SendDocument(chat, xlsxBook, title+".xlsx"); err != nil {
+		if err = s.message.SendDocument(chat, xlsxBook, title+".xlsx", sendOpts); err != nil {
 			logger.ErrorContext(ctx, "failed to send xlsx file", slog.Any("error", err))
 
 			return err
@@ -300,7 +302,7 @@ func (s *Stats) sendData(
 			chat,
 			csvData[0],
 			title+".csv",
-			&telebot.SendOptions{ThreadID: int(threadID)},
+			sendOpts,
 		)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to send csv file", slog.Any("error", err))

@@ -64,16 +64,17 @@ type Chat struct {
 }
 
 type Notify struct {
-	ID       int32
-	Name     string
-	Cron     string
-	Active   bool
-	Format   []string
-	Title    string
-	ThreadID int64
-	ChatID   int32
-	GroupID  pgtype.Int4
-	QueryID  pgtype.Int4
+	ID         int32
+	Name       string
+	Cron       string
+	Active     bool
+	Format     []string
+	Title      string
+	ThreadID   int64
+	ChatID     int32
+	GroupID    pgtype.Int4
+	QueryID    pgtype.Int4
+	TemplateID pgtype.Int4
 }
 
 type NotifyGroup struct {
@@ -82,9 +83,14 @@ type NotifyGroup struct {
 	Title string
 }
 
-type NotifyQuery struct {
+type Query struct {
+	ID       int32
+	CardUuid string
+	Title    pgtype.Text
+}
+
+type Template struct {
 	ID           int32
-	CardUuid     string
 	TemplateText pgtype.Text
 	Title        pgtype.Text
 }
