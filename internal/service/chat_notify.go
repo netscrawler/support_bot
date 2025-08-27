@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"support_bot/internal/models"
 
@@ -40,7 +41,8 @@ func (n *ChatNotify) Broadcast(
 			return "", models.ErrNotFound
 		}
 
-		return "", models.ErrInternal
+		return "", fmt.Errorf("%w %w", models.ErrInternal, err)
+
 	}
 
 	if len(chats) == 0 {

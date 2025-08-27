@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"support_bot/internal/models"
 
 	"gopkg.in/telebot.v4"
@@ -34,7 +35,7 @@ func (c *Chat) AddActive(ctx context.Context, chat *telebot.Chat) error {
 	}
 
 	if err := c.repo.Create(ctx, chatToSave); err != nil {
-		return models.ErrInternal
+		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 
 	return nil
@@ -49,7 +50,7 @@ func (c *Chat) Add(ctx context.Context, chat *telebot.Chat) error {
 	}
 
 	if err := c.repo.Create(ctx, chatToSave); err != nil {
-		return models.ErrInternal
+		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 
 	return nil

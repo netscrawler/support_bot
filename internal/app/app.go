@@ -68,7 +68,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	userNotifier := service.NewUserNotify(userRepo, messageSender)
 
 	// Создаем Metabase клиент
-	metabaseClient := metabase.New(cfg.MetabaseDomain, &http.Client{})
+	metabaseClient := metabase.New(cfg.MetabaseDomain, &http.Client{Timeout: time.Second * 60})
 	statsService := service.New(notifyRepo, messageSender, metabaseClient)
 
 	b, err := bot.New(

@@ -465,17 +465,15 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 
 	var response strings.Builder
 
-	response.WriteString("📋 *Список чатов:*\n\n")
+	response.WriteString("*Список чатов:*\n\n")
 
 	for i, chat := range chats {
 		response.WriteString(
 			fmt.Sprintf("%d. %s\n", i+1, chat.Title),
 		)
 	}
-	// //nolint:errcheck
-	// c.Delete()
 
-	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+	return c.Send(response.String()+"", &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
 }
 
 // ManageCron handles the chat management menu.
@@ -486,7 +484,7 @@ func (h *AdminHandler) ManageCron(c tele.Context) error {
 
 	c.Delete()
 
-	return c.Send("Управление чатами", menu.AdminMenu)
+	return c.Send("Управление задачами", menu.AdminMenu)
 }
 
 // StartCronJobs перезапускает крон-задачи для уведомлений.

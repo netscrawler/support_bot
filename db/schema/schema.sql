@@ -32,7 +32,6 @@ CREATE TABLE notify_groups (
 CREATE TABLE queries (
     id SERIAL PRIMARY KEY,
     card_uuid TEXT NOT NULL,
-    -- template_text TEXT,
     title TEXT
 );
 

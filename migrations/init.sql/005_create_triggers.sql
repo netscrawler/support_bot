@@ -10,6 +10,4 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_deactivate_notify_on_chat_delete
 BEFORE DELETE ON chats
 FOR EACH ROW
-EXECUTE FUNCTION deactivate_notify_on_chat_delete();
-
-
+EXECUTE PROCEDURE deactivate_notify_on_chat_delete();
