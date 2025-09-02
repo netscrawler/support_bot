@@ -26,14 +26,27 @@ type MetabaseDataGetter interface {
 	GetDataMap(ctx context.Context, cardUUID string) (map[string]any, error)
 }
 
+type TelegramChatSender interface {
+	Send(chat models.Chat, msg string, opts ...any) error
+	SendDocument(
+		chat models.Chat,
+		buf *bytes.Buffer,
+		filename string,
+		opts ...any,
+	) error
+	SendMedia(chat models.Chat, imgs []*bytes.Buffer, opts ...any) error
+}
+
+type SmbSender interface{}
+
 type Stats struct {
 	query    StatsQueryGetter
-	message  MessageSender
+	message  TelegramChatSender
 	metabase MetabaseDataGetter
 	cron     *cron.Cron
 }
 
-func New(q StatsQueryGetter, mess MessageSender, mb MetabaseDataGetter) *Stats {
+func New(q StatsQueryGetter, mess TelegramChatSender, mb MetabaseDataGetter) *Stats {
 	return &Stats{
 		query:    q,
 		message:  mess,
@@ -171,7 +184,7 @@ func (s *Stats) sendChatNotifications(
 ) error {
 	logger := slog.Default()
 
-	chat := &telebot.Chat{ID: target.ChatID}
+	chat := models.Chat{ChatID: target.ChatID}
 
 	var pngImages []*bytes.Buffer
 
@@ -258,7 +271,7 @@ func (s *Stats) sendData(
 	textMessages []string,
 	pngImages []*bytes.Buffer,
 	title string,
-	chat *telebot.Chat,
+	chat models.Chat,
 	threadID int64,
 ) error {
 	logger := slog.Default()

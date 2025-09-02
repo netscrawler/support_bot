@@ -57,7 +57,7 @@ func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 			return nil // Не выдаём ошибку пользователю
 		}
 
-		c.Set("isAdmin", role)
+		c.Set("role", role)
 
 		return next(c)
 	}
@@ -94,7 +94,7 @@ func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc 
 		}
 
 		// Добавляем роль в контекст, если юзер есть
-		c.Set("isAdmin", role)
+		c.Set("role", role)
 
 		return next(c)
 	}

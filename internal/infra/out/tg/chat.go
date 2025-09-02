@@ -17,7 +17,7 @@ func NewChatAdaptor(bot *telebot.Bot) *ChatAdaptor {
 }
 
 func (ca *ChatAdaptor) Broadcast(
-	chats []*telebot.Chat,
+	chats []models.Chat,
 	msg string,
 	opts ...any,
 ) (*models.BroadcastResp, error) {
@@ -28,7 +28,8 @@ func (ca *ChatAdaptor) Broadcast(
 	}
 
 	for _, chat := range chats {
-		_, err := ca.bot.Send(chat, msg, opts...)
+		c := &telebot.Chat{ID: chat.ChatID}
+		_, err := ca.bot.Send(c, msg, opts...)
 		if err != nil {
 			resp.AddError(chat.Title)
 
@@ -41,14 +42,16 @@ func (ca *ChatAdaptor) Broadcast(
 	return resp, nil
 }
 
-func (ca *ChatAdaptor) Send(chat *telebot.Chat, msg string, opts ...any) error {
-	_, err := ca.bot.Send(chat, msg, opts...)
+func (ca *ChatAdaptor) Send(chat models.Chat, msg string, opts ...any) error {
+	c := &telebot.Chat{ID: chat.ChatID}
+	_, err := ca.bot.Send(c, msg, opts...)
 
 	return err
 }
 
-func (ca *ChatAdaptor) SendMedia(chat *telebot.Chat, imgs []*bytes.Buffer, opts ...any) error {
+func (ca *ChatAdaptor) SendMedia(chat models.Chat, imgs []*bytes.Buffer, opts ...any) error {
 	var album telebot.Album
+	c := &telebot.Chat{ID: chat.ChatID}
 
 	for _, img := range imgs {
 		photo := &telebot.Photo{
@@ -58,13 +61,13 @@ func (ca *ChatAdaptor) SendMedia(chat *telebot.Chat, imgs []*bytes.Buffer, opts 
 		album = append(album, photo)
 	}
 
-	_, err := ca.bot.SendAlbum(chat, album, opts...)
+	_, err := ca.bot.SendAlbum(c, album, opts...)
 
 	return err
 }
 
 func (ca *ChatAdaptor) SendDocument(
-	chat *telebot.Chat,
+	chat models.Chat,
 	buf *bytes.Buffer,
 	filename string,
 	opts ...any,
@@ -73,8 +76,9 @@ func (ca *ChatAdaptor) SendDocument(
 		File:     telebot.FromReader(buf),
 		FileName: filename,
 	}
+	c := &telebot.Chat{ID: chat.ChatID}
 
-	_, err := ca.bot.Send(chat, doc, opts...)
+	_, err := ca.bot.Send(c, doc, opts...)
 
 	return err
 }

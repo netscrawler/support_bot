@@ -1,13 +1,10 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"log/slog"
 	"support_bot/internal/models"
-
-	"gopkg.in/telebot.v4"
 )
 
 type UserGetter interface {
@@ -16,20 +13,12 @@ type UserGetter interface {
 }
 
 type MessageSender interface {
-	Broadcast(chats []*telebot.Chat, msg string, opts ...any) (*models.BroadcastResp, error)
-	Send(chat *telebot.Chat, msg string, opts ...any) error
-	SendDocument(
-		chat *telebot.Chat,
-		buf *bytes.Buffer,
-		filename string,
-		opts ...any,
-	) error
-	SendMedia(chat *telebot.Chat, imgs []*bytes.Buffer, opts ...any) error
+	Broadcast(chats []models.Chat, msg string, opts ...any) (*models.BroadcastResp, error)
+	Send(chat models.Chat, msg string, opts ...any) error
 }
 
 type UserNotify struct {
-	user UserGetter
-	// log       *zap.Logger
+	user      UserGetter
 	tgAdaptor MessageSender
 }
 
@@ -50,11 +39,11 @@ func (n *UserNotify) Broadcast(ctx context.Context, notify string) error {
 		return models.ErrInternal
 	}
 
-	tgchats := []*telebot.Chat{}
+	tgchats := []models.Chat{}
 
 	for _, user := range users {
-		tgchat := telebot.Chat{ID: user.TelegramID}
-		tgchats = append(tgchats, &tgchat)
+		tgchat := models.Chat{ChatID: user.TelegramID}
+		tgchats = append(tgchats, tgchat)
 	}
 
 	_, err = n.tgAdaptor.Broadcast(tgchats, notify)
@@ -67,11 +56,9 @@ func (n *UserNotify) SendNotify(
 	tgID int64,
 	notify string,
 ) error {
-	const op = "service.UserNotify.SendNotify"
-
 	l := slog.Default()
 
-	err := n.tgAdaptor.Send(&telebot.Chat{ID: tgID}, notify)
+	err := n.tgAdaptor.Send(models.Chat{ChatID: tgID}, notify)
 	if err != nil {
 		l.ErrorContext(ctx, "Send notify error", slog.Any("error", err))
 
@@ -81,11 +68,8 @@ func (n *UserNotify) SendNotify(
 	return nil
 }
 
-func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, notify string) error {
-	const op = "service.UserNotify.SendAdminNotify"
-
+func (n *UserNotify) SendAdminNotify(ctx context.Context, notify string) error {
 	users, err := n.user.GetAllAdmins(ctx)
-	// n.log.Info(op, zap.Any("chats", users))
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.ErrNotFound
@@ -94,14 +78,14 @@ func (n *UserNotify) SendAdminNotify(ctx context.Context, bot *telebot.Bot, noti
 		return models.ErrInternal
 	}
 
-	tgchats := []*telebot.Chat{}
+	tgchats := []models.Chat{}
 
 	for _, user := range users {
-		tgchat := telebot.Chat{ID: user.TelegramID}
-		tgchats = append(tgchats, &tgchat)
+		tgchat := models.Chat{ChatID: user.TelegramID}
+		tgchats = append(tgchats, tgchat)
 	}
 
-	_, err = n.tgAdaptor.Broadcast(tgchats, notify, telebot.ModeMarkdownV2)
+	_, err = n.tgAdaptor.Broadcast(tgchats, notify, models.ModeMarkdownV2)
 
 	return err
 }

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"support_bot/internal/models"
-
-	"gopkg.in/telebot.v4"
 )
 
 type UserProvider interface {
@@ -69,10 +67,8 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	return userIds, adminIds, nil
 }
 
-func (u *User) Create(ctx context.Context, usr *telebot.User, isAdmin bool) error {
+func (u *User) Create(ctx context.Context, user *models.User) error {
 	const op = "service.User.Create"
-
-	user := models.NewUser(usr, isAdmin)
 
 	err := u.repo.Create(ctx, user)
 	if err != nil {
@@ -87,7 +83,7 @@ func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) e
 
 	user := models.NewEmptyUser(username, isAdmin)
 
-	err := u.repo.Create(ctx, user)
+	err := u.repo.Create(ctx, &user)
 	if err != nil {
 		return err
 	}
@@ -99,10 +95,8 @@ func (u *User) Update(usr *models.User) error {
 	return u.repo.Update(context.Background(), usr)
 }
 
-func (u *User) AddUserComplete(user *telebot.User) error {
-	usr := models.NewUser(user, false)
-
-	return u.Update(usr)
+func (u *User) AddUserComplete(user *models.User) error {
+	return u.Update(user)
 }
 
 func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {

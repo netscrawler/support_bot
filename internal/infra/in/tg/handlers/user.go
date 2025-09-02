@@ -78,14 +78,20 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 	}
 
 	ctx := context.Background()
-	snd := c.Sender()
-	err := h.userService.AddUserComplete(snd)
+	snd := models.NewUser(
+		c.Sender().ID,
+		c.Sender().Username,
+		c.Sender().FirstName,
+		&c.Sender().LastName,
+		false,
+	)
+	err := h.userService.AddUserComplete(&snd)
 	formatedString := fmt.Sprintf(
 		"Пользователь с ником @%s успешно прошел регистрацию",
 		c.Sender().Username,
 	)
 	//nolint:errcheck
-	h.userNotify.SendAdminNotify(ctx, h.bot, formatedString)
+	h.userNotify.SendAdminNotify(ctx, formatedString)
 
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
@@ -164,7 +170,7 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 		userString, msg,
 	)
 	//nolint:errcheck
-	go h.userNotify.SendAdminNotify(ctx, h.bot, formString)
+	go h.userNotify.SendAdminNotify(ctx, formString)
 
 	h.state.Set(c.Sender().ID, MenuState)
 

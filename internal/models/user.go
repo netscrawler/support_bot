@@ -2,8 +2,6 @@ package models
 
 import (
 	"math/rand/v2"
-
-	"gopkg.in/telebot.v4"
 )
 
 const (
@@ -25,34 +23,28 @@ type User struct {
 	Role       string  `json:"role"` // admin или user или primary
 }
 
-func NewUser(usr *telebot.User, isAdmin bool) *User {
-	if isAdmin {
-		return &User{
-			TelegramID: usr.ID,
-			Username:   usr.Username,
-			FirstName:  usr.FirstName,
-			LastName:   &usr.LastName,
-			Role:       AdminRole,
-		}
-	}
-
-	return &User{
-		TelegramID: usr.ID,
-		Username:   usr.Username,
-		FirstName:  usr.FirstName,
-		LastName:   &usr.LastName,
+func NewUser(tgID int64, username, firstname string, lastname *string, isAdmin bool) User {
+	u := User{
+		TelegramID: tgID,
+		Username:   username,
+		FirstName:  firstname,
+		LastName:   lastname,
 		Role:       UserRole,
 	}
+	if isAdmin {
+		u.Role = AdminRole
+	}
+	return u
 }
 
 //nolint:gosec
-func NewEmptyUser(username string, isAdmin bool) *User {
+func NewEmptyUser(username string, isAdmin bool) User {
 	role := UserRole
 	if isAdmin {
 		role = AdminRole
 	}
 
-	return &User{
+	return User{
 		TelegramID: rand.Int64(),
 		Username:   username,
 		Role:       role,

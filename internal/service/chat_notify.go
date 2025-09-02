@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"support_bot/internal/models"
-
-	"gopkg.in/telebot.v4"
 )
 
 type ChatGetter interface {
@@ -49,14 +47,7 @@ func (n *ChatNotify) Broadcast(
 		return "", models.ErrNotFound
 	}
 
-	tgchats := []*telebot.Chat{}
-
-	for _, chat := range chats {
-		tgchat := telebot.Chat{ID: chat.ChatID, Title: chat.Title}
-		tgchats = append(tgchats, &tgchat)
-	}
-
-	resp, err := n.tgAdaptor.Broadcast(tgchats, notify)
+	resp, err := n.tgAdaptor.Broadcast(chats, notify)
 
 	return resp.String(), err
 }

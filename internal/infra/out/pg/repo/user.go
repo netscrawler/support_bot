@@ -106,7 +106,7 @@ func (u *User) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 }
 
 func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
-	users, err := u.q.GetAllAdmins(ctx)
+	users, err := u.q.GetAllUsers(ctx)
 	if err != nil {
 		return nil, err
 	}

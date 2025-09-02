@@ -25,11 +25,11 @@ func NewTextHandler(
 }
 
 func (h *TextHandler) ProcessTextInput(c tele.Context) error {
-	if c.Get("isAdmin") == models.UserRole {
+	if c.Get("role") == models.UserRole {
 		return h.userhandler.ProcessUserInput(c)
 	}
 
-	if c.Get("isAdmin") == models.AdminRole || c.Get("isAdmin") == models.PrimaryAdminRole {
+	if c.Get("role") == models.AdminRole || c.Get("role") == models.PrimaryAdminRole {
 		return h.adminhandler.ProcessAdminInput(c)
 	}
 

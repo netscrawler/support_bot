@@ -1,6 +1,14 @@
 package models
 
-import "gopkg.in/telebot.v4"
+// ParseMode determines the way client applications treat the text of the message
+type ParseMode = string
+
+const (
+	ModeDefault    ParseMode = ""
+	ModeMarkdown   ParseMode = "Markdown"
+	ModeMarkdownV2 ParseMode = "MarkdownV2"
+	ModeHTML       ParseMode = "HTML"
+)
 
 // Chat представляет чат для отправки уведомлений.
 type Chat struct {
@@ -10,13 +18,22 @@ type Chat struct {
 	Type        string `json:"type"` // 'private', 'group', 'supergroup', 'channel'
 	Description string `json:"description"`
 	IsActive    bool   `json:"is_active"`
+	ThreadID    int64
 }
 
-func NewChat(chat *telebot.Chat) *Chat {
+func NewChat(id int64, title, cType, desc string) *Chat {
 	return &Chat{
-		ChatID:      chat.ID,
-		Title:       chat.Title,
-		Type:        string(chat.Type),
-		Description: chat.Description,
+		ChatID:      id,
+		Title:       title,
+		Type:        cType,
+		Description: desc,
 	}
+}
+
+func (c *Chat) Activate() {
+	c.IsActive = true
+}
+
+func (c *Chat) DeActivate() {
+	c.IsActive = false
 }

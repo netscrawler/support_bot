@@ -134,7 +134,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		userString, msg,
 	)
 	//nolint:errcheck
-	h.userNotify.SendAdminNotify(ctx, h.bot, formString)
+	h.userNotify.SendAdminNotify(ctx, formString)
 	h.state.Set(c.Sender().ID, MenuState)
 
 	return c.Edit(resp, tele.ModeMarkdownV2)
@@ -358,7 +358,15 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 
 	c.Delete()
 
-	err := h.chatService.AddActive(ctx, c.Chat())
+	chatToAdd := models.NewChat(
+		c.Chat().ID,
+		c.Chat().Title,
+		string(c.Chat().Type),
+		c.Chat().Description,
+	)
+	chatToAdd.Activate()
+
+	err := h.chatService.AddActive(ctx, chatToAdd)
 	if err != nil {
 
 		h.userNotify.SendNotify(
@@ -388,7 +396,14 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 
 	c.Delete()
 
-	err := h.chatService.Add(ctx, c.Chat())
+	chatToSave := models.NewChat(
+		c.Chat().ID,
+		c.Chat().Title,
+		string(c.Chat().Type),
+		c.Chat().Description,
+	)
+
+	err := h.chatService.Add(ctx, chatToSave)
 	if err != nil {
 
 		h.userNotify.SendNotify(

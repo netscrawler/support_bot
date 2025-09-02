@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"support_bot/internal/models"
-
-	"gopkg.in/telebot.v4"
 )
 
 type ChatProvider interface {
@@ -25,31 +23,26 @@ func NewChat(repo ChatProvider) *Chat {
 	}
 }
 
-func (c *Chat) AddActive(ctx context.Context, chat *telebot.Chat) error {
-	chatToSave := models.NewChat(chat)
-	chatToSave.IsActive = true
-
+func (c *Chat) AddActive(ctx context.Context, chat *models.Chat) error {
 	ch, _ := c.repo.GetByTitle(ctx, chat.Title)
 	if ch != nil {
 		return models.ErrAlreadyExist
 	}
 
-	if err := c.repo.Create(ctx, chatToSave); err != nil {
+	if err := c.repo.Create(ctx, chat); err != nil {
 		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 
 	return nil
 }
 
-func (c *Chat) Add(ctx context.Context, chat *telebot.Chat) error {
-	chatToSave := models.NewChat(chat)
-
+func (c *Chat) Add(ctx context.Context, chat *models.Chat) error {
 	ch, _ := c.repo.GetByTitle(ctx, chat.Title)
 	if ch != nil {
 		return models.ErrAlreadyExist
 	}
 
-	if err := c.repo.Create(ctx, chatToSave); err != nil {
+	if err := c.repo.Create(ctx, chat); err != nil {
 		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 
