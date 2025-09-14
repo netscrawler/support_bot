@@ -7,6 +7,7 @@ import (
 	"strings"
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 	"support_bot/internal/service"
 
 	tele "gopkg.in/telebot.v4"
@@ -16,9 +17,8 @@ type AdminHandler struct {
 	bot         *tele.Bot
 	userService *service.User
 	chatService *service.Chat
-	chatNotify  *service.ChatNotify
-	userNotify  *service.UserNotify
-	stats       *service.Stats
+	notify      *service.TelegramNotify
+	stats       *service.Report
 	state       *State
 }
 
@@ -26,9 +26,8 @@ func NewAdminHandler(
 	bot *tele.Bot,
 	userService *service.User,
 	chatService *service.Chat,
-	notificationService *service.ChatNotify,
-	userNotify *service.UserNotify,
-	stats *service.Stats,
+	notifier *service.TelegramNotify,
+	stats *service.Report,
 	state *State,
 ) *AdminHandler {
 	return &AdminHandler{
@@ -36,9 +35,8 @@ func NewAdminHandler(
 		userService: userService,
 		chatService: chatService,
 		state:       state,
-		chatNotify:  notificationService,
-		userNotify:  userNotify,
 		stats:       stats,
+		notify:      notifier,
 	}
 }
 
@@ -115,7 +113,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		return c.Edit(SendTimeExpired)
 	}
 
-	resp, err := h.chatNotify.Broadcast(ctx, msg)
+	resp, err := h.notify.BroadcastToChats(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit(UnableCauseNotFound)
@@ -134,7 +132,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 		userString, msg,
 	)
 	//nolint:errcheck
-	h.userNotify.SendAdminNotify(ctx, formString)
+	h.notify.SendAdminNotify(ctx, formString)
 	h.state.Set(c.Sender().ID, MenuState)
 
 	return c.Edit(resp, tele.ModeMarkdownV2)
@@ -334,7 +332,10 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 		)
 	}
 
-	return c.Send(response.String(), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+	return c.Send(
+		pkg.EscapeMarkdownV2(response.String()),
+		&tele.SendOptions{ParseMode: tele.ModeMarkdown},
+	)
 }
 
 // ManageChats handles the chat management menu.
@@ -369,7 +370,7 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 	err := h.chatService.AddActive(ctx, chatToAdd)
 	if err != nil {
 
-		h.userNotify.SendNotify(
+		h.notify.SendNotify(
 			ctx,
 			c.Sender().ID,
 			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
@@ -378,7 +379,7 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 		return nil
 	}
 
-	h.userNotify.Broadcast(
+	h.notify.BroadcastToUsers(
 		ctx,
 		"Добавлен новый чат в рассылку: "+c.Chat().Title,
 	)
@@ -406,7 +407,7 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 	err := h.chatService.Add(ctx, chatToSave)
 	if err != nil {
 
-		h.userNotify.SendNotify(
+		h.notify.SendNotify(
 			ctx,
 			c.Sender().ID,
 			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
@@ -415,7 +416,7 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 		return nil
 	}
 
-	h.userNotify.Broadcast(
+	h.notify.BroadcastToUsers(
 		ctx,
 		"Добавлен новый чат: "+c.Chat().Title,
 	)
@@ -488,7 +489,11 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 		)
 	}
 
-	return c.Send(response.String()+"", &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
+	s := pkg.EscapeMarkdownV2(response.String())
+	return c.Send(
+		s,
+		&tele.SendOptions{ParseMode: tele.ModeMarkdownV2},
+	)
 }
 
 // ManageCron handles the chat management menu.

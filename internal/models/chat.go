@@ -1,15 +1,5 @@
 package models
 
-// ParseMode determines the way client applications treat the text of the message
-type ParseMode = string
-
-const (
-	ModeDefault    ParseMode = ""
-	ModeMarkdown   ParseMode = "Markdown"
-	ModeMarkdownV2 ParseMode = "MarkdownV2"
-	ModeHTML       ParseMode = "HTML"
-)
-
 // Chat представляет чат для отправки уведомлений.
 type Chat struct {
 	ID          int    `json:"id"`

@@ -27,10 +27,10 @@ func (br *BroadcastResp) AddSuccess() {
 	br.SuccessCount += 1
 }
 
-func (br *BroadcastResp) AddError(chatName string) {
+func (br *BroadcastResp) AddError(chatName string, err error) {
 	br.ChatsCount += 1
 	br.ErrorCount += 1
-	br.ErrorChatsTitles = append(br.ErrorChatsTitles, "- "+chatName)
+	br.ErrorChatsTitles = append(br.ErrorChatsTitles, "- "+chatName, " : ", err.Error())
 }
 
 func (br *BroadcastResp) String() string {

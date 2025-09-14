@@ -3,7 +3,6 @@ package models_test
 import (
 	"support_bot/internal/models"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -60,68 +59,5 @@ func TestNewCron(t *testing.T) {
 		if assert.Error(t, err) {
 			assert.Equal(t, models.ErrInvalidCron, err, "expected error")
 		}
-	})
-}
-
-func TestNotify_GetGroupTitle(t *testing.T) {
-	t.Parallel()
-	t.Run("Without temlpated title", func(t *testing.T) {
-		t.Parallel()
-		assert.New(t)
-		n := models.Notify{
-			GroupTitle: "Без даты",
-		}
-
-		title, err := n.GetGroupTitle()
-
-		assert.NoError(t, err)
-		assert.Equal(t, "Без даты", title, "not equal title")
-	})
-
-	t.Run("Current date template", func(t *testing.T) {
-		t.Parallel()
-		assert.New(t)
-		n := models.Notify{
-			GroupTitle: "Сегодня {{.CurrentDate}}",
-		}
-
-		title, err := n.GetGroupTitle()
-
-		assert.NoError(t, err)
-
-		assert.Equal(t, "Сегодня "+time.Now().Format("02-01-2006"), title, "not equal title")
-	})
-
-	t.Run("Last date template", func(t *testing.T) {
-		t.Parallel()
-		assert.New(t)
-		n := models.Notify{
-			GroupTitle: "Вчера {{.LastDate}}",
-		}
-
-		title, err := n.GetGroupTitle()
-
-		assert.NoError(t, err)
-
-		assert.Equal(
-			t,
-			"Вчера "+time.Now().Add(time.Hour*-24).Format("02-01-2006"),
-			title,
-			"not equal title",
-		)
-	})
-
-	t.Run("Unknow date template", func(t *testing.T) {
-		t.Parallel()
-		assert.New(t)
-		n := models.Notify{
-			GroupTitle: "{{.Unknown}}",
-		}
-
-		title, err := n.GetGroupTitle()
-
-		assert.NoError(t, err)
-
-		assert.Equal(t, "", title, "not equal title")
 	})
 }

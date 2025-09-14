@@ -36,9 +36,8 @@ func New(
 	tgBot *telebot.Bot,
 	userService *service.User,
 	chatService *service.Chat,
-	notifyier *service.ChatNotify,
-	userNotifier *service.UserNotify,
-	statsService *service.Stats,
+	notifyier *service.TelegramNotify,
+	statsService *service.Report,
 ) (*Bot, error) {
 	state := handlers.NewState(cleanupTime)
 
@@ -47,7 +46,6 @@ func New(
 		userService,
 		chatService,
 		notifyier,
-		userNotifier,
 		statsService,
 		state,
 	)
@@ -58,7 +56,6 @@ func New(
 		userService,
 		state,
 		notifyier,
-		userNotifier,
 	)
 
 	textHandler := handlers.NewTextHandler(adminHandler, userHandler, state)

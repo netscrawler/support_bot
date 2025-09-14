@@ -3,13 +3,11 @@ package app
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
 	"support_bot/internal/infra/out/metabase"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/service"
-	"time"
 
 	postgres "support_bot/internal/infra/out/pg"
 	pgrepo "support_bot/internal/infra/out/pg/repo"
@@ -20,7 +18,7 @@ type App struct {
 	bot     *bot.Bot
 	storage *postgres.ReconnectableDB
 	cfg     *config.Config
-	stats   *service.Stats
+	stats   *service.Report
 }
 
 func New(ctx context.Context, cfg *config.Config) (*App, error) {
@@ -50,21 +48,20 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	chatService := service.NewChat(chatRepo)
 	userService := service.NewUser(userRepo)
 
-	messageSender := telegram.NewChatAdaptor(tgBot)
+	tgSender := telegram.NewChatAdaptor(tgBot)
+	senderStrategy := service.NewSender(tgSender)
 
-	notifyier := service.NewChatNotify(chatRepo, messageSender)
-	userNotifier := service.NewUserNotify(userRepo, messageSender)
+	userNotifier := service.NewTelegramNotify(userRepo, chatRepo, senderStrategy)
 
 	// Создаем Metabase клиент
-	metabaseClient := metabase.New(cfg.MetabaseDomain, &http.Client{Timeout: time.Second * 60})
-	statsService := service.New(notifyRepo, messageSender, metabaseClient)
+	metabaseClient := metabase.New(cfg.MetabaseDomain)
+	statsService := service.New(notifyRepo, senderStrategy, metabaseClient)
 
 	b, err := bot.New(
 		cfg.Bot.CleanUpTime,
 		tgBot,
 		userService,
 		chatService,
-		notifyier,
 		userNotifier,
 		statsService,
 	)

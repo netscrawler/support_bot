@@ -68,8 +68,6 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 }
 
 func (u *User) Create(ctx context.Context, user *models.User) error {
-	const op = "service.User.Create"
-
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		return err
@@ -79,8 +77,6 @@ func (u *User) Create(ctx context.Context, user *models.User) error {
 }
 
 func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) error {
-	const op = "service.User.Create"
-
 	user := models.NewEmptyUser(username, isAdmin)
 
 	err := u.repo.Create(ctx, &user)

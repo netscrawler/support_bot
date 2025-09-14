@@ -7,28 +7,28 @@ import (
 	gen "support_bot/internal/infra/out/pg/gen"
 )
 
-type Notify struct {
+type Report struct {
 	q *gen.Queries
 }
 
-func NewQuery(s gen.DBTX) *Notify {
+func NewQuery(s gen.DBTX) *Report {
 	q := gen.New(s)
 
-	return &Notify{
+	return &Report{
 		q: q,
 	}
 }
 
-func (q *Notify) GetAll(ctx context.Context) ([]models.Notify, error) {
+func (q *Report) GetAll(ctx context.Context) ([]models.Report, error) {
 	g, err := q.q.ListAllNotifies(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	retGroups := make([]models.Notify, 0, len(g))
+	retGroups := make([]models.Report, 0, len(g))
 
 	for _, g := range g {
-		q, err := models.NewNotify(
+		q, err := models.NewReport(
 			g.Name,
 			g.GroupID.String,
 			g.CardUuid.String,
@@ -37,7 +37,8 @@ func (q *Notify) GetAll(ctx context.Context) ([]models.Notify, error) {
 			g.Title,
 			g.GroupTitle.String,
 			g.ChatID.Int64,
-			g.ThreadID,
+			int(g.ThreadID),
+			models.TargetTelegramChatKind,
 			g.Active,
 			g.Format,
 		)
@@ -51,16 +52,16 @@ func (q *Notify) GetAll(ctx context.Context) ([]models.Notify, error) {
 	return retGroups, nil
 }
 
-func (q *Notify) GetAllActive(ctx context.Context) ([]models.Notify, error) {
+func (q *Report) GetAllActive(ctx context.Context) ([]models.Report, error) {
 	g, err := q.q.ListAllActiveNotifies(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	retGroups := make([]models.Notify, 0, len(g))
+	retGroups := make([]models.Report, 0, len(g))
 
 	for _, g := range g {
-		q, err := models.NewNotify(
+		q, err := models.NewReport(
 			g.Name,
 			g.GroupID.String,
 			g.CardUuid.String,
@@ -69,7 +70,8 @@ func (q *Notify) GetAllActive(ctx context.Context) ([]models.Notify, error) {
 			g.Title,
 			g.GroupTitle.String,
 			g.ChatID.Int64,
-			g.ThreadID,
+			int(g.ThreadID),
+			models.TargetTelegramChatKind,
 			g.Active,
 			g.Format,
 		)

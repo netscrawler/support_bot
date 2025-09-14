@@ -2,8 +2,11 @@
 package telegram
 
 import (
-	"bytes"
+	"errors"
+	"strings"
+
 	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 
 	"gopkg.in/telebot.v4"
 )
@@ -16,44 +19,30 @@ func NewChatAdaptor(bot *telebot.Bot) *ChatAdaptor {
 	}
 }
 
-func (ca *ChatAdaptor) Broadcast(
-	chats []models.Chat,
-	msg string,
-	opts ...any,
-) (*models.BroadcastResp, error) {
-	resp := models.NewBroadcastResp()
-
-	if len(chats) == 0 {
-		return nil, models.ErrNotFound
-	}
-
-	for _, chat := range chats {
-		c := &telebot.Chat{ID: chat.ChatID}
-		_, err := ca.bot.Send(c, msg, opts...)
-		if err != nil {
-			resp.AddError(chat.Title)
-
-			continue
-		}
-
-		resp.AddSuccess()
-	}
-
-	return resp, nil
-}
-
-func (ca *ChatAdaptor) Send(chat models.Chat, msg string, opts ...any) error {
+func (ca *ChatAdaptor) Send(chat models.TargetTelegramChat, msg models.TextData) error {
+	p := msg.Parse
 	c := &telebot.Chat{ID: chat.ChatID}
-	_, err := ca.bot.Send(c, msg, opts...)
+	o := &telebot.SendOptions{
+		ParseMode: p,
+		ThreadID:  chat.ThreadID,
+	}
+	_, err := ca.bot.Send(c, msg.Msg, o)
+	if err != nil && strings.Contains(err.Error(), "parse") {
+		_, err = ca.bot.Send(c, pkg.EscapeMarkdownV2(msg.Msg), o)
+	}
 
 	return err
 }
 
-func (ca *ChatAdaptor) SendMedia(chat models.Chat, imgs []*bytes.Buffer, opts ...any) error {
+func (ca *ChatAdaptor) SendMedia(
+	chat models.TargetTelegramChat,
+	imgs models.ImageData,
+) error {
 	var album telebot.Album
 	c := &telebot.Chat{ID: chat.ChatID}
+	o := &telebot.SendOptions{ThreadID: int(chat.ThreadID)}
 
-	for _, img := range imgs {
+	for img := range imgs.Data() {
 		photo := &telebot.Photo{
 			File: telebot.FromReader(img),
 		}
@@ -61,24 +50,27 @@ func (ca *ChatAdaptor) SendMedia(chat models.Chat, imgs []*bytes.Buffer, opts ..
 		album = append(album, photo)
 	}
 
-	_, err := ca.bot.SendAlbum(c, album, opts...)
+	_, err := ca.bot.SendAlbum(c, album, o)
 
 	return err
 }
 
 func (ca *ChatAdaptor) SendDocument(
-	chat models.Chat,
-	buf *bytes.Buffer,
-	filename string,
-	opts ...any,
+	chat models.TargetTelegramChat,
+	doc models.FileData,
 ) error {
-	doc := &telebot.Document{
-		File:     telebot.FromReader(buf),
-		FileName: filename,
-	}
+	o := &telebot.SendOptions{ThreadID: int(chat.ThreadID)}
 	c := &telebot.Chat{ID: chat.ChatID}
+	var rerr error
+	for doc, name := range doc.Data() {
+		tgDoc := &telebot.Document{
+			File:     telebot.FromReader(doc),
+			FileName: name,
+		}
+		_, err := ca.bot.Send(c, tgDoc, o)
+		errors.Join(rerr, err)
 
-	_, err := ca.bot.Send(c, doc, opts...)
+	}
 
-	return err
+	return rerr
 }

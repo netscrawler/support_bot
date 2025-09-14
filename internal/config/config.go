@@ -10,17 +10,26 @@ import (
 )
 
 type Config struct {
-	LogLevel       string         `yaml:"log_level"       env:"LOG_LEVEL"`
-	MetabaseDomain string         `yaml:"metabase_domain"`
-	Database       configDatabase `yaml:"database"`
-	Bot            configBot      `yaml:"bot"`
-	Timeout        configTimeout  `yaml:"timeout"`
+	LogLevel       string   `yaml:"log_level"       env:"LOG_LEVEL"`
+	MetabaseDomain string   `yaml:"metabase_domain"`
+	Database       database `yaml:"database"`
+	Bot            bot      `yaml:"bot"`
+	Timeout        timeout  `yaml:"timeout"`
+	SMB            smb      `yaml:"smb"`
 }
-type configBot struct {
+
+type smb struct {
+	Adress string `yaml:"adress"`
+	User   string `yaml:"user"`
+	PWD    string `yaml:"password"`
+	Domain string `yaml:"domain"`
+}
+
+type bot struct {
 	TelegramToken string        `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`
 	CleanUpTime   time.Duration `yaml:"CleanUpTime"                         env-default:"10m"`
 }
-type configDatabase struct {
+type database struct {
 	Port     int    `yaml:"port"     env:"DATABASE_PORT"     env-default:"5432"`
 	Host     string `yaml:"host"     env:"DATABASE_HOST"     env-default:"localhost"`
 	User     string `yaml:"user"     env:"DATABASE_USER"     env-default:"user"`
@@ -29,7 +38,7 @@ type configDatabase struct {
 	URL      string
 }
 
-type configTimeout struct {
+type timeout struct {
 	DatabaseConnect time.Duration `yaml:"database_connect" env:"DATABASE_CONNECT_TIMEOUT" env-default:"30s"`
 	BotPoll         time.Duration `yaml:"bot_poll"         env:"BOT_POLL_TIMEOUT"         env-default:"30s"`
 	Shutdown        time.Duration `yaml:"shutdown"         env:"SHUTDOWN_TIMEOUT"         env-default:"5s"`

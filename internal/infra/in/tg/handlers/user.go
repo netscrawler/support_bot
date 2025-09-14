@@ -16,8 +16,7 @@ type UserHandler struct {
 	chatService *service.Chat
 	userService *service.User
 	state       *State
-	chatNotify  *service.ChatNotify
-	userNotify  *service.UserNotify
+	notify      *service.TelegramNotify
 }
 
 func NewUserHandler(
@@ -25,16 +24,14 @@ func NewUserHandler(
 	chatService *service.Chat,
 	userService *service.User,
 	state *State,
-	chatNotify *service.ChatNotify,
-	userNotify *service.UserNotify,
+	notify *service.TelegramNotify,
 ) *UserHandler {
 	return &UserHandler{
 		bot:         bot,
 		chatService: chatService,
 		userService: userService,
 		state:       state,
-		chatNotify:  chatNotify,
-		userNotify:  userNotify,
+		notify:      notify,
 	}
 }
 
@@ -91,7 +88,7 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 		c.Sender().Username,
 	)
 	//nolint:errcheck
-	h.userNotify.SendAdminNotify(ctx, formatedString)
+	h.notify.SendAdminNotify(ctx, formatedString)
 
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
@@ -151,7 +148,7 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 		return c.Edit("Время на подтверждение истекло")
 	}
 
-	resp, err := h.chatNotify.Broadcast(ctx, msg)
+	resp, err := h.notify.BroadcastToChats(ctx, msg)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return c.Edit(UnableCauseNotFound)
@@ -170,7 +167,7 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 		userString, msg,
 	)
 	//nolint:errcheck
-	go h.userNotify.SendAdminNotify(ctx, formString)
+	go h.notify.SendAdminNotify(ctx, formString)
 
 	h.state.Set(c.Sender().ID, MenuState)
 

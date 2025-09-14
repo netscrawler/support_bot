@@ -13,3 +13,8 @@ timeout:
 bot:
   telegram_token: your_telegram_token
   CleanUpTime: 5m
+smb:
+  adress: your fs address
+  user: user
+  password: password
+  domain: domain
