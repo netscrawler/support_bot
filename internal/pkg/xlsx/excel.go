@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xuri/excelize/v2"
 )
 
-// CreateXlsxBook сохраняет все records по юнитам в одну XLSX-книгу, на разные листы.
-// Аргументы:
-// - dataMap: map, где ключ — unit, значение — CSV данные ([][]string).
 func CreateXlsxBook(
 	dataMap map[string][][]string,
 ) (*bytes.Buffer, error) {
@@ -28,27 +26,16 @@ func CreateXlsxBook(
 		for rowIdx, row := range records {
 			for colIdx, val := range row {
 				cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
-
-				if colIdx == 2 {
-					valInt, err := strconv.ParseInt(val, 10, 64)
-					if err == nil {
-						f.SetCellValue(sheetName, cell, valInt)
-
-						continue
-					}
-				}
-
-				f.SetCellValue(sheetName, cell, val)
+				f.SetCellValue(sheetName, cell, detectValueType(val))
 			}
 		}
 
-		// Добавление таблицы (со включенной фильтрацией)
+		// Добавление таблицы (с фильтрацией)
 		startCell, _ := excelize.CoordinatesToCellName(1, 1)
 		endCell, _ := excelize.CoordinatesToCellName(len(records[0]), len(records))
 		tableRange := fmt.Sprintf("%s:%s", startCell, endCell)
 
 		a := true
-
 		err := f.AddTable(sheetName, &excelize.Table{
 			Range:             tableRange,
 			Name:              sheetName,
@@ -74,6 +61,42 @@ func CreateXlsxBook(
 	f.DeleteSheet("Sheet1")
 
 	return f.WriteToBuffer()
+}
+
+// detectValueType определяет тип значения по строке и возвращает подходящий тип
+func detectValueType(val string) any {
+	// int
+	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return i
+	}
+
+	// float
+	if f, err := strconv.ParseFloat(val, 64); err == nil {
+		return f
+	}
+
+	// bool
+	if b, err := strconv.ParseBool(val); err == nil {
+		return b
+	}
+
+	// time (несколько форматов)
+	layouts := []string{
+		time.RFC3339,                       // 2025-09-23T19:45:29+03:00
+		"2006-01-02T15:04:05.999999-07:00", // 2025-09-23T19:45:29.754093+03:00
+		"2006-01-02",                       // 2025-09-23
+		"2006-01-02 15:04:05",              // 2025-09-23 19:45:29
+		"02.01.2006",                       // 23.09.2025
+		"02.01.2006 15:04:05",              // 23.09.2025 19:45:29
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, val); err == nil {
+			return t
+		}
+	}
+
+	// строка по умолчанию
+	return val
 }
 
 func sanitizeSheetName(name string) string {

@@ -23,6 +23,8 @@ type smb struct {
 	User   string `yaml:"user"`
 	PWD    string `yaml:"password"`
 	Domain string `yaml:"domain"`
+	Share  string `yaml:"share"`
+	Active bool   `yaml:"active"`
 }
 
 type bot struct {

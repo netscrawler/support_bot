@@ -34,6 +34,19 @@ services:
     networks:
       - internal
 
+  samba:
+    image: dperson/samba
+    container_name: samba_test
+    restart: unless-stopped
+    ports:
+      - "139:139"
+      - "445:445"
+    command: >
+      -u "testuser;testpass"
+      -s "public;/share;yes;no;yes;all;all"
+    volumes:
+      - ./samba_share:/share
+
 networks:
   internal:
     name: bottst

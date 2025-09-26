@@ -40,7 +40,7 @@ func (ca *ChatAdaptor) SendMedia(
 ) error {
 	var album telebot.Album
 	c := &telebot.Chat{ID: chat.ChatID}
-	o := &telebot.SendOptions{ThreadID: int(chat.ThreadID)}
+	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 
 	for img := range imgs.Data() {
 		photo := &telebot.Photo{
@@ -59,7 +59,7 @@ func (ca *ChatAdaptor) SendDocument(
 	chat models.TargetTelegramChat,
 	doc models.FileData,
 ) error {
-	o := &telebot.SendOptions{ThreadID: int(chat.ThreadID)}
+	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 	c := &telebot.Chat{ID: chat.ChatID}
 	var rerr error
 	for doc, name := range doc.Data() {
@@ -68,7 +68,7 @@ func (ca *ChatAdaptor) SendDocument(
 			FileName: name,
 		}
 		_, err := ca.bot.Send(c, tgDoc, o)
-		errors.Join(rerr, err)
+		rerr = errors.Join(rerr, err)
 
 	}
 

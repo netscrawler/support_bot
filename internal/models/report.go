@@ -38,10 +38,10 @@ var FormatMap = map[string]ReportFormat{
 
 type Report struct {
 	Name         string
-	GroupID      string  // group of notify for grouping many queries
-	CardUUID     string  // metabase card uuid
-	Cron         Cron    // cron settings
-	TemplateText *string // template for text type notify
+	GroupID      string   // group of notify for grouping many queries
+	CardUUID     []string // metabase card uuid
+	Cron         Cron     // cron settings
+	TemplateText *string  // template for text type notify
 	Title        string
 	GroupTitle   string
 	Target       Targeted
@@ -51,12 +51,13 @@ type Report struct {
 
 func NewReport(
 	name, groupID string,
-	cardUUID string,
+	cardUUID []string,
 	cronExpr string,
 	templateText *string,
 	title string,
 	groupTitle string,
 	chatID int64,
+	remotePath *string,
 	threadID int,
 	targetKind TargetKind,
 	active bool,
@@ -84,6 +85,9 @@ func NewReport(
 			ThreadID: int(threadID),
 		}
 	case TargetFileServerKind:
+		t = TargetFileServer{
+			Dest: *remotePath,
+		}
 	}
 
 	return Report{

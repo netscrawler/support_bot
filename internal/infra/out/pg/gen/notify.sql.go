@@ -16,22 +16,26 @@ SELECT
     n.id,
     n.name,
     ng.name  AS group_id,
-    nq.card_uuid,
+array_agg(DISTINCT nq.card_uuid)::text[] AS card_uuids,
     n.cron,
     tp.template_text,
     n.title,
     ng.title AS group_title,
     c.chat_id,
+    n.remote_path,
     n.active,
     n.format,
-	n.thread_id
-
+    n.thread_id
 FROM notify n
 LEFT JOIN chats c ON n.chat_id = c.id
 LEFT JOIN notify_groups ng ON n.group_id = ng.id
-LEFT JOIN queries nq ON nq.id = n.query_id
+LEFT JOIN notify_queries nqj ON nqj.notify_id = n.id
+LEFT JOIN queries nq ON nq.id = nqj.query_id
 LEFT JOIN templates tp ON tp.id = n.template_id
 WHERE n.active = TRUE
+GROUP BY n.id, n.name, ng.name, n.cron, tp.template_text,
+         n.title, ng.title, c.chat_id, n.remote_path,
+         n.active, n.format, n.thread_id
 ORDER BY n.id
 `
 
@@ -39,12 +43,13 @@ type ListAllActiveNotifiesRow struct {
 	ID           int32
 	Name         string
 	GroupID      pgtype.Text
-	CardUuid     pgtype.Text
+	CardUuids    []string
 	Cron         string
 	TemplateText pgtype.Text
 	Title        string
 	GroupTitle   pgtype.Text
 	ChatID       pgtype.Int8
+	RemotePath   pgtype.Text
 	Active       bool
 	Format       []string
 	ThreadID     int64
@@ -63,12 +68,13 @@ func (q *Queries) ListAllActiveNotifies(ctx context.Context) ([]ListAllActiveNot
 			&i.ID,
 			&i.Name,
 			&i.GroupID,
-			&i.CardUuid,
+			&i.CardUuids,
 			&i.Cron,
 			&i.TemplateText,
 			&i.Title,
 			&i.GroupTitle,
 			&i.ChatID,
+			&i.RemotePath,
 			&i.Active,
 			&i.Format,
 			&i.ThreadID,
@@ -88,11 +94,12 @@ SELECT
     n.id,
     n.name,
     ng.name  AS group_id,
-    nq.card_uuid,
+array_agg(DISTINCT nq.card_uuid)::text[] AS card_uuids,
     n.cron,
     tp.template_text,
     n.title,
     ng.title AS group_title,
+    n.remote_path,
     c.chat_id,
     n.active,
     n.format,
@@ -100,8 +107,12 @@ SELECT
 FROM notify n
 LEFT JOIN chats c ON n.chat_id = c.id
 LEFT JOIN notify_groups ng ON n.group_id = ng.id
-LEFT JOIN queries nq ON nq.id = n.query_id
+LEFT JOIN notify_queries nqj ON nqj.notify_id = n.id
+LEFT JOIN queries nq ON nq.id = nqj.query_id
 LEFT JOIN templates tp ON tp.id = n.template_id
+GROUP BY n.id, n.name, ng.name, n.cron, tp.template_text,
+         n.title, ng.title, n.remote_path, c.chat_id,
+         n.active, n.format, n.thread_id
 ORDER BY n.id
 `
 
@@ -109,11 +120,12 @@ type ListAllNotifiesRow struct {
 	ID           int32
 	Name         string
 	GroupID      pgtype.Text
-	CardUuid     pgtype.Text
+	CardUuids    []string
 	Cron         string
 	TemplateText pgtype.Text
 	Title        string
 	GroupTitle   pgtype.Text
+	RemotePath   pgtype.Text
 	ChatID       pgtype.Int8
 	Active       bool
 	Format       []string
@@ -133,11 +145,12 @@ func (q *Queries) ListAllNotifies(ctx context.Context) ([]ListAllNotifiesRow, er
 			&i.ID,
 			&i.Name,
 			&i.GroupID,
-			&i.CardUuid,
+			&i.CardUuids,
 			&i.Cron,
 			&i.TemplateText,
 			&i.Title,
 			&i.GroupTitle,
+			&i.RemotePath,
 			&i.ChatID,
 			&i.Active,
 			&i.Format,

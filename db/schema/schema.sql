@@ -42,7 +42,7 @@ CREATE TABLE templates (
 );
 
 
--- Уведомления
+-- Уведомления без query_id
 CREATE TABLE notify (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
@@ -51,14 +51,22 @@ CREATE TABLE notify (
     format TEXT[],
     title TEXT NOT NULL,
     thread_id BIGINT NOT NULL DEFAULT 0,
-    chat_id INT NOT NULL,   -- связь с чатом
-    group_id INT,           -- связь с группой (опционально)
-    query_id INT,    -- связь с запросом (один к одному)
-    template_id INT,    -- связь с запросом (один к одному)
+    remote_path TEXT,
+    chat_id INT,   -- связь с чатом
+    group_id INT,  -- связь с группой (опционально)
+    template_id INT, -- связь с шаблоном (один к одному)
     CONSTRAINT fk_notify_chat FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE RESTRICT,
     CONSTRAINT fk_notify_group FOREIGN KEY (group_id) REFERENCES notify_groups(id) ON DELETE SET NULL,
-    CONSTRAINT fk_notify_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE,
     CONSTRAINT fk_notify_template FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+);
+
+-- Связь многие-ко-многим: notify <-> queries
+CREATE TABLE notify_queries (
+    notify_id INT NOT NULL,
+    query_id INT NOT NULL,
+    PRIMARY KEY (notify_id, query_id),
+    CONSTRAINT fk_notify_queries_notify FOREIGN KEY (notify_id) REFERENCES notify(id) ON DELETE CASCADE,
+    CONSTRAINT fk_notify_queries_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE
 );
 
 -- Индексы

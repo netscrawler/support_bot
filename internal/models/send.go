@@ -28,8 +28,8 @@ type Targeted interface {
 }
 
 type TargetTelegramChat struct {
-	ChatID   int64
-	ThreadID int
+	ChatID   int64 `yaml:"chat_id"   env:"chat_id"`
+	ThreadID int   `yaml:"thread_id" env:"thread_id"`
 }
 
 func NewTargetTelegramChat(chat int64, thread *int) TargetTelegramChat {

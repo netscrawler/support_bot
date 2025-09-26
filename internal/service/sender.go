@@ -2,11 +2,10 @@ package service
 
 import (
 	"errors"
-
 	"support_bot/internal/models"
 )
 
-type TelegramChatSender interface {
+type telegramChatSender interface {
 	Send(chat models.TargetTelegramChat, msg models.TextData) error
 	SendDocument(
 		chat models.TargetTelegramChat,
@@ -15,13 +14,19 @@ type TelegramChatSender interface {
 	SendMedia(chat models.TargetTelegramChat, imgs models.ImageData) error
 }
 
-type SenderStrategy struct {
-	tg TelegramChatSender
+type fileUploader interface {
+	Upload(remote string, file *models.FileData) error
 }
 
-func NewSender(tg TelegramChatSender) *SenderStrategy {
+type SenderStrategy struct {
+	tg  telegramChatSender
+	smb fileUploader
+}
+
+func NewSender(tg telegramChatSender, smb fileUploader) *SenderStrategy {
 	return &SenderStrategy{
-		tg: tg,
+		tg:  tg,
+		smb: smb,
 	}
 }
 
@@ -34,7 +39,11 @@ func (ss *SenderStrategy) Send(meta models.Targeted, data models.Sendable) error
 		}
 		return ss.sendTelegramDataStrategy(chat, data)
 	case models.TargetFileServerKind:
-		return nil
+		remote, ok := meta.(models.TargetFileServer)
+		if !ok {
+			return errors.New("INVALID TARGET FILE_SERVER")
+		}
+		return ss.sendSMBDataStrategy(remote, data)
 	case models.TargetEmailKind:
 		return nil
 	default:
@@ -70,6 +79,26 @@ func (ss *SenderStrategy) sendTelegramDataStrategy(
 		return ss.tg.SendMedia(target, *dt)
 	default:
 		return errors.New("NOT SUPPORTED TELEGRAM DATA TYPE")
+
+	}
+}
+
+func (ss *SenderStrategy) sendSMBDataStrategy(
+	target models.TargetFileServer,
+	data models.Sendable,
+) error {
+	if data == nil {
+		return errors.New("NOTHING TO SEND")
+	}
+	switch data.Kind() {
+	case models.SendFileKind:
+		dt, ok := data.(*models.FileData)
+		if !ok {
+			return errors.New("INVALID TELEGRAM SEND DATA")
+		}
+		return ss.smb.Upload(target.Dest, dt)
+	default:
+		return errors.New("NOT SUPPORTED SAMBA DATA TYPE")
 
 	}
 }

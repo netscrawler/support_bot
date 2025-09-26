@@ -71,9 +71,9 @@ type Notify struct {
 	Format     []string
 	Title      string
 	ThreadID   int64
-	ChatID     int32
+	RemotePath pgtype.Text
+	ChatID     pgtype.Int4
 	GroupID    pgtype.Int4
-	QueryID    pgtype.Int4
 	TemplateID pgtype.Int4
 }
 
@@ -81,6 +81,11 @@ type NotifyGroup struct {
 	ID    int32
 	Name  string
 	Title string
+}
+
+type NotifyQuery struct {
+	NotifyID int32
+	QueryID  int32
 }
 
 type Query struct {

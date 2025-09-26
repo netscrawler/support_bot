@@ -156,6 +156,7 @@ func (rdb *ReconnectableDB) reconnectLoop(ctx context.Context) {
 				log.Warn("Reconnect attempt failed", slog.Any("error", err))
 			}
 
+			//nolint: gosec
 			sleep := time.Duration(rand.Int63n(int64(delay)))
 			log.Info("Waiting before next retry", slog.Duration("delay", sleep))
 			time.Sleep(sleep)

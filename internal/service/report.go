@@ -9,11 +9,9 @@ import (
 	"iter"
 	"log/slog"
 	"maps"
-
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/png"
 	"support_bot/internal/pkg/templatex"
-
 	"support_bot/internal/pkg/xlsx"
 
 	"github.com/robfig/cron/v3"
@@ -131,26 +129,47 @@ func (r *Report) getActiveReport(ctx context.Context) (map[string][]models.Repor
 }
 
 func (r *Report) processGroup(reports []models.Report) {
-	group := []models.NotificationResult{}
+	group, title, target := r.collectResults(reports)
+
+	send, err := mergeGroup(group, title)
+	if err != nil {
+		r.l.Error("failed to merge reports", slog.Any("error", err))
+		return
+	}
+
+	r.sendGroup(target, send)
+}
+
+// обрабатываем все отчёты, получаем список результатов
+func (r *Report) collectResults(
+	reports []models.Report,
+) ([]models.NotificationResult, string, models.Targeted) {
+	group := make([]models.NotificationResult, 0, len(reports))
 	var title string
 	var target models.Targeted
+
 	for _, rpt := range reports {
 		target = rpt.Target
 		title = rpt.GroupTitle
+
+		if rpt.CardUUID == nil && len(rpt.CardUUID) == 0 {
+			continue
+		}
+
 		res, err := r.process(rpt)
 		if err != nil {
-			r.l.Error("failed to process report",
-				slog.Any("error", err))
+			r.l.Error("failed to process report", slog.Any("error", err))
+			continue
 		}
 		group = append(group, res)
 	}
-	send, err := mergeGroup(group, title)
-	if err != nil {
-		r.l.Error("failed to process report",
-			slog.Any("error", err))
-	}
 
-	for _, s := range send {
+	return group, title, target
+}
+
+// отдельная функция для отправки
+func (r *Report) sendGroup(target models.Targeted, results []models.Sendable) {
+	for _, s := range results {
 		if err := r.sender.Send(target, s); err != nil {
 			r.l.Error("failed send report", slog.Any("error", err))
 		}
@@ -159,6 +178,7 @@ func (r *Report) processGroup(reports []models.Report) {
 
 func (r *Report) process(report models.Report) (models.NotificationResult, error) {
 	var res models.NotificationResult
+	res.Title = report.Title
 
 	dataMatrix, dataMap, err := r.exportData(report.CardUUID, report.NotifyFormat)
 	if err != nil {
@@ -183,6 +203,9 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 			if report.TemplateText != nil {
 				txt, err := templatex.RenderText(*report.TemplateText, dataMap)
 				if err != nil {
+					if dataMap == nil {
+						return res, errors.New("nil data map")
+					}
 					return res, err
 				}
 				if txt != "" {
@@ -200,10 +223,10 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 }
 
 func (r *Report) exportData(
-	cardUUID string,
+	cardUUID []string,
 	format []models.ReportFormat,
 ) ([][]string, []map[string]any, error) {
-	var rErr, err error
+	var rErr error
 	needMAP, needMatrix := false, false
 	var matrix [][]string
 	var dataMap []map[string]any
@@ -217,13 +240,26 @@ func (r *Report) exportData(
 			rErr = errors.Join(rErr, fmt.Errorf("unsupported format %s", t))
 		}
 	}
-	if needMAP {
-		dataMap, err = r.metabase.GetDataMap(context.Background(), cardUUID)
-		rErr = errors.Join(rErr, err)
-	}
-	if needMatrix {
-		matrix, err = r.metabase.GetDataMatrix(context.Background(), cardUUID)
-		rErr = errors.Join(rErr, err)
+
+	for _, cardUUID := range cardUUID {
+		if needMAP {
+			dm, err := r.metabase.GetDataMap(context.Background(), cardUUID)
+			if err != nil {
+				rErr = errors.Join(rErr, err)
+			} else {
+				dataMap = append(dataMap, dm...)
+			}
+		}
+
+		if needMatrix {
+			m, err := r.metabase.GetDataMatrix(context.Background(), cardUUID)
+			if err != nil {
+				rErr = errors.Join(rErr, err)
+			} else {
+				// просто склеиваем строки матрицы
+				matrix = append(matrix, m...)
+			}
+		}
 	}
 
 	return matrix, dataMap, rErr

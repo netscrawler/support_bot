@@ -6,6 +6,7 @@ import (
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
 	"support_bot/internal/infra/out/metabase"
+	"support_bot/internal/infra/out/smb"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/service"
 
@@ -19,6 +20,7 @@ type App struct {
 	storage *postgres.ReconnectableDB
 	cfg     *config.Config
 	stats   *service.Report
+	smb     *smb.SMB
 }
 
 func New(ctx context.Context, cfg *config.Config) (*App, error) {
@@ -36,6 +38,23 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	var smbConn *smb.SMB
+
+	if cfg.SMB.Active {
+		smbConn, err = smb.New(
+			ctx,
+			cfg.SMB.Adress,
+			cfg.SMB.User,
+			cfg.SMB.PWD,
+			cfg.SMB.Domain,
+			cfg.SMB.Share,
+		)
+		if err != nil {
+			log.ErrorContext(ctx, "unable to connect to smb", slog.Any("error", err))
+			return nil, err
+		}
+	}
+
 	tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll)
 	if err != nil {
 		return nil, err
@@ -49,7 +68,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	userService := service.NewUser(userRepo)
 
 	tgSender := telegram.NewChatAdaptor(tgBot)
-	senderStrategy := service.NewSender(tgSender)
+	senderStrategy := service.NewSender(tgSender, smbConn)
 
 	userNotifier := service.NewTelegramNotify(userRepo, chatRepo, senderStrategy)
 
@@ -74,6 +93,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		storage: rdb,
 		cfg:     cfg,
 		stats:   statsService,
+		smb:     smbConn,
 	}, nil
 }
 
@@ -101,9 +121,15 @@ func (a *App) GracefulShutdown(ctx context.Context) {
 	a.bot.Stop()
 	log.InfoContext(ctx, "bot stopped")
 
+	if a.smb != nil {
+		if err := a.smb.Close(); err != nil {
+			log.ErrorContext(ctx, "unable to close smb connection", slog.Any("error", err))
+		}
+	}
+
 	err := a.storage.Stop(ctx)
 	if err != nil {
-		log.InfoContext(ctx, "unable to close db connection", slog.Any("error", err))
+		log.ErrorContext(ctx, "unable to close db connection", slog.Any("error", err))
 
 		return
 	}

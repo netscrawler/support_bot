@@ -5,3 +5,5 @@ bin/
 private_*
 local_*
 tmp/
+samba_share/
+TODO.MD
