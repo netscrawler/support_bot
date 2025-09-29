@@ -3,10 +3,8 @@ package telegram
 
 import (
 	"errors"
-	"strings"
 
 	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 
 	"gopkg.in/telebot.v4"
 )
@@ -27,9 +25,6 @@ func (ca *ChatAdaptor) Send(chat models.TargetTelegramChat, msg models.TextData)
 		ThreadID:  chat.ThreadID,
 	}
 	_, err := ca.bot.Send(c, msg.Msg, o)
-	if err != nil && strings.Contains(err.Error(), "parse") {
-		_, err = ca.bot.Send(c, pkg.EscapeMarkdownV2(msg.Msg), o)
-	}
 
 	return err
 }

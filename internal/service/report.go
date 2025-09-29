@@ -9,6 +9,7 @@ import (
 	"iter"
 	"log/slog"
 	"maps"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/png"
 	"support_bot/internal/pkg/templatex"
@@ -276,7 +277,8 @@ func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable
 			maps.Copy(xls, *r.XLSX)
 		}
 		if r.Text != nil && *r.Text != "" {
-			send = append(send, models.NewTextData(*r.Text, nil))
+			p := models.ParseModeHTML
+			send = append(send, models.NewTextData(*r.Text, &p))
 		}
 
 		if r.Image != nil {

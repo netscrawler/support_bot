@@ -73,7 +73,7 @@ type TextData struct {
 }
 
 func NewTextData(text string, parse *ParseMode) TextData {
-	p := ParseModeMarkdownV2
+	p := ParseModeHTML
 	if parse != nil {
 		p = *parse
 	}

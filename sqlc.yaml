@@ -16,3 +16,5 @@ sql:
             go_type: "string"
           - db_type: "varchar"
             go_type: "string"
+          - db_type: "text[]"
+            go_type: "[]*string"

@@ -1,6 +1,7 @@
 package templatex_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -195,6 +196,23 @@ Bob +3 days: 2025-09-28
 		got, err := templatex.RenderText(tmpl, data)
 		assert.NoError(t, err)
 		want := `10`
+		assert.Equal(t, want, got)
+	})
+	t.Run("DateRange", func(t *testing.T) {
+		t.Parallel()
+
+		// данные не нужны, так как шаблон использует sprig-функции
+		tmpl := `{{ subDays now 7 | date "2006-01-02" }} - {{ subDays now 1 | date "2006-01-02" }}`
+
+		got, err := templatex.RenderText(tmpl, nil)
+		assert.NoError(t, err)
+
+		// вычисляем ожидаемый результат через Go time, чтобы тест не был "жёстко забит"
+		now := time.Now()
+		start := now.AddDate(0, 0, -7).Format("2006-01-02")
+		end := now.AddDate(0, 0, -1).Format("2006-01-02")
+		want := fmt.Sprintf("%s - %s", start, end)
+
 		assert.Equal(t, want, got)
 	})
 }
