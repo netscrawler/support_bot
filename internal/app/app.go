@@ -3,16 +3,16 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
 	"support_bot/internal/infra/out/metabase"
-	"support_bot/internal/infra/out/smb"
-	"support_bot/internal/pkg/logger"
-	"support_bot/internal/service"
-
 	postgres "support_bot/internal/infra/out/pg"
 	pgrepo "support_bot/internal/infra/out/pg/repo"
+	"support_bot/internal/infra/out/smb"
 	telegram "support_bot/internal/infra/out/tg"
+	"support_bot/internal/pkg/logger"
+	"support_bot/internal/service"
 )
 
 type App struct {
@@ -43,7 +43,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if cfg.SMB.Active {
 		smbConn, err = smb.New(
 			ctx,
-			cfg.SMB.Adress,
+			cfg.SMB.Address,
 			cfg.SMB.User,
 			cfg.SMB.PWD,
 			cfg.SMB.Domain,
@@ -51,6 +51,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		)
 		if err != nil {
 			log.ErrorContext(ctx, "unable to connect to smb", slog.Any("error", err))
+
 			return nil, err
 		}
 	}
@@ -122,7 +123,8 @@ func (a *App) GracefulShutdown(ctx context.Context) {
 	log.InfoContext(ctx, "bot stopped")
 
 	if a.smb != nil {
-		if err := a.smb.Close(); err != nil {
+		err := a.smb.Close()
+		if err != nil {
 			log.ErrorContext(ctx, "unable to close smb connection", slog.Any("error", err))
 		}
 	}

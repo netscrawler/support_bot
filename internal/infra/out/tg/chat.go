@@ -4,9 +4,8 @@ package telegram
 import (
 	"errors"
 
-	"support_bot/internal/models"
-
 	"gopkg.in/telebot.v4"
+	"support_bot/internal/models"
 )
 
 type ChatAdaptor struct{ bot *telebot.Bot }
@@ -34,6 +33,7 @@ func (ca *ChatAdaptor) SendMedia(
 	imgs models.ImageData,
 ) error {
 	var album telebot.Album
+
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 
@@ -56,7 +56,9 @@ func (ca *ChatAdaptor) SendDocument(
 ) error {
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 	c := &telebot.Chat{ID: chat.ChatID}
+
 	var rerr error
+
 	for doc, name := range doc.Data() {
 		tgDoc := &telebot.Document{
 			File:     telebot.FromReader(doc),
@@ -64,7 +66,6 @@ func (ca *ChatAdaptor) SendDocument(
 		}
 		_, err := ca.bot.Send(c, tgDoc, o)
 		rerr = errors.Join(rerr, err)
-
 	}
 
 	return rerr

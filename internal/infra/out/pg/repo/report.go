@@ -2,9 +2,9 @@ package pgrepo
 
 import (
 	"context"
-	"support_bot/internal/models"
 
 	gen "support_bot/internal/infra/out/pg/gen"
+	"support_bot/internal/models"
 )
 
 type Report struct {
@@ -28,7 +28,6 @@ func (q *Report) GetAll(ctx context.Context) ([]models.Report, error) {
 	retGroups := make([]models.Report, 0, len(g))
 
 	for _, g := range g {
-
 		if g.RemotePath.String != "" {
 			q, err := models.NewReport(
 				g.Name,
@@ -50,11 +49,11 @@ func (q *Report) GetAll(ctx context.Context) ([]models.Report, error) {
 			}
 
 			retGroups = append(retGroups, q)
+
 			continue
-
 		}
-		if g.ChatID.Int64 != 0 {
 
+		if g.ChatID.Int64 != 0 {
 			q, err := models.NewReport(
 				g.Name,
 				g.GroupID.String,
@@ -90,7 +89,6 @@ func (q *Report) GetAllActive(ctx context.Context) ([]models.Report, error) {
 	retGroups := make([]models.Report, 0, len(g))
 
 	for _, g := range g {
-
 		if g.RemotePath.String != "" {
 			q, err := models.NewReport(
 				g.Name,
@@ -112,11 +110,11 @@ func (q *Report) GetAllActive(ctx context.Context) ([]models.Report, error) {
 			}
 
 			retGroups = append(retGroups, q)
+
 			continue
-
 		}
-		if g.ChatID.Int64 != 0 {
 
+		if g.ChatID.Int64 != 0 {
 			q, err := models.NewReport(
 				g.Name,
 				g.GroupID.String,

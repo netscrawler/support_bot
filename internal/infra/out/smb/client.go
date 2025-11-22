@@ -11,9 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"support_bot/internal/models"
-
 	"github.com/hirochachacha/go-smb2"
+	"support_bot/internal/models"
 )
 
 type SMB struct {
@@ -42,7 +41,8 @@ func New(
 		share:    share,
 	}
 
-	if err := r.connect(); err != nil {
+	err := r.connect()
+	if err != nil {
 		return nil, err
 	}
 
@@ -66,13 +66,16 @@ func (smb *SMB) Upload(remote string, fileData *models.FileData) error {
 		f, err := smb.fs.Create(remotePath)
 		if err != nil {
 			uploadErr = fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
+
 			return false // прекращаем итерацию при ошибке
 		}
 
 		_, err = f.Write(buf.Bytes())
 		f.Close() // закрываем сразу после записи
+
 		if err != nil {
 			uploadErr = fmt.Errorf("failed to write to remote file %s: %w", remotePath, err)
+
 			return false
 		}
 
@@ -84,21 +87,26 @@ func (smb *SMB) Upload(remote string, fileData *models.FileData) error {
 
 func (smb *SMB) Close() error {
 	smb.cancel()
+
 	if smb.fs != nil {
 		_ = smb.fs.Umount()
 	}
+
 	if smb.session != nil {
 		_ = smb.session.Logoff()
 	}
+
 	if smb.conn != nil {
 		return smb.conn.Close()
 	}
+
 	return nil
 }
 
 func (smb *SMB) startMonitor(ctx context.Context) {
 	go func() {
 		log := slog.Default()
+
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
@@ -106,6 +114,7 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				log.Info("SMB monitor stopped", slog.String("reason", ctx.Err().Error()))
+
 				return
 			case <-ticker.C:
 				if _, err := smb.fs.Stat("."); err != nil {
@@ -134,6 +143,7 @@ func (smb *SMB) connect() error {
 	sess, err := d.Dial(conn)
 	if err != nil {
 		_ = conn.Close()
+
 		return fmt.Errorf("smb session error: %w", err)
 	}
 
@@ -141,6 +151,7 @@ func (smb *SMB) connect() error {
 	if err != nil {
 		_ = sess.Logoff()
 		_ = conn.Close()
+
 		return fmt.Errorf("mount error: %w", err)
 	}
 
@@ -149,6 +160,7 @@ func (smb *SMB) connect() error {
 	smb.fs = fs
 
 	slog.Info("SMB connected", slog.String("share", smb.share))
+
 	return nil
 }
 
@@ -167,14 +179,15 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("SMB reconnect loop stopped", slog.String("reason", ctx.Err().Error()))
+
 			return
 		default:
 			smb.cleanup()
 
 			err := smb.connect()
-
 			if err == nil {
 				log.Info("SMB reconnected successfully")
+
 				return
 			}
 
@@ -183,6 +196,7 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 			//nolint: gosec
 			sleep := delay/2 + time.Duration(rand.Int63n(int64(delay/2)))
 			log.Info("Waiting before next retry", slog.Duration("delay", sleep))
+
 			select {
 			case <-ctx.Done():
 				return
@@ -202,10 +216,12 @@ func (smb *SMB) cleanup() {
 		_ = smb.fs.Umount()
 		smb.fs = nil
 	}
+
 	if smb.session != nil {
 		_ = smb.session.Logoff()
 		smb.session = nil
 	}
+
 	if smb.conn != nil {
 		_ = smb.conn.Close()
 		smb.conn = nil

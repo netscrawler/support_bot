@@ -15,6 +15,7 @@ func NewCron(cronExpr string) (Cron, error) {
 	if err != nil {
 		return "", ErrInvalidCron
 	}
+
 	return Cron(cronExpr), nil
 }
 
@@ -46,7 +47,7 @@ type Report struct {
 	GroupTitle   string
 	Target       Targeted
 	Active       bool
-	NotifyFormat []ReportFormat // format of notification [png | xlsx | text | csv | or many]
+	ReportFormat []ReportFormat // format of notification [png | xlsx | text | csv | or many]
 }
 
 func NewReport(
@@ -68,11 +69,11 @@ func NewReport(
 		return Report{}, err
 	}
 
-	nf := make([]ReportFormat, 0, len(reportFormat))
+	rf := make([]ReportFormat, 0, len(reportFormat))
 
 	for _, f := range reportFormat {
 		if format, ok := FormatMap[f]; ok {
-			nf = append(nf, format)
+			rf = append(rf, format)
 		}
 	}
 
@@ -98,7 +99,7 @@ func NewReport(
 		TemplateText: templateText,
 		Title:        title,
 		Active:       active,
-		NotifyFormat: nf,
+		ReportFormat: rf,
 		GroupTitle:   groupTitle,
 		Target:       t,
 	}, nil

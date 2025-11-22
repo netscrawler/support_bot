@@ -3,10 +3,10 @@ package middlewares
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/logger"
 
 	"gopkg.in/telebot.v4"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/logger"
 )
 
 type UserProvider interface {
@@ -30,6 +30,7 @@ func NewMw(uPr UserProvider) *Mw {
 func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		var user *telebot.User
+
 		user = c.Sender()
 		if c.Query() != nil {
 			user = c.Query().Sender
@@ -44,12 +45,13 @@ func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 		)
 
 		role, err := mw.userPr.IsAllowed(ctx, user.ID)
-		//nolint:nilerr
+
 		if err != nil || role == models.Denied {
 			mw.l.InfoContext(
 				ctx,
 				"unauthorized access attempt",
 			)
+
 			if err != nil {
 				mw.l.InfoContext(ctx, "error check user", slog.Any("error", err))
 			}
@@ -66,6 +68,7 @@ func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		var user *telebot.User
+
 		user = c.Sender()
 		if c.Query() != nil {
 			user = c.Query().Sender
@@ -86,6 +89,7 @@ func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc 
 				ctx,
 				"unauthorized admin access attempt",
 			)
+
 			if err != nil {
 				mw.l.InfoContext(ctx, "error check user", slog.Any("error", err))
 			}

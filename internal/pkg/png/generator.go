@@ -3,6 +3,7 @@ package png
 import (
 	"bytes"
 	"image/png"
+
 	"support_bot/internal/pkg"
 )
 

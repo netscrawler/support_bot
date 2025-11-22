@@ -10,12 +10,11 @@ import (
 	"log/slog"
 	"maps"
 
+	"github.com/robfig/cron/v3"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/png"
 	"support_bot/internal/pkg/templatex"
 	"support_bot/internal/pkg/xlsx"
-
-	"github.com/robfig/cron/v3"
 )
 
 type ReportGetter interface {
@@ -69,6 +68,7 @@ func (r *Report) Start(ctx context.Context) (CronJobs, error) {
 
 	// Создаем новый планировщик
 	r.cron = cron.New()
+
 	groupedReports, err := r.getActiveReport(ctx)
 	if err != nil {
 		return CronJobs{}, err
@@ -76,6 +76,7 @@ func (r *Report) Start(ctx context.Context) (CronJobs, error) {
 
 	for groupID, reportGroups := range groupedReports {
 		c.Total += len(reportGroups)
+
 		_, err := r.cron.AddFunc(string(reportGroups[0].Cron), func() {
 			r.processGroup(reportGroups)
 		})
@@ -117,7 +118,9 @@ func (r *Report) getActiveReport(ctx context.Context) (map[string][]models.Repor
 	if err != nil {
 		return nil, fmt.Errorf("%w : (%w)", models.ErrInternal, err)
 	}
+
 	groupedReports := make(map[string][]models.Report)
+
 	for _, notify := range n {
 		groupID := notify.GroupID
 		if groupID == "" {
@@ -126,6 +129,7 @@ func (r *Report) getActiveReport(ctx context.Context) (map[string][]models.Repor
 
 		groupedReports[groupID] = append(groupedReports[groupID], notify)
 	}
+
 	return groupedReports, nil
 }
 
@@ -135,19 +139,23 @@ func (r *Report) processGroup(reports []models.Report) {
 	send, err := mergeGroup(group, title)
 	if err != nil {
 		r.l.Error("failed to merge reports", slog.Any("error", err))
+
 		return
 	}
 
 	r.sendGroup(target, send)
 }
 
-// обрабатываем все отчёты, получаем список результатов
+// обрабатываем все отчёты, получаем список результатов.
 func (r *Report) collectResults(
 	reports []models.Report,
 ) ([]models.NotificationResult, string, models.Targeted) {
 	group := make([]models.NotificationResult, 0, len(reports))
-	var title string
-	var target models.Targeted
+
+	var (
+		title  string
+		target models.Targeted
+	)
 
 	for _, rpt := range reports {
 		target = rpt.Target
@@ -160,18 +168,21 @@ func (r *Report) collectResults(
 		res, err := r.process(rpt)
 		if err != nil {
 			r.l.Error("failed to process report", slog.Any("error", err))
+
 			continue
 		}
+
 		group = append(group, res)
 	}
 
 	return group, title, target
 }
 
-// отдельная функция для отправки
+// отдельная функция для отправки.
 func (r *Report) sendGroup(target models.Targeted, results []models.Sendable) {
 	for _, s := range results {
-		if err := r.sender.Send(target, s); err != nil {
+		err := r.sender.Send(target, s)
+		if err != nil {
 			r.l.Error("failed send report", slog.Any("error", err))
 		}
 	}
@@ -179,21 +190,25 @@ func (r *Report) sendGroup(target models.Targeted, results []models.Sendable) {
 
 func (r *Report) process(report models.Report) (models.NotificationResult, error) {
 	var res models.NotificationResult
+
 	res.Title = report.Title
 
-	dataMatrix, dataMap, err := r.exportData(report.CardUUID, report.NotifyFormat)
+	dataMatrix, dataMap, err := r.exportData(report.CardUUID, report.ReportFormat)
 	if err != nil {
 		return res, err
 	}
-	for _, t := range report.NotifyFormat {
+
+	for _, t := range report.ReportFormat {
 		switch t {
 		case models.NotifyFormatCsv:
 			res.CSV = models.NewFileData(writeCsv(dataMatrix), report.Title+".csv")
 		case models.NotifyFormatPng:
 			var img *bytes.Buffer
+
 			img, err = png.CreateImageFromMatrix(dataMatrix, report.Title, report.Title)
 			if err != nil {
 			}
+
 			res.Image = models.NewImageData(img, report.Title+".png")
 
 		case models.NotifyFormatXlsx:
@@ -207,8 +222,10 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 					if dataMap == nil {
 						return res, errors.New("nil data map")
 					}
+
 					return res, err
 				}
+
 				if txt != "" {
 					res.Text = &txt
 				}
@@ -220,6 +237,7 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 		default:
 		}
 	}
+
 	return res, nil
 }
 
@@ -228,9 +246,14 @@ func (r *Report) exportData(
 	format []models.ReportFormat,
 ) ([][]string, []map[string]any, error) {
 	var rErr error
+
 	needMAP, needMatrix := false, false
-	var matrix [][]string
-	var dataMap []map[string]any
+
+	var (
+		matrix  [][]string
+		dataMap []map[string]any
+	)
+
 	for _, t := range format {
 		switch t {
 		case models.NotifyFormatCsv, models.NotifyFormatXlsx, models.NotifyFormatPng:
@@ -276,6 +299,7 @@ func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable
 		if r.XLSX != nil {
 			maps.Copy(xls, *r.XLSX)
 		}
+
 		if r.Text != nil && *r.Text != "" {
 			p := models.ParseModeHTML
 			send = append(send, models.NewTextData(*r.Text, &p))
@@ -284,6 +308,7 @@ func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable
 		if r.Image != nil {
 			imgs.ExtendIter(r.Image.Data())
 		}
+
 		if r.CSV != nil {
 			files.ExtendIter(r.CSV.Data())
 		}

@@ -28,6 +28,7 @@ var funcMap = template.FuncMap{
 		if err != nil {
 			return time.Time{}, err
 		}
+
 		return t.Add(dd), nil
 	},
 	"escape": func(s string) string {
@@ -51,6 +52,7 @@ var funcMap = template.FuncMap{
 			".", `\.`,
 			"!", `\!`,
 		)
+
 		return r.Replace(s)
 	},
 }

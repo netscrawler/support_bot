@@ -30,6 +30,7 @@ func GenerateTableImageFromMatrix(
 ) image.Image {
 	// Кол-во столбцов по первой строке
 	colsCount := 0
+
 	for _, row := range records {
 		if len(row) > colsCount {
 			colsCount = len(row)
@@ -60,6 +61,7 @@ func GenerateTableImageFromMatrix(
 	for _, row := range records {
 		for col := range colsCount {
 			cellText := ""
+
 			if len(row) > col {
 				cellText = row[col]
 			}
@@ -89,6 +91,7 @@ func GenerateTableImageFromMatrix(
 
 		for col := range colsCount {
 			cellText := ""
+
 			if len(row) > col {
 				cellText = row[col]
 			}
@@ -112,11 +115,13 @@ func GenerateTableImageFromMatrix(
 
 	// 3. Рассчитать общую ширину и высоту изображения
 	totalWidth := borderWidth // левая рамка
+
 	for _, w := range colWidths {
 		totalWidth += w + borderWidth
 	}
 
 	totalHeight := borderWidth // верхняя рамка
+
 	for _, h := range rowHeights {
 		totalHeight += h + borderWidth
 	}
@@ -132,6 +137,7 @@ func GenerateTableImageFromMatrix(
 
 	// 5. Нарисовать таблицу с рамками и текстом
 	y := borderWidth
+
 	for rowIdx, row := range records {
 		x := borderWidth
 		rowHeight := rowHeights[rowIdx]
@@ -159,6 +165,7 @@ func GenerateTableImageFromMatrix(
 
 			// Текст в ячейке
 			cellText := ""
+
 			if len(row) > col {
 				cellText = row[col]
 			}

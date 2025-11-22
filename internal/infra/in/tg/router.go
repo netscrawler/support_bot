@@ -2,12 +2,12 @@ package bot
 
 import (
 	"log/slog"
-	"support_bot/internal/infra/in/tg/handlers"
-	"support_bot/internal/infra/in/tg/menu"
-	"support_bot/internal/infra/in/tg/middlewares"
 
 	"gopkg.in/telebot.v4"
 	telemw "gopkg.in/telebot.v4/middleware"
+	"support_bot/internal/infra/in/tg/handlers"
+	"support_bot/internal/infra/in/tg/menu"
+	"support_bot/internal/infra/in/tg/middlewares"
 )
 
 type Router struct {

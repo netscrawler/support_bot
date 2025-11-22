@@ -19,6 +19,7 @@ type Metabase struct {
 func New(baseURL string) *Metabase {
 	rt := newRetraibleRoundTripper(http.DefaultTransport)
 	client := http.Client{Transport: rt, Timeout: 5 * time.Minute}
+
 	return &Metabase{client: metabase.NewClient(baseURL, &client)}
 }
 
@@ -98,6 +99,7 @@ func (x retraibleRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 		if err == nil || r >= retry {
 			return resp, err
 		}
+
 		select {
 		case <-time.After(delay):
 			delay = delay * 3

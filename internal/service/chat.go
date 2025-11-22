@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+
 	"support_bot/internal/models"
 )
 
@@ -29,7 +30,8 @@ func (c *Chat) AddActive(ctx context.Context, chat *models.Chat) error {
 		return models.ErrAlreadyExist
 	}
 
-	if err := c.repo.Create(ctx, chat); err != nil {
+	err := c.repo.Create(ctx, chat)
+	if err != nil {
 		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 
@@ -42,7 +44,8 @@ func (c *Chat) Add(ctx context.Context, chat *models.Chat) error {
 		return models.ErrAlreadyExist
 	}
 
-	if err := c.repo.Create(ctx, chat); err != nil {
+	err := c.repo.Create(ctx, chat)
+	if err != nil {
 		return fmt.Errorf("%w %w", models.ErrInternal, err)
 	}
 

@@ -32,9 +32,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - internal
-
-  samba:
+      - internal samba:
     image: dperson/samba
     container_name: samba_test
     restart: unless-stopped

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/models"
 )
 
@@ -40,6 +41,7 @@ func (n *TelegramNotify) BroadcastToUsers(ctx context.Context, notify string) er
 
 		return models.ErrInternal
 	}
+
 	var jerr error
 
 	for _, user := range users {
@@ -74,6 +76,7 @@ func (n *TelegramNotify) SendAdminNotify(ctx context.Context, notify string) err
 
 		return models.ErrInternal
 	}
+
 	var jerr error
 
 	for _, user := range users {
@@ -93,12 +96,12 @@ func (n *TelegramNotify) BroadcastToChats(
 	chats, err := n.chat.GetAllActive(ctx)
 	if err != nil {
 		l.ErrorContext(ctx, "error broadcast messages", slog.Any("error", err))
+
 		if errors.Is(err, models.ErrNotFound) {
 			return "", models.ErrNotFound
 		}
 
 		return "", fmt.Errorf("%w %w", models.ErrInternal, err)
-
 	}
 
 	if len(chats) == 0 {

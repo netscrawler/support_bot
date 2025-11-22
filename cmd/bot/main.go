@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
-	"syscall"
-	"time"
 )
 
 const (
@@ -57,8 +58,10 @@ func main() {
 }
 
 func setupLogger(logLevel string) *slog.Logger {
-	var log *slog.Logger
-	var opts *slog.HandlerOptions
+	var (
+		log  *slog.Logger
+		opts *slog.HandlerOptions
+	)
 
 	switch logLevel {
 	case debug:

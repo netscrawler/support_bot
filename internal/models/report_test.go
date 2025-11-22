@@ -1,10 +1,10 @@
 package models_test
 
 import (
-	"support_bot/internal/models"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"support_bot/internal/models"
 )
 
 func TestNewCron(t *testing.T) {
@@ -16,7 +16,7 @@ func TestNewCron(t *testing.T) {
 
 		c, err := models.NewCron("* * * * *")
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, models.Cron("* * * * *"), c, "cron must be equal to '* * * * *'")
 	})
 
@@ -26,7 +26,7 @@ func TestNewCron(t *testing.T) {
 
 		c, err := models.NewCron("5 * * * *")
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, models.Cron("5 * * * *"), c, "cron must be equal to '5 * * * *'")
 	})
 
@@ -36,7 +36,7 @@ func TestNewCron(t *testing.T) {
 
 		c, err := models.NewCron("5 1 * * *")
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, models.Cron("5 1 * * *"), c, "cron must be equal to '5 1 * * *'")
 	})
 
@@ -46,7 +46,7 @@ func TestNewCron(t *testing.T) {
 
 		c, err := models.NewCron("5 0/10 * * *")
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, models.Cron("5 0/10 * * *"), c, "cron must be equal to '5 0/10 * * *'")
 	})
 

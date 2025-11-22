@@ -36,6 +36,7 @@ func CreateXlsxBook(
 		tableRange := fmt.Sprintf("%s:%s", startCell, endCell)
 
 		a := true
+
 		err := f.AddTable(sheetName, &excelize.Table{
 			Range:             tableRange,
 			Name:              sheetName,
@@ -63,7 +64,7 @@ func CreateXlsxBook(
 	return f.WriteToBuffer()
 }
 
-// detectValueType определяет тип значения по строке и возвращает подходящий тип
+// detectValueType определяет тип значения по строке и возвращает подходящий тип.
 func detectValueType(val string) any {
 	// int
 	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
@@ -84,8 +85,8 @@ func detectValueType(val string) any {
 	layouts := []string{
 		time.RFC3339,                       // 2025-09-23T19:45:29+03:00
 		"2006-01-02T15:04:05.999999-07:00", // 2025-09-23T19:45:29.754093+03:00
-		"2006-01-02",                       // 2025-09-23
-		"2006-01-02 15:04:05",              // 2025-09-23 19:45:29
+		time.DateOnly,                      // 2025-09-23
+		time.DateTime,                      // 2025-09-23 19:45:29
 		"02.01.2006",                       // 23.09.2025
 		"02.01.2006 15:04:05",              // 23.09.2025 19:45:29
 	}

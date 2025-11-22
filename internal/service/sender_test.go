@@ -1,10 +1,10 @@
 package service
 
 import (
-	"support_bot/internal/models"
 	"testing"
 
 	_ "github.com/stretchr/testify/assert"
+	"support_bot/internal/models"
 )
 
 func TestSenderStrategy_Send(t *testing.T) {
@@ -26,13 +26,16 @@ func TestSenderStrategy_sendTelegramDataStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ss := NewSender(tt.tg, tt.smb)
+
 			gotErr := ss.sendTelegramDataStrategy(tt.target, tt.data)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("sendTelegramDataStrategy() failed: %v", gotErr)
 				}
+
 				return
 			}
+
 			if tt.wantErr {
 				t.Fatal("sendTelegramDataStrategy() succeeded unexpectedly")
 			}
@@ -56,13 +59,16 @@ func TestSenderStrategy_sendSMBDataStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ss := NewSender(tt.tg, tt.smb)
+
 			gotErr := ss.sendSMBDataStrategy(tt.target, tt.data)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("sendSMBDataStrategy() failed: %v", gotErr)
 				}
+
 				return
 			}
+
 			if tt.wantErr {
 				t.Fatal("sendSMBDataStrategy() succeeded unexpectedly")
 			}

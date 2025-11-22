@@ -3,11 +3,10 @@ package pgrepo
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/models"
-
-	gen "support_bot/internal/infra/out/pg/gen"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	gen "support_bot/internal/infra/out/pg/gen"
+	"support_bot/internal/models"
 )
 
 type User struct {

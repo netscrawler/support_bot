@@ -2,14 +2,13 @@ package service
 
 import (
 	"errors"
-	"support_bot/internal/models"
 	"testing"
-
-	mocks "support_bot/internal/service/mock"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"support_bot/internal/models"
+	mocks "support_bot/internal/service/mock"
 )
 
 func TestReport_collectResults(t *testing.T) {
@@ -23,7 +22,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid"},
 			GroupTitle:   "TestGroup",
 			Target:       models.NewTargetTelegramChat(1213, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv},
 			Title:        "TestReport",
 		}
 
@@ -39,7 +38,7 @@ func TestReport_collectResults(t *testing.T) {
 		assert.Equal(t, "TestGroup", gotTitle)
 		assert.Equal(t, models.TargetTelegramChatKind, gotTarget.Kind())
 		tr, ok := gotTarget.(models.TargetTelegramChat)
-		assert.Equal(t, true, ok)
+		assert.True(t, ok)
 		assert.Equal(t, int64(1213), tr.ChatID)
 		assert.Equal(t, want, got[0])
 	})
@@ -54,7 +53,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid", "uuid1"},
 			GroupTitle:   "TestGroup",
 			Target:       models.NewTargetTelegramChat(1213, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv},
 			Title:        "TestReport",
 		}
 		wantf := writeCsv([][]string{{"a", "b"}, {"b", "c"}})
@@ -70,7 +69,7 @@ func TestReport_collectResults(t *testing.T) {
 		assert.Equal(t, "TestGroup", gotTitle)
 		assert.Equal(t, models.TargetTelegramChatKind, gotTarget.Kind())
 		tr, ok := gotTarget.(models.TargetTelegramChat)
-		assert.Equal(t, true, ok)
+		assert.True(t, ok)
 		assert.Equal(t, int64(1213), tr.ChatID)
 		assert.Equal(t, want, got[0])
 	})
@@ -86,7 +85,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid"},
 			GroupTitle:   "ErrGroup",
 			Target:       models.NewTargetTelegramChat(42, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv},
 			Title:        "ErrReport",
 		}
 
@@ -99,11 +98,12 @@ func TestReport_collectResults(t *testing.T) {
 
 	t.Run("empty reports slice", func(t *testing.T) {
 		t.Parallel()
+
 		r := New(nil, nil, nil)
 
 		got, gotTitle, gotTarget := r.collectResults([]models.Report{})
 		require.Empty(t, got)
-		assert.Equal(t, "", gotTitle)
+		assert.Empty(t, gotTitle)
 		assert.Nil(t, gotTarget)
 	})
 	t.Run("success double format report", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid"},
 			GroupTitle:   "TestGroup",
 			Target:       models.NewTargetTelegramChat(1213, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv, models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv, models.NotifyFormatText},
 			Title:        "TestReport",
 			TemplateText: ptr(`HELLO {{index . 0 "a"}}`),
 		}
@@ -138,7 +138,7 @@ func TestReport_collectResults(t *testing.T) {
 		assert.Equal(t, "TestGroup", gotTitle)
 		assert.Equal(t, models.TargetTelegramChatKind, gotTarget.Kind())
 		tr, ok := gotTarget.(models.TargetTelegramChat)
-		assert.Equal(t, true, ok)
+		assert.True(t, ok)
 		assert.Equal(t, int64(1213), tr.ChatID)
 		assert.Equal(t, want, got[0])
 	})
@@ -157,7 +157,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid", "uuid1"},
 			GroupTitle:   "TestGroup",
 			Target:       models.NewTargetTelegramChat(1213, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "TestReport",
 			TemplateText: ptr(`HELLO {{index . 0 "a"}} {{index . 1 "b"}}`),
 		}
@@ -170,7 +170,7 @@ func TestReport_collectResults(t *testing.T) {
 		assert.Equal(t, "TestGroup", gotTitle)
 		assert.Equal(t, models.TargetTelegramChatKind, gotTarget.Kind())
 		tr, ok := gotTarget.(models.TargetTelegramChat)
-		assert.Equal(t, true, ok)
+		assert.True(t, ok)
 		assert.Equal(t, int64(1213), tr.ChatID)
 		assert.Equal(t, want, got[0])
 	})
@@ -182,7 +182,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{},
 			GroupTitle:   "TestGroup",
 			Target:       models.NewTargetTelegramChat(1213, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "TestReport",
 			TemplateText: ptr(`HELLO`),
 		}
@@ -195,7 +195,7 @@ func TestReport_collectResults(t *testing.T) {
 		assert.Equal(t, "TestGroup", gotTitle)
 		assert.Equal(t, models.TargetTelegramChatKind, gotTarget.Kind())
 		tr, ok := gotTarget.(models.TargetTelegramChat)
-		assert.Equal(t, true, ok)
+		assert.True(t, ok)
 		assert.Equal(t, int64(1213), tr.ChatID)
 		assert.Equal(t, want, got[0])
 	})
@@ -207,7 +207,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid"},
 			GroupTitle:   "UnsupportedGroup",
 			Target:       models.NewTargetTelegramChat(123, nil),
-			NotifyFormat: []models.ReportFormat{"unknown_format"}, // неподдерживаемый формат
+			ReportFormat: []models.ReportFormat{"unknown_format"}, // неподдерживаемый формат
 			Title:        "UnsupportedReport",
 		}
 
@@ -230,7 +230,7 @@ func TestReport_collectResults(t *testing.T) {
 			CardUUID:     []string{"uuid"},
 			GroupTitle:   "EmptyMapGroup",
 			Target:       models.NewTargetTelegramChat(456, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "EmptyMapReport",
 			TemplateText: ptr(`HELLO {{index . 0 "a"}}`), // шаблон с обращением к первой карте
 		}
@@ -283,7 +283,7 @@ func TestReport_process(t *testing.T) {
 			GroupTitle:   "CSVReport",
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(123, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv},
 			Title:        "CSVReport",
 		}
 
@@ -310,7 +310,7 @@ func TestReport_process(t *testing.T) {
 		rpt := models.Report{
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(456, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "TextReport",
 			TemplateText: ptr(`HELLO {{index . 0 "a"}}`),
 		}
@@ -338,7 +338,7 @@ func TestReport_process(t *testing.T) {
 		rpt := models.Report{
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(789, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv, models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv, models.NotifyFormatText},
 			Title:        "CSVTextReport",
 			TemplateText: ptr(`HELLO {{index . 0 "a"}}`),
 		}
@@ -366,7 +366,7 @@ func TestReport_process(t *testing.T) {
 		rpt := models.Report{
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(111, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatCsv},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatCsv},
 			Title:        "ErrReport",
 		}
 
@@ -385,7 +385,7 @@ func TestReport_process(t *testing.T) {
 		rpt := models.Report{
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(222, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "EmptyMapReport",
 			TemplateText: ptr(`HELLO {{index 0 .a}}`),
 		}
@@ -409,7 +409,7 @@ func TestReport_process(t *testing.T) {
 		rpt := models.Report{
 			CardUUID:     []string{"uuid"},
 			Target:       models.NewTargetTelegramChat(222, nil),
-			NotifyFormat: []models.ReportFormat{models.NotifyFormatText},
+			ReportFormat: []models.ReportFormat{models.NotifyFormatText},
 			Title:        "EmptyMapReport",
 			TemplateText: ptr(`HELLO`),
 		}
@@ -501,6 +501,7 @@ func TestReport_exportData(t *testing.T) {
 
 	t.Run("unsupported format", func(t *testing.T) {
 		t.Parallel()
+
 		r := New(nil, nil, nil)
 		got, got2, err := r.exportData([]string{"uuid"}, []models.ReportFormat{"unknown_format"})
 		require.Error(t, err)

@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	tele "gopkg.in/telebot.v4"
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/service"
-
-	tele "gopkg.in/telebot.v4"
 )
 
 type UserHandler struct {

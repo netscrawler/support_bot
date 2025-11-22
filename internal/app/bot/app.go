@@ -2,14 +2,13 @@ package bot
 
 import (
 	"log/slog"
+	"time"
+
+	"gopkg.in/telebot.v4"
+	bot "support_bot/internal/infra/in/tg"
 	"support_bot/internal/infra/in/tg/handlers"
 	"support_bot/internal/infra/in/tg/middlewares"
 	"support_bot/internal/service"
-	"time"
-
-	bot "support_bot/internal/infra/in/tg"
-
-	"gopkg.in/telebot.v4"
 )
 
 type Bot struct {
@@ -74,6 +73,7 @@ func New(
 
 func (b *Bot) Start() {
 	slog.Info("starting bot polling")
+
 	go b.bot.Start()
 }
 

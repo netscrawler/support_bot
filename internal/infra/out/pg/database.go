@@ -57,6 +57,7 @@ func New(ctx context.Context, connStr string) (*ReconnectableDB, error) {
 
 func (rdb *ReconnectableDB) Stop(ctx context.Context) error {
 	rdb.cancel()
+
 	return rdb.getConn().Close(ctx)
 }
 
@@ -94,6 +95,7 @@ func (rdb *ReconnectableDB) startDBMonitor(ctx context.Context) {
 	go func() {
 		log := slog.Default()
 		log.InfoContext(ctx, "starting db monitor")
+
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
@@ -101,10 +103,12 @@ func (rdb *ReconnectableDB) startDBMonitor(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				log.Info("DB monitor stopped", slog.String("reason", ctx.Err().Error()))
+
 				return
 			case <-ticker.C:
 				pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				err := rdb.getConn().Ping(pingCtx)
+
 				cancel()
 
 				if err != nil {
@@ -131,14 +135,17 @@ func (rdb *ReconnectableDB) reconnectLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Reconnect loop stopped", slog.String("reason", ctx.Err().Error()))
+
 			return
 		default:
 			connCtx, cancel := context.WithTimeout(ctx, timeoutEach)
 			err := rdb.getConn().Ping(connCtx)
+
 			cancel()
 
 			if err == nil {
 				log.Info("Database connection restored")
+
 				return
 			}
 
@@ -147,12 +154,17 @@ func (rdb *ReconnectableDB) reconnectLoop(ctx context.Context) {
 			if rdb.getConn().IsClosed() {
 				connCtx, cancel := context.WithTimeout(ctx, timeoutEach)
 				newConn, err := newConn(connCtx, rdb.config)
+
 				cancel()
+
 				if err == nil {
 					rdb.conn = newConn
+
 					log.Info("Successfully reconnected to database")
+
 					return
 				}
+
 				log.Warn("Reconnect attempt failed", slog.Any("error", err))
 			}
 

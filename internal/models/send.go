@@ -13,7 +13,7 @@ const (
 	TargetEmailKind
 )
 
-// ParseMode determines the way client applications treat the text of the message
+// ParseMode determines the way client applications treat the text of the message.
 type ParseMode = string
 
 const (
@@ -28,12 +28,13 @@ type Targeted interface {
 }
 
 type TargetTelegramChat struct {
-	ChatID   int64 `yaml:"chat_id"   env:"chat_id"`
-	ThreadID int   `yaml:"thread_id" env:"thread_id"`
+	ChatID   int64 `env:"chat_id"   yaml:"chat_id"`
+	ThreadID int   `env:"thread_id" yaml:"thread_id"`
 }
 
 func NewTargetTelegramChat(chat int64, thread *int) TargetTelegramChat {
 	t := 0
+
 	if thread != nil {
 		t = *thread
 	}
@@ -74,6 +75,7 @@ type TextData struct {
 
 func NewTextData(text string, parse *ParseMode) TextData {
 	p := ParseModeHTML
+
 	if parse != nil {
 		p = *parse
 	}
@@ -95,6 +97,7 @@ type ImageData struct {
 func NewImageData(img *bytes.Buffer, name string) *ImageData {
 	f := []*bytes.Buffer{}
 	n := []string{}
+
 	return &ImageData{
 		img:   append(f, img),
 		name:  append(n, name),
@@ -105,6 +108,7 @@ func NewImageData(img *bytes.Buffer, name string) *ImageData {
 func NewEmptyImageData() *ImageData {
 	f := []*bytes.Buffer{}
 	n := []string{}
+
 	return &ImageData{
 		img:   f,
 		name:  n,
@@ -123,7 +127,6 @@ func (id *ImageData) ExtendIter(data iter.Seq2[*bytes.Buffer, string]) {
 		id.img = append(id.img, i)
 		id.name = append(id.name, n)
 		id.Entry += 1
-
 	}
 }
 
@@ -148,6 +151,7 @@ type FileData struct {
 func NewFileData(file *bytes.Buffer, name string) *FileData {
 	f := []*bytes.Buffer{}
 	n := []string{}
+
 	return &FileData{
 		file:  append(f, file),
 		name:  append(n, name),
@@ -158,6 +162,7 @@ func NewFileData(file *bytes.Buffer, name string) *FileData {
 func NewEmptyFileData() *FileData {
 	f := []*bytes.Buffer{}
 	n := []string{}
+
 	return &FileData{
 		file:  f,
 		name:  n,
@@ -170,7 +175,6 @@ func (fd *FileData) ExtendIter(data iter.Seq2[*bytes.Buffer, string]) {
 		fd.file = append(fd.file, i)
 		fd.name = append(fd.name, n)
 		fd.Entry += 1
-
 	}
 }
 

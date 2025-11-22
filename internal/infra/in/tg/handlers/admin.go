@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	tele "gopkg.in/telebot.v4"
 	"support_bot/internal/infra/in/tg/menu"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 	"support_bot/internal/service"
-
-	tele "gopkg.in/telebot.v4"
 )
 
 type AdminHandler struct {
@@ -232,7 +232,8 @@ func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
 
 	username := c.Data()
 
-	if err := h.userService.CreateEmpty(ctx, username, false); err != nil {
+	err := h.userService.CreateEmpty(ctx, username, false)
+	if err != nil {
 		return c.Send("Не удалось добавить пользователя: " + err.Error())
 	}
 
@@ -251,7 +252,8 @@ func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
 
 	username := c.Data()
 
-	if err := h.userService.CreateEmpty(ctx, username, true); err != nil {
+	err := h.userService.CreateEmpty(ctx, username, true)
+	if err != nil {
 		return c.Edit("Не удалось добавить пользователя: " + err.Error())
 	}
 
@@ -369,7 +371,6 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 
 	err := h.chatService.AddActive(ctx, chatToAdd)
 	if err != nil {
-
 		h.notify.SendNotify(
 			ctx,
 			c.Sender().ID,
@@ -406,7 +407,6 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 
 	err := h.chatService.Add(ctx, chatToSave)
 	if err != nil {
-
 		h.notify.SendNotify(
 			ctx,
 			c.Sender().ID,
@@ -490,6 +490,7 @@ func (h *AdminHandler) ListChats(c tele.Context) error {
 	}
 
 	s := pkg.EscapeMarkdownV2(response.String())
+
 	return c.Send(
 		s,
 		&tele.SendOptions{ParseMode: tele.ModeMarkdownV2},
@@ -523,6 +524,7 @@ func (h *AdminHandler) startJobs(ctx context.Context) string {
 	}
 
 	var build strings.Builder
+
 	if len(j.Unsucess) > 0 {
 		for g, e := range j.Unsucess {
 			build.WriteString(fmt.Sprintf("\n❌ Ошибка при запуске: %d\n", len(j.Unsucess)))
@@ -537,6 +539,7 @@ func (h *AdminHandler) startJobs(ctx context.Context) string {
 		j.Success,
 		build.String(),
 	)
+
 	return ans
 }
 
