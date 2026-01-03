@@ -7,30 +7,33 @@ import (
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
 	LogLevel       string   `yaml:"log_level"       env:"LOG_LEVEL"`
-	MetabaseDomain string   `yaml:"metabase_domain"`
+	MetabaseDomain string   `yaml:"metabase_domain" env:"METABASE_DOMAIN"`
 	Database       database `yaml:"database"`
 	Bot            bot      `yaml:"bot"`
 	Timeout        timeout  `yaml:"timeout"`
 	SMB            smb      `yaml:"smb"`
+	SMTP           smtp     `yaml:"smtp"`
 }
 
 type smb struct {
-	Adress string `yaml:"adress"`
-	User   string `yaml:"user"`
-	PWD    string `yaml:"password"`
-	Domain string `yaml:"domain"`
-	Share  string `yaml:"share"`
-	Active bool   `yaml:"active"`
+	Adress string `yaml:"adress"   env:"ADRESS"`
+	User   string `yaml:"user"     env:"USER"`
+	PWD    string `yaml:"password" env:"PWD"`
+	Domain string `yaml:"domain"   env:"DOMAIN"`
+	Share  string `yaml:"share"    env:"SHARE"`
+	Active bool   `yaml:"active"   env:"ACTIVE"`
 }
 
 type bot struct {
 	TelegramToken string        `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`
-	CleanUpTime   time.Duration `yaml:"CleanUpTime"                         env-default:"10m"`
+	CleanUpTime   time.Duration `yaml:"CleanUpTime"    env:"CLEAN_UP_TIME"  env-default:"10m"`
 }
+
 type database struct {
 	Port     int    `yaml:"port"     env:"DATABASE_PORT"     env-default:"5432"`
 	Host     string `yaml:"host"     env:"DATABASE_HOST"     env-default:"localhost"`
@@ -46,10 +49,18 @@ type timeout struct {
 	Shutdown        time.Duration `yaml:"shutdown"         env:"SHUTDOWN_TIMEOUT"         env-default:"5s"`
 }
 
+type smtp struct {
+	Host     string `yaml:"smtp_serv"     env:"SMTP_SERV"`
+	Port     string `yaml:"smtp_port"     env:"SMTP_PORT"`
+	Email    string `yaml:"email"         env:"EMAIL"`
+	Password string `yaml:"smtp_password" env:"SMTP_PASSWORD"`
+}
+
 // Load загружает конфигурацию из файла или из переменных окружения.
 func Load() (*Config, error) {
 	var cfg Config
 
+	_ = godotenv.Load()
 	configPath := fetchConfigPath()
 
 	// Загрузка конфигурации
