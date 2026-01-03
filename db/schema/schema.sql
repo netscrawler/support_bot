@@ -41,12 +41,25 @@ CREATE TABLE templates (
     title TEXT
 );
 
+CREATE TABLE crons(
+    id SERIAL PRIMARY KEY,
+    cron TEXT NOT NULL,
+    desc TEXT
+);
+
+CREATE TABLE report_crons(
+    report_id INT NOT NULL,
+    cron_id INT NOT NULL,
+    PRIMARY KEY (notify_id, query_id),
+    CONSTRAINT fk_report_crons_report FOREIGN KEY (report_id) REFERENCES notify(id) ON DELETE CASCADE,
+    CONSTRAINT fk_report_crons_cron FOREIGN KEY (cron_id) REFERENCES crons(id) ON DELETE CASCADE
+);
+
 
 -- Уведомления без query_id
 CREATE TABLE notify (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
-    cron TEXT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT FALSE,
     format TEXT[],
     title TEXT NOT NULL,
@@ -75,13 +88,16 @@ CREATE INDEX idx_notify_group_id ON notify(group_id);
 
 
 -- Триггер: при удалении чата уведомления становятся неактивными
-CREATE OR REPLACE FUNCTION deactivate_notify_on_chat_delete()
-RETURNS TRIGGER AS $$
+create or replace function deactivate_notify_on_chat_delete()
+returns trigger
+as $$
 BEGIN
     UPDATE notify SET active = FALSE WHERE chat_id = OLD.id;
     RETURN OLD;
 END;
-$$ LANGUAGE plpgsql;
+$$
+language plpgsql
+;
 
 CREATE TRIGGER trg_deactivate_notify_on_chat_delete
 BEFORE DELETE ON chats
