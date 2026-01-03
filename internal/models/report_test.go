@@ -3,8 +3,10 @@ package models_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"support_bot/internal/models"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewCron(t *testing.T) {

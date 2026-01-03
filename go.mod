@@ -41,6 +41,7 @@ require (
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
+	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
 	github.com/fogleman/gg v1.3.0
 	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0

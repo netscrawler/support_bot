@@ -10,11 +10,13 @@ import (
 	"log/slog"
 	"maps"
 
-	"github.com/robfig/cron/v3"
+	"support_bot/internal/exporter/text"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/png"
 	"support_bot/internal/pkg/templatex"
 	"support_bot/internal/pkg/xlsx"
+
+	"github.com/robfig/cron/v3"
 )
 
 type ReportGetter interface {
@@ -217,7 +219,7 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 			res.XLSX = &xl
 		case models.NotifyFormatText:
 			if report.TemplateText != nil {
-				txt, err := templatex.RenderText(*report.TemplateText, dataMap)
+				buf, err := text.New(dataMap, *report.TemplateText).Export()
 				if err != nil {
 					if dataMap == nil {
 						return res, errors.New("nil data map")
@@ -226,6 +228,7 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 					return res, err
 				}
 
+				txt := buf.String()
 				if txt != "" {
 					res.Text = &txt
 				}
