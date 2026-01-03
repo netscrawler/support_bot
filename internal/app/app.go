@@ -43,7 +43,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if cfg.SMB.Active {
 		smbConn, err = smb.New(
 			ctx,
-			cfg.SMB.Address,
+			cfg.SMB.Adress,
 			cfg.SMB.User,
 			cfg.SMB.PWD,
 			cfg.SMB.Domain,
