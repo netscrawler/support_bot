@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"iter"
 	"net/http"
 	"time"
 
@@ -23,7 +22,7 @@ func New(baseURL string) *Metabase {
 	return &Metabase{client: metabase.NewClient(baseURL, &client)}
 }
 
-func (m *Metabase) GetDataMatrix(ctx context.Context, cardUUID string) ([][]string, error) {
+func (m *Metabase) FetchMatrix(ctx context.Context, cardUUID string) ([][]string, error) {
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatCSV, nil)
 	if err != nil {
 		return nil, err
@@ -39,7 +38,7 @@ func (m *Metabase) GetDataMatrix(ctx context.Context, cardUUID string) ([][]stri
 	return records, nil
 }
 
-func (m *Metabase) GetDataMap(ctx context.Context, cardUUID string) ([]map[string]any, error) {
+func (m *Metabase) Fetch(ctx context.Context, cardUUID string) ([]map[string]any, error) {
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
 	if err != nil {
 		return nil, err
@@ -53,29 +52,4 @@ func (m *Metabase) GetDataMap(ctx context.Context, cardUUID string) ([]map[strin
 	}
 
 	return result, nil
-}
-
-func (m *Metabase) GetDataIter(
-	ctx context.Context,
-	cardUUID string,
-) (iter.Seq[map[string]any], error) {
-	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []map[string]any
-
-	err = json.Unmarshal(data, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return func(yield func(map[string]any) bool) {
-		for _, row := range result {
-			if !yield(row) {
-				return
-			}
-		}
-	}, nil
 }

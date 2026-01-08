@@ -13,8 +13,6 @@ import (
 	"support_bot/internal/exporter/text"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/png"
-	"support_bot/internal/pkg/templatex"
-	"support_bot/internal/pkg/xlsx"
 
 	"github.com/robfig/cron/v3"
 )
@@ -30,7 +28,7 @@ type MetabaseDataGetter interface {
 }
 
 type Sender interface {
-	Send(meta models.Targeted, data models.Sendable) error
+	Send(meta models.Targeted, data models.ReportData) error
 }
 
 type Report struct {
@@ -181,7 +179,7 @@ func (r *Report) collectResults(
 }
 
 // отдельная функция для отправки.
-func (r *Report) sendGroup(target models.Targeted, results []models.Sendable) {
+func (r *Report) sendGroup(target models.Targeted, results []models.ReportData) {
 	for _, s := range results {
 		err := r.sender.Send(target, s)
 		if err != nil {
@@ -228,7 +226,7 @@ func (r *Report) process(report models.Report) (models.NotificationResult, error
 					return res, err
 				}
 
-				txt := buf.String()
+				txt := buf.Msg
 				if txt != "" {
 					res.Text = &txt
 				}
@@ -292,11 +290,11 @@ func (r *Report) exportData(
 	return matrix, dataMap, rErr
 }
 
-func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable, error) {
+func mergeGroup(gr []models.NotificationResult, title string) ([]models.ReportData, error) {
 	xls := make(map[string][][]string)
 	imgs := models.NewEmptyImageData()
 	files := models.NewEmptyFileData()
-	send := []models.Sendable{}
+	send := []models.ReportData{}
 
 	for _, r := range gr {
 		if r.XLSX != nil {
@@ -304,8 +302,7 @@ func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable
 		}
 
 		if r.Text != nil && *r.Text != "" {
-			p := models.ParseModeHTML
-			send = append(send, models.NewTextData(*r.Text, &p))
+			send = append(send, models.NewTextData(*r.Text))
 		}
 
 		if r.Image != nil {
@@ -317,13 +314,13 @@ func mergeGroup(gr []models.NotificationResult, title string) ([]models.Sendable
 		}
 	}
 
-	tit, _ := templatex.RenderText(title, nil)
+	// tit, _ := templatex.RenderText(title, nil)
 
 	if len(xls) > 0 {
-		xlsxF, err := xlsx.CreateXlsxBook(xls)
-		if err == nil {
-			files.Extend(xlsxF, tit+".xlsx")
-		}
+		//xlsxF, err := xlsx.CreateXlsxBook(xls)
+		//if err == nil {
+		//files.Extend(xlsxF, tit+".xlsx")
+		//}
 	}
 
 	if imgs.Entry > 0 {

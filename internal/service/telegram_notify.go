@@ -59,7 +59,7 @@ func (n *TelegramNotify) SendNotify(
 ) error {
 	l := slog.Default()
 
-	err := n.sender.Send(models.NewTargetTelegramChat(tgID, nil), models.NewTextData(notify, nil))
+	err := n.sender.Send(models.NewTargetTelegramChat(tgID, nil), models.NewTextData(notify))
 	if err != nil {
 		l.ErrorContext(ctx, "Send notify error", slog.Any("error", err))
 	}
@@ -110,7 +110,7 @@ func (n *TelegramNotify) BroadcastToChats(
 
 	resp := models.NewBroadcastResp()
 
-	sendData := models.NewTextData(notify, nil)
+	sendData := models.NewTextData(notify)
 
 	for _, chat := range chats {
 		err := n.sender.Send(

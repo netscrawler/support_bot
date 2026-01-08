@@ -6,11 +6,8 @@ import (
 
 	"support_bot/internal/app/bot"
 	"support_bot/internal/config"
-	"support_bot/internal/infra/out/metabase"
+	"support_bot/internal/delivery/smb"
 	postgres "support_bot/internal/infra/out/pg"
-	pgrepo "support_bot/internal/infra/out/pg/repo"
-	"support_bot/internal/infra/out/smb"
-	telegram "support_bot/internal/infra/out/tg"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/service"
 )
@@ -48,6 +45,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 			cfg.SMB.PWD,
 			cfg.SMB.Domain,
 			cfg.SMB.Share,
+			log,
 		)
 		if err != nil {
 			log.ErrorContext(ctx, "unable to connect to smb", slog.Any("error", err))
@@ -56,45 +54,45 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		}
 	}
 
-	tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll)
-	if err != nil {
-		return nil, err
-	}
+	//tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Timeout.BotPoll)
+	//if err != nil {
+	//return nil, err
+	//}
 
-	chatRepo := pgrepo.NewChat(rdb)
-	userRepo := pgrepo.NewUser(rdb)
-	notifyRepo := pgrepo.NewQuery(rdb)
+	// chatRepo := pgrepo.NewChat(rdb)
+	// userRepo := pgrepo.NewUser(rdb)
+	// notifyRepo := pgrepo.NewQuery(rdb)
 
-	chatService := service.NewChat(chatRepo)
-	userService := service.NewUser(userRepo)
+	// chatService := service.NewChat(chatRepo)
+	// userService := service.NewUser(userRepo)
 
-	tgSender := telegram.NewChatAdaptor(tgBot)
-	senderStrategy := service.NewSender(tgSender, smbConn)
+	// tgSender := telegram.NewChatAdaptor(tgBot)
+	// senderStrategy := service.NewSender(tgSender, smbConn)
 
-	userNotifier := service.NewTelegramNotify(userRepo, chatRepo, senderStrategy)
+	// userNotifier := service.NewTelegramNotify(userRepo, chatRepo, senderStrategy)
 
 	// Создаем Metabase клиент
-	metabaseClient := metabase.New(cfg.MetabaseDomain)
-	statsService := service.New(notifyRepo, senderStrategy, metabaseClient)
+	// metabaseClient := metabase.New(cfg.MetabaseDomain)
+	// statsService := service.New(notifyRepo, senderStrategy, metabaseClient)
 
-	b, err := bot.New(
-		cfg.Bot.CleanUpTime,
-		tgBot,
-		userService,
-		chatService,
-		userNotifier,
-		statsService,
-	)
-	if err != nil {
-		return nil, err
-	}
+	//b, err := bot.New(
+	//cfg.Bot.CleanUpTime,
+	//tgBot,
+	//userService,
+	//chatService,
+	//userNotifier,
+	//statsService,
+	//)
+	//if err != nil {
+	//return nil, err
+	//}
 
 	return &App{
-		bot:     b,
+		// bot:     b,
 		storage: rdb,
 		cfg:     cfg,
-		stats:   statsService,
-		smb:     smbConn,
+		// stats:   statsService,
+		smb: smbConn,
 	}, nil
 }
 

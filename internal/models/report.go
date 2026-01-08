@@ -19,24 +19,6 @@ func NewCron(cronExpr string) (Cron, error) {
 	return Cron(cronExpr), nil
 }
 
-type ReportFormat = string
-
-const (
-	NotifyFormatText ReportFormat = "text"
-	NotifyFormatHTML ReportFormat = "html"
-	NotifyFormatPng  ReportFormat = "png"
-	NotifyFormatCsv  ReportFormat = "csv"
-	NotifyFormatXlsx ReportFormat = "xlsx"
-)
-
-var FormatMap = map[string]ReportFormat{
-	"text": NotifyFormatText,
-	"html": NotifyFormatHTML,
-	"png":  NotifyFormatPng,
-	"csv":  NotifyFormatCsv,
-	"xlsx": NotifyFormatXlsx,
-}
-
 type Report struct {
 	Name         string
 	GroupID      string   // group of notify for grouping many queries

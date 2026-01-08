@@ -13,14 +13,14 @@ const (
 	TargetEmailKind
 )
 
-// ParseMode determines the way client applications treat the text of the message.
-type ParseMode = string
+// TelegramParseMode determines the way client applications treat the text of the message.
+type TelegramParseMode = string
 
 const (
-	ParseModeDefault    ParseMode = ""
-	ParseModeMarkdown   ParseMode = "Markdown"
-	ParseModeMarkdownV2 ParseMode = "MarkdownV2"
-	ParseModeHTML       ParseMode = "HTML"
+	TelegramParseModeDefault    TelegramParseMode = ""
+	TelegramParseModeMarkdown   TelegramParseMode = "Markdown"
+	TelegramParseModeMarkdownV2 TelegramParseMode = "MarkdownV2"
+	TelegramParseModeHTML       TelegramParseMode = "HTML"
 )
 
 type Targeted interface {
@@ -51,7 +51,7 @@ type TargetFileServer struct {
 func (t TargetFileServer) Kind() TargetKind { return TargetFileServerKind }
 
 type TargetEmail struct {
-	Dest string
+	Dest []string
 }
 
 func (t TargetEmail) Kind() TargetKind { return TargetEmailKind }
@@ -64,23 +64,19 @@ const (
 	SendFileKind
 )
 
-type Sendable interface {
+type ReportData interface {
 	Kind() SendKind
 }
 
 type TextData struct {
 	Msg   string
-	Parse ParseMode
+	Parse TelegramParseMode
 }
 
-func NewTextData(text string, parse *ParseMode) TextData {
-	p := ParseModeHTML
+func NewTextData(text string) *TextData {
+	p := TelegramParseModeHTML
 
-	if parse != nil {
-		p = *parse
-	}
-
-	return TextData{
+	return &TextData{
 		Msg:   text,
 		Parse: p,
 	}

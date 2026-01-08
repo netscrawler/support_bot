@@ -3,8 +3,9 @@ package service
 import (
 	"testing"
 
-	_ "github.com/stretchr/testify/assert"
 	"support_bot/internal/models"
+
+	_ "github.com/stretchr/testify/assert"
 )
 
 func TestSenderStrategy_Send(t *testing.T) {
@@ -18,7 +19,7 @@ func TestSenderStrategy_sendTelegramDataStrategy(t *testing.T) {
 		smb fileUploader
 		// Named input parameters for target function.
 		target  models.TargetTelegramChat
-		data    models.Sendable
+		data    models.ReportData
 		wantErr bool
 	}{
 		// TODO: Add test cases.
@@ -51,7 +52,7 @@ func TestSenderStrategy_sendSMBDataStrategy(t *testing.T) {
 		smb fileUploader
 		// Named input parameters for target function.
 		target  models.TargetFileServer
-		data    models.Sendable
+		data    models.ReportData
 		wantErr bool
 	}{
 		// TODO: Add test cases.

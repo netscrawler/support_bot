@@ -1,9 +1,30 @@
-package xlsx
+package csv
 
-import "bytes"
+import (
+	"bytes"
+	"encoding/csv"
 
-type Exporter struct{}
+	"support_bot/internal/models"
+)
 
-func (e *Exporter) Export() (*bytes.Buffer, error) {
-	panic("not implemented") // TODO: Implement
+type Exporter[T models.FileData] struct {
+	buf  [][]string
+	name string
+}
+
+func (e *Exporter[T]) Export() (*T, error) {
+	return any(models.NewFileData(writeCsv(e.buf), e.name)).(*T), nil
+}
+
+func writeCsv(data [][]string) *bytes.Buffer {
+	if len(data) == 0 {
+		return nil
+	}
+
+	var buf bytes.Buffer
+
+	r := csv.NewWriter(&buf)
+	r.WriteAll(data)
+
+	return &buf
 }

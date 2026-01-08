@@ -5,22 +5,24 @@ import (
 	"maps"
 	"text/template"
 
+	"support_bot/internal/models"
+
 	"github.com/Masterminds/sprig/v3"
 )
 
-type Exporter struct {
+type Exporter[T models.TextData] struct {
 	data     any
 	template string
 }
 
-func New(data any, template string) *Exporter {
-	return &Exporter{
+func New[T models.TextData](data any, template string) *Exporter[T] {
+	return &Exporter[T]{
 		data:     data,
 		template: template,
 	}
 }
 
-func (e *Exporter) Export() (*bytes.Buffer, error) {
+func (e *Exporter[T]) Export() (*T, error) {
 	allFuncs := sprig.TxtFuncMap()
 	maps.Copy(allFuncs, funcMap)
 
@@ -36,5 +38,5 @@ func (e *Exporter) Export() (*bytes.Buffer, error) {
 		return nil, err
 	}
 
-	return &buf, nil
+	return any(models.NewTextData(buf.String())).(*T), nil
 }

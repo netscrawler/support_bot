@@ -31,7 +31,7 @@ func NewSender(tg telegramChatSender, smb fileUploader) *SenderStrategy {
 	}
 }
 
-func (ss *SenderStrategy) Send(meta models.Targeted, data models.Sendable) error {
+func (ss *SenderStrategy) Send(meta models.Targeted, data models.ReportData) error {
 	switch meta.Kind() {
 	case models.TargetTelegramChatKind:
 		chat, ok := meta.(models.TargetTelegramChat)
@@ -56,7 +56,7 @@ func (ss *SenderStrategy) Send(meta models.Targeted, data models.Sendable) error
 
 func (ss *SenderStrategy) sendTelegramDataStrategy(
 	target models.TargetTelegramChat,
-	data models.Sendable,
+	data models.ReportData,
 ) error {
 	if data == nil {
 		return errors.New("NOTHING TO SEND")
@@ -91,7 +91,7 @@ func (ss *SenderStrategy) sendTelegramDataStrategy(
 
 func (ss *SenderStrategy) sendSMBDataStrategy(
 	target models.TargetFileServer,
-	data models.Sendable,
+	data models.ReportData,
 ) error {
 	if data == nil {
 		return errors.New("NOTHING TO SEND")
