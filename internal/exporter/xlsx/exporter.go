@@ -7,26 +7,45 @@ import (
 	"strings"
 	"time"
 
-	"support_bot/internal/models"
-
 	"github.com/xuri/excelize/v2"
+	models "support_bot/internal/models/report"
+	"support_bot/internal/pkg"
 )
 
 type Exporter[T models.FileData] struct {
-	buf  map[string][][]string
-	name string
+	buf   map[string][]map[string]any
+	order map[string][]string
+	name  string
+}
+
+func New[T models.FileData](
+	data map[string][]map[string]any,
+	name string,
+	order map[string][]string,
+) *Exporter[T] {
+	return &Exporter[T]{
+		buf:   data,
+		order: order,
+		name:  name,
+	}
 }
 
 func (e *Exporter[T]) Export() (*T, error) {
-	buf, err := createXlsxBook(e.buf)
+	buf, err := e.createXlsxBook(e.buf)
 	if err != nil {
 		return nil, err
 	}
-	return any(models.NewFileData(buf, e.name)).(*T), nil
+
+	fd, err := models.NewFileData(buf, e.name+".xlsx")
+	if err != nil {
+		return nil, err
+	}
+
+	return any(fd).(*T), nil
 }
 
-func createXlsxBook(
-	dataMap map[string][][]string,
+func (e *Exporter[T]) createXlsxBook(
+	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
 
@@ -35,19 +54,28 @@ func createXlsxBook(
 			continue
 		}
 
+		var order []string
+		if o, ok := e.order[unit]; ok {
+			order = o
+		} else {
+			order = nil
+		}
+
+		sortedRecords := pkg.ConvertSortedRows(records, order)
+
 		sheetName := sanitizeSheetName(unit)
 		f.NewSheet(sheetName)
 
-		for rowIdx, row := range records {
+		for rowIdx, row := range sortedRecords {
 			for colIdx, val := range row {
 				cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
-				f.SetCellValue(sheetName, cell, detectValueType(val))
+				f.SetCellValue(sheetName, cell, detectValueType(fmt.Sprint(val)))
 			}
 		}
 
 		// Добавление таблицы (с фильтрацией)
 		startCell, _ := excelize.CoordinatesToCellName(1, 1)
-		endCell, _ := excelize.CoordinatesToCellName(len(records[0]), len(records))
+		endCell, _ := excelize.CoordinatesToCellName(len(sortedRecords[0]), len(sortedRecords))
 		tableRange := fmt.Sprintf("%s:%s", startCell, endCell)
 
 		a := true
@@ -67,10 +95,10 @@ func createXlsxBook(
 		}
 
 		// Автоширина колонок
-		for colIdx := range records[0] {
+		for colIdx := range sortedRecords[0] {
 			colLetter, _ := excelize.ColumnNumberToName(colIdx + 1)
 			colRange := colLetter + ":" + colLetter
-			f.SetColWidth(sheetName, colRange, colRange, getAutoWidth(records, colIdx))
+			f.SetColWidth(sheetName, colRange, colRange, getAutoWidth(sortedRecords, colIdx))
 		}
 	}
 
@@ -155,12 +183,12 @@ func isValidSheetNameStart(b rune) bool {
 }
 
 // getAutoWidth оценивает ширину колонки в символах.
-func getAutoWidth(records [][]string, colIdx int) float64 {
+func getAutoWidth(records [][]any, colIdx int) float64 {
 	max := 10.0
 
 	for _, row := range records {
 		if colIdx < len(row) {
-			width := float64(len([]rune(row[colIdx]))) * 1.2 // запас
+			width := float64(len([]rune(fmt.Sprint(row[colIdx])))) * 1.2 // запас
 			if width > max {
 				max = width
 			}

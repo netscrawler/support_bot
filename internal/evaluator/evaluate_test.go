@@ -1,23 +1,28 @@
 package evaluator_test
 
 import (
+	"log/slog"
+	"os"
 	"testing"
 
-	"support_bot/internal/evaluator"
-
 	"github.com/stretchr/testify/assert"
+	"support_bot/internal/evaluator"
 )
 
 func TestEvaluator_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	eval, err := evaluator.NewEvaluator()
+	th := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	l := slog.New(th)
+
+	eval, err := evaluator.NewEvaluator(l)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("simple test", func(t *testing.T) {
 		t.Parallel()
+
 		report := map[string][]map[string]any{
 			"sheet1": {
 				{"total": 0, "count": 5},
@@ -29,22 +34,39 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 		allow, err := eval.Evaluate(t.Context(), report, fn)
 		assert.NoError(t, err)
-		assert.Equal(t, false, allow)
+		assert.False(t, allow)
 	})
-	t.Run("simple test list", func(t *testing.T) {
+
+	t.Run("count test one sheet", func(t *testing.T) {
 		t.Parallel()
-		report := map[string][][]string{
-			"sheet1": {
-				{"total", "count"},
-				{"0", "5"},
-				{"10", "0"},
+
+		report := map[string][]map[string]any{
+			"sheet1": {},
+		}
+
+		fn := `size(report["sheet1"]) > 1`
+
+		allow, err := eval.Evaluate(t.Context(), report, fn)
+		assert.NoError(t, err)
+		assert.False(t, allow)
+	})
+
+	t.Run("count test all sheets", func(t *testing.T) {
+		t.Parallel()
+
+		report := map[string][]map[string]any{
+			"sheet1": {},
+			"sheet2": {
+				{"total": 0, "count": 5},
+				{"total": 10, "count": 0},
 			},
 		}
-		fn := `report["sheet1"].slice(1, report["sheet1"].size()).all(r, int(r[0]) != 0)`
 
-		allow, err := eval.EvaluateMatrix(t.Context(), report, fn)
+		fn := `report.map(k, report[k]).flatten().size() > 1`
+
+		allow, err := eval.Evaluate(t.Context(), report, fn)
 		assert.NoError(t, err)
-		assert.Equal(t, false, allow)
+		assert.True(t, allow)
 	})
 
 	t.Run("always expr", func(t *testing.T) {
@@ -54,6 +76,6 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 		ok, err = eval.Evaluate(t.Context(), nil, "[!*]")
 		assert.NoError(t, err)
-		assert.True(t, !ok)
+		assert.False(t, ok)
 	})
 }

@@ -7,3 +7,6 @@ local_*
 tmp/
 samba_share/
 TODO.md
+vendor/
+*.log
+reports/

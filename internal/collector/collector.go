@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+
+	models "support_bot/internal/models/report"
 )
 
 const defaultParralellCollectors = 32
@@ -14,11 +16,6 @@ type DataFetcher interface {
 	FetchMatrix(ctx context.Context, uuid string) ([][]string, error)
 }
 
-type Card struct {
-	Name string
-	UUID string
-}
-
 type Collector struct {
 	mb       DataFetcher
 	log      *slog.Logger
@@ -26,24 +23,31 @@ type Collector struct {
 }
 
 func NewCollector(parralell uint8, mb DataFetcher, log *slog.Logger) *Collector {
+	l := log.With(slog.Any("module", "collector"))
+
 	if parralell == 0 {
 		parralell = defaultParralellCollectors
 	}
+
+	l.Info("create collector", slog.Any("parralell_query", parralell))
 	semaphor := make(chan struct{}, parralell)
+
 	return &Collector{
 		mb:       mb,
-		log:      log,
+		log:      l,
 		parallel: semaphor,
 	}
 }
 
 func (c *Collector) Collect(
 	ctx context.Context,
-	cards ...Card,
+	cards ...models.Card,
 ) (map[string][]map[string]any, error) {
 	c.log.DebugContext(ctx, "Start collecting data")
 
 	if len(cards) == 0 {
+		c.log.ErrorContext(ctx, "empty card list")
+
 		return nil, errors.New("empty cards")
 	}
 
@@ -58,11 +62,14 @@ func (c *Collector) Collect(
 	close(errChan)
 
 	for r := range resChan {
+		c.log.DebugContext(ctx, "collecting data from card", slog.Any("card_name", r.Name))
 		collected[r.Name] = r.Data
 	}
 
 	var collectError error
+
 	for err := range errChan {
+		c.log.DebugContext(ctx, "error while collecting data from card", slog.Any("error", err))
 		collectError = errors.Join(collectError, err)
 	}
 
@@ -71,11 +78,13 @@ func (c *Collector) Collect(
 
 func (c *Collector) CollectTables(
 	ctx context.Context,
-	cards ...Card,
+	cards ...models.Card,
 ) (map[string][][]string, error) {
 	c.log.DebugContext(ctx, "Start collecting data")
 
 	if len(cards) == 0 {
+		c.log.ErrorContext(ctx, "empty card list")
+
 		return nil, errors.New("empty cards")
 	}
 
@@ -90,11 +99,14 @@ func (c *Collector) CollectTables(
 	close(errChan)
 
 	for r := range resChan {
+		c.log.DebugContext(ctx, "collecting data from card", slog.Any("card_name", r.Name))
 		collected[r.Name] = r.Data
 	}
 
 	var collectError error
+
 	for err := range errChan {
+		c.log.DebugContext(ctx, "error while collecting data from card", slog.Any("error", err))
 		collectError = errors.Join(collectError, err)
 	}
 
@@ -113,19 +125,21 @@ type resTable struct {
 func (c *Collector) collectTables(
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	cards ...Card,
+	cards ...models.Card,
 ) (chan resTable, chan error) {
 	resChan := make(chan resTable, len(cards))
 	errChan := make(chan error, len(cards))
 
 	for _, crd := range cards {
 		wg.Add(1)
+
 		c.parallel <- struct{}{}
 
-		go func(crd Card) {
+		go func(crd models.Card) {
 			defer wg.Done()
 			defer func() { <-c.parallel }()
-			data, err := c.mb.FetchMatrix(ctx, crd.UUID)
+
+			data, err := c.mb.FetchMatrix(ctx, crd.CardUUID)
 			if err != nil {
 				c.log.ErrorContext(
 					ctx,
@@ -133,9 +147,11 @@ func (c *Collector) collectTables(
 					slog.Any("card", crd),
 					slog.Any("error", err),
 				)
+
 				errChan <- err
 			}
-			resChan <- resTable{Name: crd.Name, Data: data}
+
+			resChan <- resTable{Name: crd.Title, Data: data}
 		}(crd)
 	}
 
@@ -145,19 +161,21 @@ func (c *Collector) collectTables(
 func (c *Collector) collect(
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	cards ...Card,
+	cards ...models.Card,
 ) (chan res, chan error) {
 	resChan := make(chan res, len(cards))
 	errChan := make(chan error, len(cards))
 
 	for _, crd := range cards {
 		wg.Add(1)
+
 		c.parallel <- struct{}{}
 
-		go func(crd Card) {
+		go func(crd models.Card) {
 			defer wg.Done()
 			defer func() { <-c.parallel }()
-			data, err := c.mb.Fetch(ctx, crd.UUID)
+
+			data, err := c.mb.Fetch(ctx, crd.CardUUID)
 			if err != nil {
 				c.log.ErrorContext(
 					ctx,
@@ -165,9 +183,11 @@ func (c *Collector) collect(
 					slog.Any("card", crd),
 					slog.Any("error", err),
 				)
+
 				errChan <- err
 			}
-			resChan <- res{Name: crd.Name, Data: data}
+
+			resChan <- res{Name: crd.Title, Data: data}
 		}(crd)
 	}
 

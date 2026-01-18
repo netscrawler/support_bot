@@ -2,6 +2,8 @@ package png
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -9,25 +11,59 @@ import (
 	"math"
 	"strings"
 
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
-
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
+	models "support_bot/internal/models/report"
+	"support_bot/internal/pkg"
 )
 
 type Exporter[T models.ImageData] struct {
-	data  [][]string
+	data  map[string][]map[string]any
+	order map[string][]string
 	name  string
-	title *string
+}
+
+func New[T models.ImageData](
+	data map[string][]map[string]any,
+	name string,
+	order map[string][]string,
+) *Exporter[T] {
+	return &Exporter[T]{
+		data:  data,
+		order: order,
+		name:  name,
+	}
 }
 
 func (e *Exporter[T]) Export() (*T, error) {
-	id, err := createImageFromMatrix(e.data, e.title)
-	if err != nil {
-		return nil, err
+	var err error
+
+	id := models.NewEmptyImageData()
+
+	for k, v := range e.data {
+		var order []string
+		if o, ok := e.order[k]; ok {
+			order = o
+		} else {
+			order = nil
+		}
+
+		mtx := pkg.ConvertSortedRows(v, order)
+
+		img, gErr := createImageFromMatrix(mtx, &k)
+		if gErr != nil {
+			err = errors.Join(err, gErr)
+
+			continue
+		}
+		eErr := id.Extend(img, e.name+"_"+k+".png")
+
+		if eErr != nil {
+			err = errors.Join(err, eErr)
+		}
 	}
-	return any(models.NewImageData(id, e.name)).(*T), nil
+
+	return any(id).(*T), nil
 }
 
 const (
@@ -35,7 +71,7 @@ const (
 	rowHEX    = "#d5d5d5"
 )
 
-func createImageFromMatrix(data [][]string, title *string) (*bytes.Buffer, error) {
+func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 	font, err := pkg.GetFontFaceNormal(18)
 	if err != nil {
 		return nil, err
@@ -71,7 +107,7 @@ func createImageFromMatrix(data [][]string, title *string) (*bytes.Buffer, error
 // padding — внутренний отступ внутри ячеек (с каждой стороны)
 // borderWidth — ширина рамок таблицы.
 func generateTableImageFromMatrix(
-	records [][]string,
+	records [][]any,
 	font font.Face,
 	fontSize float64,
 	padding float64,
@@ -99,7 +135,7 @@ func generateTableImageFromMatrix(
 	// Предварительно положим ширину колонки как ширина заголовка (первой строки)
 	for col := range colsCount {
 		if len(records[0]) > col {
-			w, _ := dc.MeasureString(records[0][col])
+			w, _ := dc.MeasureString(fmt.Sprint(records[0][col]))
 			colWidths[col] = w
 		} else {
 			colWidths[col] = minColWidth
@@ -112,7 +148,7 @@ func generateTableImageFromMatrix(
 			cellText := ""
 
 			if len(row) > col {
-				cellText = row[col]
+				cellText = fmt.Sprint(row[col])
 			}
 
 			// Без переноса измерим полную ширину
@@ -142,7 +178,7 @@ func generateTableImageFromMatrix(
 			cellText := ""
 
 			if len(row) > col {
-				cellText = row[col]
+				cellText = fmt.Sprint(row[col])
 			}
 
 			maxTextWidth := colWidths[col] - 2*padding
@@ -216,7 +252,7 @@ func generateTableImageFromMatrix(
 			cellText := ""
 
 			if len(row) > col {
-				cellText = row[col]
+				cellText = fmt.Sprint(row[col])
 			}
 
 			lines := wrapText(dc, cellText, cellWidth-2*padding)

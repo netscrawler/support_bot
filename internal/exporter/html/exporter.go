@@ -5,9 +5,8 @@ import (
 	"html/template"
 	"maps"
 
-	"support_bot/internal/models"
-
 	"github.com/Masterminds/sprig/v3"
+	models "support_bot/internal/models/report"
 )
 
 type Exporter[T models.FileData] struct {
@@ -40,5 +39,10 @@ func (e *Exporter[T]) Export() (*T, error) {
 		return nil, err
 	}
 
-	return any(models.NewFileData(&buf, e.name)).(*T), nil
+	fd, err := models.NewFileData(&buf, e.name+".html")
+	if err != nil {
+		return nil, err
+	}
+
+	return any(fd).(*T), nil
 }

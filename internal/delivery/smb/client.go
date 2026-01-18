@@ -9,17 +9,12 @@ import (
 	"net"
 	"path/filepath"
 
-	"support_bot/internal/models"
-
 	"github.com/hirochachacha/go-smb2"
+	models "support_bot/internal/models/report"
 )
 
 type SMB struct {
-	address  string
-	user     string
-	password string
-	domain   string
-	share    string
+	cfg SMBConfig
 
 	conn    net.Conn
 	session *smb2.Session
@@ -32,17 +27,13 @@ type SMB struct {
 
 func New(
 	ctx context.Context,
-	address, user, password, domain, share string,
+	cfg SMBConfig,
 	log *slog.Logger,
 ) (*SMB, error) {
-	l := log.WithGroup("samba sender")
+	l := log.With(slog.Any("module", "samba_sender"))
 	r := &SMB{
-		address:  address,
-		user:     user,
-		password: password,
-		domain:   domain,
-		share:    share,
-		log:      l,
+		cfg: cfg,
+		log: l,
 	}
 
 	err := r.connect()
@@ -59,9 +50,12 @@ func New(
 	return r, nil
 }
 
-func (smb *SMB) Upload(remote string, fileData *models.FileData) error {
+func (smb *SMB) Upload(
+	remote string,
+	fileData *models.FileData,
+	imageData *models.ImageData,
+) error {
 	if smb.fs == nil {
-
 		smb.log.Error("error upload file", slog.Any("error", "smb share is not mounted"))
 
 		return errors.New("SMB share is not mounted")
@@ -71,7 +65,38 @@ func (smb *SMB) Upload(remote string, fileData *models.FileData) error {
 
 	var uploadErr error
 
-	fileData.Data()(func(buf *bytes.Buffer, name string) bool {
+	if fileData != nil {
+		fileData.Data()(func(buf *bytes.Buffer, name string) bool {
+			remotePath := filepath.Join(remote, name)
+
+			f, err := smb.fs.Create(remotePath)
+			if err != nil {
+				l.Error("failed create remote file", slog.Any("file", name), slog.Any("error", err))
+				uploadErr = fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
+
+				return false
+			}
+
+			_, err = f.Write(buf.Bytes())
+			f.Close()
+
+			if err != nil {
+				l.Error("failed write remote file", slog.Any("file", name), slog.Any("error", err))
+
+				uploadErr = fmt.Errorf("failed to write to remote file %s: %w", remotePath, err)
+
+				return false
+			}
+
+			return true
+		})
+	}
+
+	if imageData == nil {
+		return uploadErr
+	}
+
+	imageData.Data()(func(buf *bytes.Buffer, name string) bool {
 		remotePath := filepath.Join(remote, name)
 
 		f, err := smb.fs.Create(remotePath)
@@ -122,6 +147,7 @@ func (smb *SMB) Close() error {
 		if err != nil {
 			smb.log.Error("failed close connection", slog.Any("error", err))
 		}
+
 		return err
 	}
 

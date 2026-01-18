@@ -2,8 +2,8 @@ package evaluator
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 
 	"github.com/google/cel-go/cel"
@@ -11,36 +11,31 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-// Версия cel.Env для разных типов report
-type envVer int
-
-const (
-	// t1 = envT1 для data - map[string][]map[string]any
-	t1 envVer = 0
-	// t2 = envT2 для data - map[string][][]string
-	t2 envVer = 1
-)
-
 type Evaluator struct {
-	envT1   *cel.Env
-	envT2   *cel.Env
-	cacheT1 *lru.Cache[string, cel.Program]
-	cacheT2 *lru.Cache[string, cel.Program]
+	env   *cel.Env
+	cache *lru.Cache[string, cel.Program]
+
+	log *slog.Logger
 }
 
-func NewEvaluator() (*Evaluator, error) {
+func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
+	l := log.With(slog.String("module", "evaluator"))
+
 	lT1, err := lru.New[string, cel.Program](15)
 	if err != nil {
+		l.Error("unable create cache", slog.Any("error", err))
+
 		return nil, fmt.Errorf("unable create cache: (%w)", err)
 	}
-	lT2, err := lru.New[string, cel.Program](15)
-	if err != nil {
-		return nil, fmt.Errorf("unable create cache: (%w)", err)
-	}
+
+	l.Info("start creating env")
 
 	envT1, err := cel.NewEnv(
 		cel.StdLib(),
 		ext.Lists(),
+		ext.Sets(),
+		ext.TwoVarComprehensions(),
+		cel.OptionalTypes(),
 		cel.Macros(cel.StandardMacros...),
 		cel.Variable(
 			"report",
@@ -50,23 +45,18 @@ func NewEvaluator() (*Evaluator, error) {
 		),
 	)
 	if err != nil {
+		l.Error("error while creating env 1", slog.Any("error", err))
+
 		return nil, fmt.Errorf("unable create env T1: (%w)", err)
 	}
-	envT2, err := cel.NewEnv(
-		cel.StdLib(),
-		ext.Lists(),
-		cel.Macros(cel.StandardMacros...),
-		cel.Variable(
-			"report",
-			cel.MapType(cel.StringType,
-				cel.ListType(cel.ListType(cel.AnyType))),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("unable create env T2: (%w)", err)
-	}
 
-	return &Evaluator{envT1: envT1, envT2: envT2, cacheT1: lT1, cacheT2: lT2}, nil
+	l.Info("evaluator created")
+
+	return &Evaluator{
+		env:   envT1,
+		cache: lT1,
+		log:   l,
+	}, nil
 }
 
 func (e *Evaluator) Evaluate(
@@ -74,31 +64,15 @@ func (e *Evaluator) Evaluate(
 	data map[string][]map[string]any,
 	expr string,
 ) (bool, error) {
+	e.log.InfoContext(ctx, "evaluating expr", slog.Any("expr", expr))
+
 	switch expr {
 	case AlwaysTrueExpr:
 		return true, nil
 	case AlwaysFalseExpr:
 		return false, nil
 	default:
-		return e.eval(ctx, t1, expr, map[string]any{
-			"report": data,
-		})
-
-	}
-}
-
-func (e *Evaluator) EvaluateMatrix(
-	ctx context.Context,
-	data map[string][][]string,
-	expr string,
-) (bool, error) {
-	switch expr {
-	case AlwaysTrueExpr:
-		return true, nil
-	case AlwaysFalseExpr:
-		return false, nil
-	default:
-		return e.eval(ctx, t2, expr, map[string]any{
+		return e.eval(ctx, expr, map[string]any{
 			"report": data,
 		})
 	}
@@ -106,22 +80,43 @@ func (e *Evaluator) EvaluateMatrix(
 
 func (e *Evaluator) eval(
 	ctx context.Context,
-	envVer envVer,
 	expr string,
 	vars map[string]any,
 ) (bool, error) {
-	prg, err := e.getProgram(envVer, expr)
+	prg, err := e.getProgram(expr)
 	if err != nil {
 		return false, fmt.Errorf("error while compiling program, invalid expr: (%w)", err)
 	}
 
-	out, _, err := prg.ContextEval(ctx, vars)
+	out, details, err := prg.ContextEval(ctx, vars)
 	if err != nil {
+		e.log.ErrorContext(
+			ctx,
+			"error while eval program",
+			slog.Any("expr", expr),
+			slog.Any("error", err),
+			slog.Any("details", details),
+		)
+
 		return false, fmt.Errorf("evaluating error: (%w)", err)
 	}
 
+	e.log.InfoContext(
+		ctx,
+		"program eval success",
+		slog.Any("expr", expr),
+		slog.Any("details", details),
+		slog.Any("out", out),
+	)
+
 	ans, err := out.ConvertToNative(reflect.TypeFor[bool]())
 	if err != nil {
+		e.log.ErrorContext(
+			ctx,
+			"error while converting out to native bool value",
+			slog.Any("error", err),
+		)
+
 		return false, fmt.Errorf("undefined output data: (%w), expected boll value", err)
 	}
 
@@ -129,37 +124,32 @@ func (e *Evaluator) eval(
 }
 
 func (e *Evaluator) getProgram(
-	envVer envVer,
 	expr string,
 ) (cel.Program, error) {
-	var env *cel.Env
-	var cache *lru.Cache[string, cel.Program]
+	if prg, ok := e.cache.Get(expr); ok {
+		e.log.Debug("program get from cache")
 
-	switch envVer {
-	case t1:
-		env = e.envT1
-		cache = e.cacheT1
-	case t2:
-		env = e.envT2
-		cache = e.cacheT2
-	default:
-		return nil, errors.New("unknown env")
-	}
-
-	if prg, ok := cache.Get(expr); ok {
 		return prg, nil
 	}
 
-	ast, iss := env.Compile(expr)
+	e.log.Debug("cache miss, try compile program from expr")
+
+	ast, iss := e.env.Compile(expr)
 	if iss != nil {
+		e.log.Error("error while compiling program to ast", slog.Any("error", iss))
+
 		return nil, iss.Err()
 	}
 
-	prg, err := env.Program(ast)
+	prg, err := e.env.Program(ast)
 	if err != nil {
+		e.log.Error("error while compiling program from ast", slog.Any("error", err))
+
 		return nil, err
 	}
 
-	cache.Add(expr, prg)
+	e.log.Debug("adding program to cache", slog.Any("expr", expr))
+	e.cache.Add(expr, prg)
+
 	return prg, nil
 }

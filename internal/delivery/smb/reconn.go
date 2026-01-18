@@ -13,8 +13,9 @@ import (
 
 func (smb *SMB) startMonitor(ctx context.Context) {
 	smb.log.Info("start smb monitor")
+
 	go func() {
-		log := smb.log.WithGroup("monitor")
+		log := smb.log.With(slog.Any("module", "samba_sender_monitor"))
 
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -36,16 +37,16 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 }
 
 func (smb *SMB) connect() error {
-	conn, err := net.Dial("tcp", smb.address)
+	conn, err := net.Dial("tcp", smb.cfg.Adress)
 	if err != nil {
 		return fmt.Errorf("dial error: %w", err)
 	}
 
 	d := &smb2.Dialer{
 		Initiator: &smb2.NTLMInitiator{
-			User:     smb.user,
-			Password: smb.password,
-			Domain:   smb.domain,
+			User:     smb.cfg.User,
+			Password: smb.cfg.Password,
+			Domain:   smb.cfg.Domain,
 		},
 	}
 
@@ -56,7 +57,7 @@ func (smb *SMB) connect() error {
 		return fmt.Errorf("smb session error: %w", err)
 	}
 
-	fs, err := sess.Mount(smb.share)
+	fs, err := sess.Mount(smb.cfg.Share)
 	if err != nil {
 		_ = sess.Logoff()
 		_ = conn.Close()
@@ -68,7 +69,7 @@ func (smb *SMB) connect() error {
 	smb.session = sess
 	smb.fs = fs
 
-	slog.Info("SMB connected", slog.String("share", smb.share))
+	slog.Info("SMB connected", slog.String("share", smb.cfg.Share))
 
 	return nil
 }
@@ -131,6 +132,7 @@ func (smb *SMB) cleanup() {
 		if err != nil {
 			smb.log.Error("error unmount share", slog.Any("error", err))
 		}
+
 		smb.fs = nil
 	}
 
@@ -139,6 +141,7 @@ func (smb *SMB) cleanup() {
 		if err != nil {
 			smb.log.Error("error logoff session", slog.Any("error", err))
 		}
+
 		smb.session = nil
 	}
 
@@ -147,6 +150,7 @@ func (smb *SMB) cleanup() {
 		if err != nil {
 			smb.log.Error("failed close connection", slog.Any("error", err))
 		}
+
 		smb.conn = nil
 	}
 

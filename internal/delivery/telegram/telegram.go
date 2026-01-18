@@ -5,9 +5,8 @@ import (
 	"errors"
 	"log/slog"
 
-	"support_bot/internal/models"
-
 	"gopkg.in/telebot.v4"
+	models "support_bot/internal/models/report"
 )
 
 type ChatAdaptor struct {
@@ -16,7 +15,7 @@ type ChatAdaptor struct {
 }
 
 func NewChatAdaptor(bot *telebot.Bot, log *slog.Logger) *ChatAdaptor {
-	l := log.WithGroup("telegram sender")
+	l := log.With(slog.Any("module", "telegram_sender"))
 
 	return &ChatAdaptor{
 		bot: bot,
