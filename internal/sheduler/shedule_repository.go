@@ -4,8 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/jmoiron/sqlx"
 	models "support_bot/internal/models/report"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type SheduleRepo struct {
@@ -23,9 +24,7 @@ func NewSheduleRepo(db *sqlx.DB, log *slog.Logger) *SheduleRepo {
 }
 
 func (s *SheduleRepo) Load(ctx context.Context) ([]models.SheduleUnit, error) {
-	const query string = `select cron, name from crons
-
-`
+	const query string = `select cron, name from crons where is_active = true`
 
 	s.log.DebugContext(ctx, "start loading shedules")
 

@@ -2,11 +2,13 @@
 package telegram
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
-	"gopkg.in/telebot.v4"
 	models "support_bot/internal/models/report"
+
+	"gopkg.in/telebot.v4"
 )
 
 type ChatAdaptor struct {
@@ -23,7 +25,68 @@ func NewChatAdaptor(bot *telebot.Bot, log *slog.Logger) *ChatAdaptor {
 	}
 }
 
-func (ca *ChatAdaptor) Send(chat models.TargetTelegramChat, msg models.TextData) error {
+func (ca *ChatAdaptor) Send(
+	ctx context.Context,
+	chat models.TargetTelegramChat,
+	datas ...models.ReportData,
+) error {
+	if len(datas) == 0 {
+		return errors.New("NOTHING TO SEND")
+	}
+
+	for _, data := range datas {
+		if data == nil {
+			ca.log.Error("empty send data", slog.Any("data", data))
+		}
+
+		switch data.Kind() {
+		case models.SendTextKind:
+			dt, ok := data.(*models.TextData)
+			if !ok {
+				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+
+				continue
+			}
+
+			err := ca.sendText(chat, *dt)
+			if err != nil {
+				ca.log.Error("sending error", slog.Any("error", err))
+			}
+		case models.SendFileKind:
+			dt, ok := data.(*models.FileData)
+			if !ok {
+				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+
+				continue
+			}
+
+			err := ca.sendDocument(chat, *dt)
+			if err != nil {
+				ca.log.Error("sending error", slog.Any("error", err))
+			}
+		case models.SendImageKind:
+			dt, ok := data.(*models.ImageData)
+			if !ok {
+				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+
+				continue
+			}
+
+			err := ca.sendMedia(chat, *dt)
+			if err != nil {
+				ca.log.Error("sending error", slog.Any("error", err))
+			}
+		default:
+			ca.log.Error("not supported telegram data", slog.Any("data", data))
+
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (ca *ChatAdaptor) sendText(chat models.TargetTelegramChat, msg models.TextData) error {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -50,7 +113,7 @@ func (ca *ChatAdaptor) Send(chat models.TargetTelegramChat, msg models.TextData)
 	return nil
 }
 
-func (ca *ChatAdaptor) SendMedia(
+func (ca *ChatAdaptor) sendMedia(
 	chat models.TargetTelegramChat,
 	imgs models.ImageData,
 ) error {
@@ -87,7 +150,7 @@ func (ca *ChatAdaptor) SendMedia(
 	return nil
 }
 
-func (ca *ChatAdaptor) SendDocument(
+func (ca *ChatAdaptor) sendDocument(
 	chat models.TargetTelegramChat,
 	doc models.FileData,
 ) error {

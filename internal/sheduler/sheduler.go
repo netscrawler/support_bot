@@ -4,8 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/robfig/cron/v3"
 	models "support_bot/internal/models/report"
+
+	"github.com/robfig/cron/v3"
 )
 
 type SheduleLoader interface {
@@ -18,9 +19,16 @@ type Sheduler struct {
 	loader SheduleLoader
 
 	EventChan chan string
+
+	api chan SheduleAPIEvent
 }
 
-func NewSheduler(shLoader SheduleLoader, log *slog.Logger, events chan string) *Sheduler {
+func NewSheduler(
+	shLoader SheduleLoader,
+	log *slog.Logger,
+	events chan string,
+	apiChan chan SheduleAPIEvent,
+) *Sheduler {
 	l := log.With(slog.Any("module", "sheduler"))
 
 	return &Sheduler{
@@ -28,6 +36,7 @@ func NewSheduler(shLoader SheduleLoader, log *slog.Logger, events chan string) *
 		log:       l,
 		loader:    shLoader,
 		EventChan: events,
+		api:       apiChan,
 	}
 }
 
@@ -63,10 +72,35 @@ func (s *Sheduler) Start(ctx context.Context) error {
 	s.log.InfoContext(ctx, "Sheduler started")
 
 	s.cron.Start()
+	s.StartMonitor(ctx)
 
 	return nil
 }
 
 func (s *Sheduler) Stop() {
 	s.cron.Stop()
+}
+
+func (s *Sheduler) StartMonitor(ctx context.Context) {
+	s.log.DebugContext(ctx, "starting event monitor")
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev := <-s.api:
+				switch ev {
+				case EventStart:
+					s.log.DebugContext(ctx, "received start event")
+					s.Stop()
+					s.Start(ctx)
+				case EventStop:
+					s.log.DebugContext(ctx, "received stop event")
+					s.Stop()
+				default:
+					s.log.DebugContext(ctx, "received unknown event", slog.Any("event", ev))
+				}
+			}
+		}
+	}()
 }

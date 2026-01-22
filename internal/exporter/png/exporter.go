@@ -11,10 +11,11 @@ import (
 	"math"
 	"strings"
 
-	"github.com/fogleman/gg"
-	"golang.org/x/image/font"
 	models "support_bot/internal/models/report"
 	"support_bot/internal/pkg"
+
+	"github.com/fogleman/gg"
+	"golang.org/x/image/font"
 )
 
 type Exporter[T models.ImageData] struct {
@@ -253,6 +254,9 @@ func generateTableImageFromMatrix(
 
 			if len(row) > col {
 				cellText = fmt.Sprint(row[col])
+				if row[col] == nil {
+					cellText = ""
+				}
 			}
 
 			lines := wrapText(dc, cellText, cellWidth-2*padding)

@@ -1,3 +1,16 @@
+-- Роли пользователей
+CREATE TYPE user_role AS ENUM ('admin', 'user', 'primary');
+
+-- Таблица пользователей
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    role user_role NOT NULL DEFAULT 'user'
+);
+
 create table evaluate(
     id serial primary key,
     expr text NOT NULL
@@ -12,12 +25,22 @@ CREATE TABLE reports (
     CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate(id) ON DELETE RESTRICT
 );
 
+-- Таблица чатов для уведомлений
+CREATE TABLE chats (
+    id SERIAL PRIMARY KEY,
+    chat_id BIGINT UNIQUE NOT NULL,
+    title VARCHAR(255),
+    type VARCHAR(50) NOT NULL, -- 'private', 'group', 'supergroup', 'channel'
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true
+);
+
 create table email_templates(
     id serial PRIMARY KEY,
-    dest text[] NOT NULL,
-    copy text[],
-    subject text NOT NULL,
-    body text
+    Dest text[] NOT NULL,
+    Copy text[],
+    Subject text NOT NULL,
+    Body text
 );
 
 create table recipients(
@@ -32,7 +55,6 @@ create table recipients(
     CONSTRAINT fk_recipient_chat FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE RESTRICT,
     CONSTRAINT fk_recipient_email FOREIGN KEY (email_id) REFERENCES email_templates(id) ON DELETE RESTRICT
 );
-
 
 
 CREATE TABLE reports_recipients(
@@ -82,7 +104,7 @@ create table reports_export(
     report_id int,
     format_id int,
     file_name text,
-    sort_order jsonb DEFAULT '{}',
+    order jsonb,
     CONSTRAINT fk_report_export_report FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
     CONSTRAINT fk_report_export_export FOREIGN KEY (format_id) REFERENCES export_formats(id) ON DELETE CASCADE
 );
@@ -104,4 +126,22 @@ CREATE TABLE report_queries (
     CONSTRAINT fk_notify_queries_notify FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
     CONSTRAINT fk_notify_queries_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE
 );
+
+
+-- Триггер: при удалении чата уведомления становятся неактивными
+create or replace function deactivate_notify_on_chat_delete()
+returns trigger
+as $$
+BEGIN
+    UPDATE reports SET active = FALSE WHERE chat_id = OLD.id;
+    RETURN OLD;
+END;
+$$
+language plpgsql
+;
+
+CREATE TRIGGER trg_deactivate_notify_on_chat_delete
+BEFORE DELETE ON chats
+FOR EACH ROW
+EXECUTE FUNCTION deactivate_notify_on_chat_delete();
 

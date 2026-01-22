@@ -13,7 +13,6 @@ const defaultParralellCollectors = 32
 
 type DataFetcher interface {
 	Fetch(ctx context.Context, uuid string) ([]map[string]any, error)
-	FetchMatrix(ctx context.Context, uuid string) ([][]string, error)
 }
 
 type Collector struct {
@@ -76,86 +75,9 @@ func (c *Collector) Collect(
 	return collected, collectError
 }
 
-func (c *Collector) CollectTables(
-	ctx context.Context,
-	cards ...models.Card,
-) (map[string][][]string, error) {
-	c.log.DebugContext(ctx, "Start collecting data")
-
-	if len(cards) == 0 {
-		c.log.ErrorContext(ctx, "empty card list")
-
-		return nil, errors.New("empty cards")
-	}
-
-	collected := make(map[string][][]string)
-
-	var wg sync.WaitGroup
-
-	resChan, errChan := c.collectTables(ctx, &wg, cards...)
-
-	wg.Wait()
-	close(resChan)
-	close(errChan)
-
-	for r := range resChan {
-		c.log.DebugContext(ctx, "collecting data from card", slog.Any("card_name", r.Name))
-		collected[r.Name] = r.Data
-	}
-
-	var collectError error
-
-	for err := range errChan {
-		c.log.DebugContext(ctx, "error while collecting data from card", slog.Any("error", err))
-		collectError = errors.Join(collectError, err)
-	}
-
-	return collected, collectError
-}
-
 type res struct {
 	Name string
 	Data []map[string]any
-}
-type resTable struct {
-	Name string
-	Data [][]string
-}
-
-func (c *Collector) collectTables(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	cards ...models.Card,
-) (chan resTable, chan error) {
-	resChan := make(chan resTable, len(cards))
-	errChan := make(chan error, len(cards))
-
-	for _, crd := range cards {
-		wg.Add(1)
-
-		c.parallel <- struct{}{}
-
-		go func(crd models.Card) {
-			defer wg.Done()
-			defer func() { <-c.parallel }()
-
-			data, err := c.mb.FetchMatrix(ctx, crd.CardUUID)
-			if err != nil {
-				c.log.ErrorContext(
-					ctx,
-					"Error while fetching data",
-					slog.Any("card", crd),
-					slog.Any("error", err),
-				)
-
-				errChan <- err
-			}
-
-			resChan <- resTable{Name: crd.Title, Data: data}
-		}(crd)
-	}
-
-	return resChan, errChan
 }
 
 func (c *Collector) collect(

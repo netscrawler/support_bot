@@ -135,7 +135,7 @@ type export struct {
 	TemplateTitle *string         `db:"title"`
 	TemplateType  *string         `db:"type"`
 	TemplateText  *string         `db:"template_text"`
-	Order         json.RawMessage `db:"order"`
+	Order         json.RawMessage `db:"sort_order"`
 }
 
 func mapExportToModel(e export) (models.Export, error) {

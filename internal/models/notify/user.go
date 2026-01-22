@@ -15,12 +15,12 @@ const (
 )
 
 type User struct {
-	ID         int     `json:"id"`
-	TelegramID int64   `json:"telegram_id"`
-	Username   string  `json:"username"`
-	FirstName  string  `json:"first_name"`
-	LastName   *string `json:"last_name"`
-	Role       string  `json:"role"` // admin или user или primary
+	ID         int     `json:"id"          db:"id"`
+	TelegramID int64   `json:"telegram_id" db:"telegram_id"`
+	Username   string  `json:"username"    db:"username"`
+	FirstName  string  `json:"first_name"  db:"first_name"`
+	LastName   *string `json:"last_name"   db:"last_name"`
+	Role       string  `json:"role"        db:"role"` // admin или user или primary
 }
 
 func NewUser(tgID int64, username, firstname string, lastname *string, isAdmin bool) User {

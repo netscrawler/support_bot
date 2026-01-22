@@ -10,12 +10,7 @@ import (
 )
 
 type telegramChatSender interface {
-	Send(chat models.TargetTelegramChat, msg models.TextData) error
-	SendDocument(
-		chat models.TargetTelegramChat,
-		doc models.FileData,
-	) error
-	SendMedia(chat models.TargetTelegramChat, imgs models.ImageData) error
+	Send(ctx context.Context, chat models.TargetTelegramChat, data ...models.ReportData) error
 }
 
 type fileUploader interface {
@@ -66,7 +61,7 @@ func (ss *SenderStrategy) Send(
 				continue
 			}
 
-			err := ss.sendTelegramDataStrategy(chat, data)
+			err := ss.tg.Send(ctx, chat, data...)
 			if err != nil {
 				sendError = errors.Join(sendError, err)
 			}
@@ -96,66 +91,6 @@ func (ss *SenderStrategy) Send(
 
 		default:
 			ss.log.ErrorContext(ctx, "not supported target kind", slog.Any("dest", meta))
-
-			continue
-		}
-	}
-
-	return nil
-}
-
-func (ss *SenderStrategy) sendTelegramDataStrategy(
-	target models.TargetTelegramChat,
-	datas []models.ReportData,
-) error {
-	if len(datas) == 0 {
-		return errors.New("NOTHING TO SEND")
-	}
-
-	for _, data := range datas {
-		if data == nil {
-			ss.log.Error("empty send data", slog.Any("data", data))
-		}
-
-		switch data.Kind() {
-		case models.SendTextKind:
-			dt, ok := data.(*models.TextData)
-			if !ok {
-				ss.log.Error("invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ss.tg.Send(target, *dt)
-			if err != nil {
-				ss.log.Error("sending error", slog.Any("error", err))
-			}
-		case models.SendFileKind:
-			dt, ok := data.(*models.FileData)
-			if !ok {
-				ss.log.Error("invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ss.tg.SendDocument(target, *dt)
-			if err != nil {
-				ss.log.Error("sending error", slog.Any("error", err))
-			}
-		case models.SendImageKind:
-			dt, ok := data.(*models.ImageData)
-			if !ok {
-				ss.log.Error("invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ss.tg.SendMedia(target, *dt)
-			if err != nil {
-				ss.log.Error("sending error", slog.Any("error", err))
-			}
-		default:
-			ss.log.Error("not supported telegram data", slog.Any("data", data))
 
 			continue
 		}

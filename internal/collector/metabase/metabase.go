@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -23,6 +24,9 @@ func New(baseURL string) *Metabase {
 }
 
 func (m *Metabase) FetchMatrix(ctx context.Context, cardUUID string) ([][]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("Metabase query %w", err)
+	}
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatCSV, nil)
 	if err != nil {
 		return nil, err
@@ -39,6 +43,9 @@ func (m *Metabase) FetchMatrix(ctx context.Context, cardUUID string) ([][]string
 }
 
 func (m *Metabase) Fetch(ctx context.Context, cardUUID string) ([]map[string]any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("Metabase query %w", err)
+	}
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
 	if err != nil {
 		return nil, err

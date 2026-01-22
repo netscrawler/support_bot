@@ -83,6 +83,9 @@ func (e *Evaluator) eval(
 	expr string,
 	vars map[string]any,
 ) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("evaluator eval :%w", err)
+	}
 	prg, err := e.getProgram(expr)
 	if err != nil {
 		return false, fmt.Errorf("error while compiling program, invalid expr: (%w)", err)

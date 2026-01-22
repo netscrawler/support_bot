@@ -45,6 +45,7 @@ func New(
 	cfg *config.Config,
 	bot *telebot.Bot,
 	db *postgres.DB,
+	shdAPI chan sheduler.SheduleAPIEvent,
 	log *slog.Logger,
 ) (*App, error) {
 	mb := metabase.New(cfg.MetabaseDomain)
@@ -67,7 +68,7 @@ func New(
 	reportChan := make(chan models.Report, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(db.GetConn(), log)
-	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents)
+	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
 
 	evRepository := eventcreator.NewRepository(db.GetConn(), log)
 	evC := eventcreator.New(sheduleEvents, eventChan, log, evRepository)

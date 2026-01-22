@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xuri/excelize/v2"
 	models "support_bot/internal/models/report"
 	"support_bot/internal/pkg"
+
+	"github.com/xuri/excelize/v2"
 )
 
 type Exporter[T models.FileData] struct {
@@ -109,6 +110,9 @@ func (e *Exporter[T]) createXlsxBook(
 
 // detectValueType определяет тип значения по строке и возвращает подходящий тип.
 func detectValueType(val string) any {
+	if val == "<nil>" {
+		return ""
+	}
 	// int
 	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return i

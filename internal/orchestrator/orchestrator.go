@@ -4,8 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	models "support_bot/internal/models/report"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type ReportLoader interface {
@@ -32,7 +33,7 @@ func New(
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
-	cache, _ := lru.New[string, []models.Report](128)
+	cache, _ := lru.New[string, []models.Report](5)
 
 	return &Orchestrator{
 		EventC:  evC,
