@@ -4,8 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/robfig/cron/v3"
 	models "support_bot/internal/models/report"
+
+	"github.com/robfig/cron/v3"
 )
 
 type SheduleLoader interface {

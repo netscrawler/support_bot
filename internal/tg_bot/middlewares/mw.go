@@ -3,10 +3,11 @@ package middlewares
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/pkg/logger"
+
+	models "support_bot/internal/models/notify"
 
 	"gopkg.in/telebot.v4"
-	models "support_bot/internal/models/notify"
-	"support_bot/internal/pkg/logger"
 )
 
 type UserProvider interface {
