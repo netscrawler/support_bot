@@ -2,12 +2,12 @@ package models
 
 // Chat представляет чат для отправки уведомлений.
 type Chat struct {
-	ID          int     `json:"id"          db:"id"`
-	ChatID      int64   `json:"chat_id"     db:"chat_id"`
-	Title       string  `json:"title"       db:"title"`
-	Type        string  `json:"type"        db:"type"` // 'private', 'group', 'supergroup', 'channel'
-	Description *string `json:"description" db:"description"`
-	IsActive    bool    `json:"is_active"   db:"is_active"`
+	ID          int     `db:"id"          json:"id"`
+	ChatID      int64   `db:"chat_id"     json:"chat_id"`
+	Title       string  `db:"title"       json:"title"`
+	Type        string  `db:"type"        json:"type"` // 'private', 'group', 'supergroup', 'channel'
+	Description *string `db:"description" json:"description"`
+	IsActive    bool    `db:"is_active"   json:"is_active"`
 	ThreadID    int64
 }
 

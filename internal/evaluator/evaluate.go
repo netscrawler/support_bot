@@ -86,6 +86,7 @@ func (e *Evaluator) eval(
 	if err := ctx.Err(); err != nil {
 		return false, fmt.Errorf("evaluator eval :%w", err)
 	}
+
 	prg, err := e.getProgram(expr)
 	if err != nil {
 		return false, fmt.Errorf("error while compiling program, invalid expr: (%w)", err)
@@ -123,6 +124,7 @@ func (e *Evaluator) eval(
 		return false, fmt.Errorf("undefined output data: (%w), expected boll value", err)
 	}
 
+	//nolint:revive,forcetypeassert // not panic
 	return ans.(bool), nil
 }
 

@@ -84,6 +84,7 @@ func (ss *SenderStrategy) Send(
 
 				continue
 			}
+
 			err := ss.sendSMTPDataStrategy(ctx, email, data)
 			if err != nil {
 				sendError = errors.Join(sendError, err)

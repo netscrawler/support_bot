@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xuri/excelize/v2"
 	models "support_bot/internal/models/report"
 	"support_bot/internal/pkg"
-
-	"github.com/xuri/excelize/v2"
 )
 
 type Exporter[T models.FileData] struct {
@@ -188,16 +187,16 @@ func isValidSheetNameStart(b rune) bool {
 
 // getAutoWidth оценивает ширину колонки в символах.
 func getAutoWidth(records [][]any, colIdx int) float64 {
-	max := 10.0
+	maxWidth := 10.0
 
 	for _, row := range records {
 		if colIdx < len(row) {
 			width := float64(len([]rune(fmt.Sprint(row[colIdx])))) * 1.2 // запас
-			if width > max {
-				max = width
+			if width > maxWidth {
+				maxWidth = width
 			}
 		}
 	}
 
-	return max
+	return maxWidth
 }

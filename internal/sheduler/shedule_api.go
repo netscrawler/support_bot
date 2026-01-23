@@ -17,17 +17,20 @@ func NewSheduleAPI(c chan SheduleAPIEvent) *SheduleAPI {
 }
 
 func (sha *SheduleAPI) Start() {
-	defer recover()
+	defer func() { recover() }()
+
 	sha.c <- EventStart
 }
 
 func (sha *SheduleAPI) Stop() {
-	defer recover()
+	defer func() { recover() }()
+
 	sha.c <- EventStop
 }
 
 func (sha *SheduleAPI) Restart() {
-	defer recover()
+	defer func() { recover() }()
+
 	sha.Stop()
 	sha.Start()
 }

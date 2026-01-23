@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	// sqlx driver.
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 )
@@ -36,7 +37,10 @@ func New(ctx context.Context, cfg PostgresConfig, log *slog.Logger) (*DB, error)
 	db.SetConnMaxIdleTime(cfg.MaxConnIdleTime)
 
 	if err := db.Ping(); err != nil {
-		db.Close()
+		closeErr := db.Close()
+		if closeErr != nil {
+			l.ErrorContext(ctx, "unable close connection correctly", slog.Any("error", err))
+		}
 
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -70,6 +74,12 @@ func (d *DB) GetConn() *sqlx.DB {
 	return d.db
 }
 
+func (d *DB) Stop(_ context.Context) error {
+	d.cancel()
+
+	return d.db.Close()
+}
+
 func (d *DB) startMonitor(ctx context.Context) {
 	go func() {
 		log := d.log.With(slog.Any("submodule", "monitor"))
@@ -96,10 +106,4 @@ func (d *DB) startMonitor(ctx context.Context) {
 			}
 		}
 	}()
-}
-
-func (d *DB) Stop(ctx context.Context) error {
-	d.cancel()
-
-	return d.db.Close()
 }

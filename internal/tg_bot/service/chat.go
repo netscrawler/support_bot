@@ -22,6 +22,7 @@ type Chat struct {
 
 func NewChat(repo ChatProvider, log *slog.Logger) *Chat {
 	l := log.With(slog.Any("module", "tg_bot.service.chat"))
+
 	return &Chat{
 		repo: repo,
 		log:  l,
