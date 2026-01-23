@@ -43,6 +43,7 @@ func (e *Exporter[T]) Export() (*T, error) {
 		cBuf := pkg.ConvertSortedRows(v, ordering)
 
 		buf := writeCsv(cBuf)
+
 		eErr := fd.Extend(buf, e.name+"_"+k+".csv")
 		if eErr != nil {
 			err = errors.Join(err, eErr)

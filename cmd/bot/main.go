@@ -42,13 +42,15 @@ func main() {
 	app, err := app.New(ctx, cfg)
 	if err != nil {
 		log.Error("failing creating app", slog.Any("error", err))
-		os.Exit(1)
+
+		return
 	}
 
 	err = app.Start(ctx)
 	if err != nil {
 		log.Error("failing start app", slog.Any("error", err))
-		os.Exit(1)
+
+		return
 	}
 
 	stop := make(chan os.Signal, 1)

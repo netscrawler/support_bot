@@ -30,8 +30,8 @@ type Targeted interface {
 }
 
 type TargetTelegramChat struct {
-	ChatID   int64 `env:"chat_id"   yaml:"chat_id"`
-	ThreadID int   `env:"thread_id" yaml:"thread_id"`
+	ChatID   int64
+	ThreadID int
 }
 
 func NewTargetTelegramChat(chat int64, thread *int) TargetTelegramChat {
@@ -155,7 +155,7 @@ func (id *ImageData) Extend(img *bytes.Buffer, name string) error {
 
 	id.img = append(id.img, img)
 	id.name = append(id.name, n)
-	id.Entry += 1
+	id.Entry++
 
 	return nil
 }
@@ -170,7 +170,7 @@ func (id *ImageData) Data() iter.Seq2[*bytes.Buffer, string] {
 	}
 }
 
-func (ImageData) Kind() SendKind { return SendImageKind }
+func (*ImageData) Kind() SendKind { return SendImageKind }
 
 type FileData struct {
 	file  []*bytes.Buffer
@@ -194,10 +194,6 @@ func NewFileData(file *bytes.Buffer, name string) (*FileData, error) {
 	}, nil
 }
 
-func (fd *FileData) Len() int {
-	return len(fd.file)
-}
-
 func NewEmptyFileData() *FileData {
 	f := []*bytes.Buffer{}
 	n := []string{}
@@ -209,6 +205,10 @@ func NewEmptyFileData() *FileData {
 	}
 }
 
+func (fd *FileData) Len() int {
+	return len(fd.file)
+}
+
 func (fd *FileData) Extend(file *bytes.Buffer, name string) error {
 	nm, err := text.ExecuteTemplate(name, nil)
 	if err != nil {
@@ -217,7 +217,7 @@ func (fd *FileData) Extend(file *bytes.Buffer, name string) error {
 
 	fd.file = append(fd.file, file)
 	fd.name = append(fd.name, nm)
-	fd.Entry += 1
+	fd.Entry++
 
 	return nil
 }
@@ -225,7 +225,7 @@ func (fd *FileData) Extend(file *bytes.Buffer, name string) error {
 func (fd *FileData) ExtendWithoutTemplate(file *bytes.Buffer, name string) {
 	fd.file = append(fd.file, file)
 	fd.name = append(fd.name, name)
-	fd.Entry += 1
+	fd.Entry++
 }
 
 func (fd *FileData) Append(datas ...FileData) {
@@ -236,7 +236,7 @@ func (fd *FileData) Append(datas ...FileData) {
 	}
 }
 
-func (FileData) Kind() SendKind { return SendFileKind }
+func (*FileData) Kind() SendKind { return SendFileKind }
 
 func (fd *FileData) Data() iter.Seq2[*bytes.Buffer, string] {
 	return func(yield func(*bytes.Buffer, string) bool) {

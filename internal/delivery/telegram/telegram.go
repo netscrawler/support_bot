@@ -6,9 +6,8 @@ import (
 	"errors"
 	"log/slog"
 
-	models "support_bot/internal/models/report"
-
 	"gopkg.in/telebot.v4"
+	models "support_bot/internal/models/report"
 )
 
 type ChatAdaptor struct {
@@ -36,48 +35,48 @@ func (ca *ChatAdaptor) Send(
 
 	for _, data := range datas {
 		if data == nil {
-			ca.log.Error("empty send data", slog.Any("data", data))
+			ca.log.ErrorContext(ctx, "empty send data", slog.Any("data", data))
 		}
 
 		switch data.Kind() {
 		case models.SendTextKind:
 			dt, ok := data.(*models.TextData)
 			if !ok {
-				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
 
 				continue
 			}
 
 			err := ca.sendText(chat, *dt)
 			if err != nil {
-				ca.log.Error("sending error", slog.Any("error", err))
+				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
 		case models.SendFileKind:
 			dt, ok := data.(*models.FileData)
 			if !ok {
-				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
 
 				continue
 			}
 
 			err := ca.sendDocument(chat, *dt)
 			if err != nil {
-				ca.log.Error("sending error", slog.Any("error", err))
+				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
 		case models.SendImageKind:
 			dt, ok := data.(*models.ImageData)
 			if !ok {
-				ca.log.Error("invalid telegram send data", slog.Any("data", data))
+				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
 
 				continue
 			}
 
 			err := ca.sendMedia(chat, *dt)
 			if err != nil {
-				ca.log.Error("sending error", slog.Any("error", err))
+				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
 		default:
-			ca.log.Error("not supported telegram data", slog.Any("data", data))
+			ca.log.ErrorContext(ctx, "not supported telegram data", slog.Any("data", data))
 
 			continue
 		}

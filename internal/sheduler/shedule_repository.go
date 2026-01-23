@@ -4,9 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/jmoiron/sqlx"
+	models "support_bot/internal/models/report"
 )
 
 type SheduleRepo struct {

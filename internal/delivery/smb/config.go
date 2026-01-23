@@ -1,7 +1,7 @@
 package smb
 
 type SMBConfig struct {
-	Adress   string `env:"SMB_ADRESS"   yaml:"adress"`
+	Address  string `env:"SMB_ADDRESS"  yaml:"address"`
 	User     string `env:"SMB_USER"     yaml:"user"`
 	Password string `env:"SMB_PASSWORD" yaml:"password"`
 	Domain   string `env:"SMB_DOMAIN"   yaml:"domain"`

@@ -27,7 +27,7 @@ type Config struct {
 
 type bot struct {
 	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token"`
-	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"CleanUpTime"    env-default:"10m"`
+	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  env-default:"10m"`
 	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       env-default:"30s"`
 }
 
@@ -39,7 +39,9 @@ type timeout struct {
 func Load() (*Config, error) {
 	var cfg Config
 
+	//nolint:errcheck //not need
 	_ = godotenv.Load()
+
 	configPath := fetchConfigPath()
 
 	// Загрузка конфигурации

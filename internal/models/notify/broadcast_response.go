@@ -24,13 +24,13 @@ func NewBroadcastResp() *BroadcastResp {
 }
 
 func (br *BroadcastResp) AddSuccess() {
-	br.ChatsCount += 1
-	br.SuccessCount += 1
+	br.ChatsCount++
+	br.SuccessCount++
 }
 
 func (br *BroadcastResp) AddError(chatName string, err error) {
-	br.ChatsCount += 1
-	br.ErrorCount += 1
+	br.ChatsCount++
+	br.ErrorCount++
 	br.ErrorChatsTitles = append(br.ErrorChatsTitles, "- "+chatName, " : ", err.Error())
 }
 

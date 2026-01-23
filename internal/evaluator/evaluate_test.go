@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"support_bot/internal/evaluator"
 )
 
@@ -33,7 +34,7 @@ func TestEvaluator_Evaluate(t *testing.T) {
 		fn := `report["sheet1"].all(r, r["total"] != 0)`
 
 		allow, err := eval.Evaluate(t.Context(), report, fn)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, allow)
 	})
 
@@ -47,7 +48,7 @@ func TestEvaluator_Evaluate(t *testing.T) {
 		fn := `size(report["sheet1"]) > 1`
 
 		allow, err := eval.Evaluate(t.Context(), report, fn)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, allow)
 	})
 
@@ -65,17 +66,18 @@ func TestEvaluator_Evaluate(t *testing.T) {
 		fn := `report.map(k, report[k]).flatten().size() > 1`
 
 		allow, err := eval.Evaluate(t.Context(), report, fn)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, allow)
 	})
 
 	t.Run("always expr", func(t *testing.T) {
+		t.Parallel()
 		ok, err := eval.Evaluate(t.Context(), nil, "[*]")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, ok)
 
 		ok, err = eval.Evaluate(t.Context(), nil, "[!*]")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, ok)
 	})
 }

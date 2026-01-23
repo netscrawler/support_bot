@@ -83,10 +83,13 @@ func mapRecipientToModel(r recipient) models.Recipient {
 	var e *models.EmailTemplate
 
 	var dest []string
+
 	if r.Copy != nil {
 		dest = pqArrayToArray(*r.Dest)
 	}
+
 	var rCopy []string
+
 	if r.Copy != nil {
 		rCopy = pqArrayToArray(*r.Copy)
 	}
@@ -114,6 +117,7 @@ func mapRecipientToModel(r recipient) models.Recipient {
 func pqArrayToArray(arr string) []string {
 	a := strings.TrimLeft(arr, "{")
 	a = strings.TrimRight(a, "}")
+
 	return strings.Split(a, ",")
 }
 

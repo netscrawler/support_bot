@@ -4,9 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/robfig/cron/v3"
+	models "support_bot/internal/models/report"
 )
 
 type SheduleLoader interface {
@@ -84,6 +83,7 @@ func (s *Sheduler) Stop() {
 
 func (s *Sheduler) StartMonitor(ctx context.Context) {
 	s.log.DebugContext(ctx, "starting event monitor")
+
 	go func() {
 		for {
 			select {

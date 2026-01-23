@@ -44,7 +44,9 @@ func (c *Collector) Collect(
 	cards ...models.Card,
 ) (map[string][]map[string]any, error) {
 	start := time.Now()
+
 	c.log.InfoContext(ctx, "Start collecting data")
+
 	defer func() {
 		c.log.InfoContext(
 			ctx,

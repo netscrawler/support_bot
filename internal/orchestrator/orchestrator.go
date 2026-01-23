@@ -103,6 +103,7 @@ func (o *Orchestrator) getReportByEvent(
 	l.DebugContext(ctx, "getting report by event")
 
 	o.mu.RLock()
+
 	r, ok := o.cache[event]
 	if ok {
 		l.DebugContext(ctx, "find report in cache")
@@ -124,6 +125,7 @@ func (o *Orchestrator) getReportByEvent(
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
+
 	if rp, ok := o.cache[event]; ok {
 		o.cache[event] = append(rp, *reports)
 	} else {

@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	models "support_bot/internal/models/notify"
-
 	"github.com/jmoiron/sqlx"
+	models "support_bot/internal/models/notify"
 )
 
 type UserRepository struct {
@@ -17,6 +16,7 @@ type UserRepository struct {
 
 func NewUserRepository(db *sqlx.DB, log *slog.Logger) *UserRepository {
 	l := log.With(slog.Any("module", "tg_bot.repository.user"))
+
 	return &UserRepository{db: db, log: l}
 }
 
@@ -29,6 +29,7 @@ RETURNING *;`
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("user repository create: %w", err)
 	}
+
 	_, err := u.db.ExecContext(
 		ctx,
 		query,
@@ -41,6 +42,7 @@ RETURNING *;`
 	if err != nil {
 		return fmt.Errorf("creating user: %w", err)
 	}
+
 	return nil
 }
 
@@ -50,6 +52,7 @@ func (u *UserRepository) Update(ctx context.Context, user *models.User) error {
         first_name = $3,
         last_name = $4
     WHERE username = $1;`
+
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("user repository update: %w", err)
 	}
@@ -65,9 +68,11 @@ func (u *UserRepository) Update(ctx context.Context, user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
+
 	if count, err := res.RowsAffected(); err == nil {
 		u.log.DebugContext(ctx, "updated users", slog.Any("count", count))
 	}
+
 	return nil
 }
 
@@ -75,6 +80,7 @@ func (u *UserRepository) GetByUsername(ctx context.Context, username string) (*m
 	const query = `SELECT * FROM users
 WHERE username = $1
 LIMIT 1;`
+
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("user repository get by username: %w", err)
 	}
@@ -85,19 +91,25 @@ LIMIT 1;`
 	if err != nil {
 		return nil, fmt.Errorf("get by username: %w", err)
 	}
+
 	return user, nil
 }
 
 func (u *UserRepository) GetAll(ctx context.Context) ([]models.User, error) {
 	const query = `SELECT * FROM users;`
-	if err := ctx.Err(); err != nil {
+
+	err := ctx.Err()
+	if err != nil {
 		return nil, fmt.Errorf("user repository get all: %w", err)
 	}
 
 	var users []models.User
-	if err := u.db.SelectContext(ctx, &users, query); err != nil {
+
+	err = u.db.SelectContext(ctx, &users, query)
+	if err != nil {
 		return nil, fmt.Errorf("get all: %w", err)
 	}
+
 	return users, nil
 }
 
@@ -105,6 +117,7 @@ func (u *UserRepository) GetByTgID(ctx context.Context, id int64) (*models.User,
 	const query = `SELECT * FROM users
 WHERE telegram_id = $1
 LIMIT 1;`
+
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("user repository get by telegram id: %w", err)
 	}
@@ -115,26 +128,33 @@ LIMIT 1;`
 	if err != nil {
 		return nil, fmt.Errorf("get by telegram id: %w", err)
 	}
+
 	return user, nil
 }
 
 func (u *UserRepository) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 	const query = `SELECT * FROM users
 WHERE role in ('admin', 'primary');`
-	if err := ctx.Err(); err != nil {
+
+	err := ctx.Err()
+	if err != nil {
 		return nil, fmt.Errorf("user repository get all admins: %w", err)
 	}
 
 	var users []models.User
-	if err := u.db.SelectContext(ctx, &users, query); err != nil {
+
+	err = u.db.SelectContext(ctx, &users, query)
+	if err != nil {
 		return nil, fmt.Errorf("get all admins: %w", err)
 	}
+
 	return users, nil
 }
 
 func (u *UserRepository) Delete(ctx context.Context, tgID int64) error {
 	const query = `DELETE FROM users
     WHERE telegram_id = $1;`
+
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("user repository delete: %w", err)
 	}
@@ -143,8 +163,10 @@ func (u *UserRepository) Delete(ctx context.Context, tgID int64) error {
 	if err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}
+
 	if count, err := res.RowsAffected(); err == nil {
 		u.log.DebugContext(ctx, "deleted users", slog.Any("count", count))
 	}
+
 	return nil
 }

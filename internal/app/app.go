@@ -4,14 +4,13 @@ import (
 	"context"
 	"log/slog"
 
+	"gopkg.in/telebot.v4"
 	"support_bot/internal/app/bot"
 	"support_bot/internal/app/report"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
-
-	"gopkg.in/telebot.v4"
 )
 
 type App struct {

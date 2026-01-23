@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/jmoiron/sqlx"
+	models "support_bot/internal/models/report"
 )
 
 type OrchestratorRepository struct {
@@ -30,6 +29,7 @@ func (o *OrchestratorRepository) Load(ctx context.Context) ([]models.Report, err
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load card: %w", ctx.Err())
 	}
+
 	o.log.DebugContext(ctx, "start loading with tx")
 
 	tx, err := o.db.BeginTxx(ctx, &sql.TxOptions{
@@ -108,6 +108,7 @@ func (o *OrchestratorRepository) loadReports(ctx context.Context, tx *sqlx.Tx) (
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load reports: %w", ctx.Err())
 	}
+
 	const query = `select r.id, r.name, r.title, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
@@ -133,6 +134,7 @@ func (o *OrchestratorRepository) loadReportByName(
 	if err := ctx.Err(); err != nil {
 		return report{}, fmt.Errorf("orchestrator load report by name: %w", ctx.Err())
 	}
+
 	const query = `select r.id, r.name, r.title, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
@@ -158,6 +160,7 @@ func (o *OrchestratorRepository) loadQueriesByReportID(
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load queries by report id: %w", ctx.Err())
 	}
+
 	const query = `select q.card_uuid, q.title
 from report_queries rq
 join queries q on q.id = rq.query_id

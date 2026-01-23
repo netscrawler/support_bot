@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"support_bot/internal/collector"
 	cmock "support_bot/internal/collector/mock"
 	models "support_bot/internal/models/report"
@@ -38,7 +39,7 @@ func TestCollect(t *testing.T) {
 
 		result, err := c.Collect(ctx, card)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, "value1", result["card1"][0]["field"])
 
@@ -61,7 +62,7 @@ func TestCollect(t *testing.T) {
 
 		for _, card := range cards {
 			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid).Run(func(args mock.Arguments) {
+			df.On("Fetch", ctx, uuid).Run(func(_ mock.Arguments) {
 				time.Sleep(1 * time.Second)
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
@@ -72,7 +73,7 @@ func TestCollect(t *testing.T) {
 		result, err := c.Collect(ctx, cards...)
 		duration := time.Since(start)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 3)
 
 		for _, card := range cards {
@@ -97,11 +98,11 @@ func TestCollect(t *testing.T) {
 			{Title: "card2", CardUUID: "uuid2"},
 		}
 
-		df.On("Fetch", ctx, "uuid1").Run(func(args mock.Arguments) {
+		df.On("Fetch", ctx, "uuid1").Run(func(_ mock.Arguments) {
 			time.Sleep(1 * time.Second)
 		}).Return([]map[string]any{{"field": "value_" + "uuid1"}}, nil)
 
-		df.On("Fetch", ctx, "uuid2").Run(func(args mock.Arguments) {
+		df.On("Fetch", ctx, "uuid2").Run(func(_ mock.Arguments) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
@@ -111,7 +112,7 @@ func TestCollect(t *testing.T) {
 		result, err := c.Collect(ctx, cards...)
 		duration := time.Since(start)
 
-		assert.EqualError(t, err, "some error")
+		require.EqualError(t, err, "some error")
 		assert.Len(t, result, 2)
 
 		assert.Equal(t, "value_uuid1", result["card1"][0]["field"])
@@ -137,7 +138,7 @@ func TestCollect(t *testing.T) {
 		}
 
 		for _, card := range append(cards1, cards2...) {
-			df.On("Fetch", ctx, card.CardUUID).Run(func(args mock.Arguments) {
+			df.On("Fetch", ctx, card.CardUUID).Run(func(_ mock.Arguments) {
 				time.Sleep(200 * time.Millisecond) // симуляция долгой работы
 			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
@@ -147,24 +148,19 @@ func TestCollect(t *testing.T) {
 		start := time.Now()
 
 		var wg sync.WaitGroup
-		wg.Add(2)
 
 		var (
 			result1, result2 map[string][]map[string]any
 			err1, err2       error
 		)
 
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			result1, err1 = c.Collect(ctx, cards1...)
-		}()
+		})
 
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			result2, err2 = c.Collect(ctx, cards2...)
-		}()
+		})
 
 		wg.Wait()
 
@@ -221,7 +217,7 @@ func TestCollect(t *testing.T) {
 
 		for _, card := range cards {
 			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid).Run(func(args mock.Arguments) {
+			df.On("Fetch", ctx, uuid).Run(func(_ mock.Arguments) {
 				mu.Lock()
 
 				currentRunning++
@@ -244,24 +240,18 @@ func TestCollect(t *testing.T) {
 		c := collector.NewCollector(3, df, slog.Default())
 
 		var wg sync.WaitGroup
-		wg.Add(2)
 
 		var (
 			result1, result2 map[string][]map[string]any
 			err1, err2       error
 		)
 
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			result1, err1 = c.Collect(ctx, cards[:3]...)
-		}()
-
-		go func() {
-			defer wg.Done()
-
+		})
+		wg.Go(func() {
 			result2, err2 = c.Collect(ctx, cards[3:]...)
-		}()
+		})
 
 		wg.Wait()
 

@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	tele "gopkg.in/telebot.v4"
 	"support_bot/internal/errorz"
 	models "support_bot/internal/models/notify"
 	"support_bot/internal/pkg"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
-
-	tele "gopkg.in/telebot.v4"
 )
 
 type AdminHandler struct {
@@ -515,14 +514,15 @@ func (h *AdminHandler) StartCronJobs(c tele.Context) error {
 	return c.Send(ans)
 }
 
+// StopCronJobs перезапускает крон-задачи для уведомлений.
+func (h *AdminHandler) StopCronJobs(c tele.Context) error {
+	h.report.Stop()
+
+	return c.Send("Задачи успешно остановлены")
+}
+
 func (h *AdminHandler) startJobs(ctx context.Context) string {
 	h.report.Start()
 
 	return "Задачи запущены"
-}
-
-// StopCronJobs перезапускает крон-задачи для уведомлений.
-func (h *AdminHandler) StopCronJobs(c tele.Context) error {
-	h.report.Stop()
-	return c.Send("Задачи успешно остановлены")
 }
