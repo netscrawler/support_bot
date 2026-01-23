@@ -34,12 +34,7 @@ func New(cfg SMTPConfig, log *slog.Logger) *SMTPSender {
 func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
 
-	message, err := s.buildMessage(mail)
-	if err != nil {
-		s.log.ErrorContext(ctx, "failed to build message", slog.Any("error", err))
-
-		return fmt.Errorf("build message: %w", err)
-	}
+	message := s.buildMessage(mail)
 
 	recipients := append(mail.Recipients, mail.Copy...)
 	if len(recipients) == 0 {
@@ -48,6 +43,7 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 
+	//nolint:gosec //not need
 	tlsConfig := &tls.Config{
 		ServerName: s.cfg.Host,
 	}
@@ -58,7 +54,13 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 		return fmt.Errorf("connect to SMTP: %w", err)
 	}
-	defer conn.Close()
+
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			s.log.ErrorContext(ctx, "unable close connection correctly", slog.Any("error", err))
+		}
+	}()
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
@@ -66,7 +68,13 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 		return fmt.Errorf("create SMTP client: %w", err)
 	}
-	defer client.Quit()
+
+	defer func() {
+		err := client.Quit()
+		if err != nil {
+			s.log.ErrorContext(ctx, "unable quit from client correctly", slog.Any("error", err))
+		}
+	}()
 
 	if err = client.Auth(auth); err != nil {
 		s.log.Error("failed to authenticate", slog.Any("error", err))
@@ -117,7 +125,7 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 	return nil
 }
 
-func (s *SMTPSender) buildMessage(mail Mail) ([]byte, error) {
+func (s *SMTPSender) buildMessage(mail Mail) []byte {
 	var buf bytes.Buffer
 
 	fmt.Fprintf(&buf, "From: %s <%s>\r\n", s.cfg.Email, s.cfg.Email)
@@ -153,10 +161,7 @@ func (s *SMTPSender) buildMessage(mail Mail) ([]byte, error) {
 		buf.WriteString("\r\n\r\n")
 
 		for file, name := range mail.Attachments.Data() {
-			err := s.writeAttachment(&buf, boundary, file, name)
-			if err != nil {
-				return nil, err
-			}
+			s.writeAttachment(&buf, boundary, file, name)
 		}
 
 		fmt.Fprintf(&buf, "--%s--\r\n", boundary)
@@ -167,7 +172,7 @@ func (s *SMTPSender) buildMessage(mail Mail) ([]byte, error) {
 		buf.WriteString("\r\n")
 	}
 
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 func (s *SMTPSender) writeAttachment(
@@ -175,10 +180,11 @@ func (s *SMTPSender) writeAttachment(
 	boundary string,
 	file *bytes.Buffer,
 	name string,
-) error {
+) {
 	fmt.Fprintf(buf, "--%s\r\n", boundary)
 
 	ext := filepath.Ext(name)
+
 	mimeType := mime.TypeByExtension(ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
@@ -191,6 +197,7 @@ func (s *SMTPSender) writeAttachment(
 	encoded := base64.StdEncoding.EncodeToString(file.Bytes())
 
 	const maxLineLen = 76
+
 	totalLen := len(encoded)
 
 	for i := 0; i < totalLen; i += maxLineLen {
@@ -200,12 +207,11 @@ func (s *SMTPSender) writeAttachment(
 	}
 
 	buf.WriteString("\r\n")
-
-	return nil
 }
 
 func randomBoundary() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
+
 	return hex.EncodeToString(b)
 }

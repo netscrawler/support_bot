@@ -11,11 +11,10 @@ import (
 	"math"
 	"strings"
 
-	models "support_bot/internal/models/report"
-	"support_bot/internal/pkg"
-
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
+	models "support_bot/internal/models/report"
+	"support_bot/internal/pkg"
 )
 
 type Exporter[T models.ImageData] struct {
@@ -57,8 +56,8 @@ func (e *Exporter[T]) Export() (*T, error) {
 
 			continue
 		}
-		eErr := id.Extend(img, e.name+"_"+k+".png")
 
+		eErr := id.Extend(img, e.name+"_"+k+".png")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
 		}

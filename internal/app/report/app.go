@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"gopkg.in/telebot.v4"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
@@ -18,8 +19,6 @@ import (
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
-
-	"gopkg.in/telebot.v4"
 )
 
 const (
@@ -114,7 +113,7 @@ func (r *App) Start(ctx context.Context) error {
 	return nil
 }
 
-func (r *App) Stop(ctx context.Context) {
+func (r *App) Stop(_ context.Context) {
 	r.sheduler.Stop()
 	close(r.sheduleC)
 	close(r.eventC)

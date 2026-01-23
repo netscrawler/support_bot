@@ -25,6 +25,7 @@ func (m *Metabase) Fetch(ctx context.Context, cardUUID string) ([]map[string]any
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("metabase query context : %w", err)
 	}
+
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
 	if err != nil {
 		return nil, fmt.Errorf("metabase card query : %w", err)

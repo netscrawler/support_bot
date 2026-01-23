@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"gopkg.in/telebot.v4"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
@@ -12,8 +13,6 @@ import (
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
-
-	"gopkg.in/telebot.v4"
 )
 
 type Bot struct {

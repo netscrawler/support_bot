@@ -37,7 +37,7 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 }
 
 func (smb *SMB) connect() error {
-	conn, err := net.Dial("tcp", smb.cfg.Adress)
+	conn, err := net.Dial("tcp", smb.cfg.Address)
 	if err != nil {
 		return fmt.Errorf("dial error: %w", err)
 	}
@@ -52,15 +52,25 @@ func (smb *SMB) connect() error {
 
 	sess, err := d.Dial(conn)
 	if err != nil {
-		_ = conn.Close()
+		closeErr := conn.Close()
+		if closeErr != nil {
+			smb.log.Error("unable to close connection correctly", slog.Any("error", closeErr))
+		}
 
 		return fmt.Errorf("smb session error: %w", err)
 	}
 
 	fs, err := sess.Mount(smb.cfg.Share)
 	if err != nil {
-		_ = sess.Logoff()
-		_ = conn.Close()
+		logoffErr := sess.Logoff()
+		if logoffErr != nil {
+			smb.log.Error("unable to logoff correctly", slog.Any("error", logoffErr))
+		}
+
+		closeErr := conn.Close()
+		if closeErr != nil {
+			smb.log.Error("unable to close connection correctly", slog.Any("error", closeErr))
+		}
 
 		return fmt.Errorf("mount error: %w", err)
 	}
@@ -105,7 +115,7 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 
 			log.Warn("Reconnect attempt failed", slog.Any("error", err))
 
-			//nolint: gosec
+			//nolint: gosec //not need
 			sleep := delay/2 + time.Duration(rand.Int63n(int64(delay/2)))
 			log.Info("Waiting before next retry", slog.Duration("delay", sleep))
 

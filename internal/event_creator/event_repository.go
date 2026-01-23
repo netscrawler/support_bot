@@ -27,6 +27,7 @@ func (er *EventRepository) Load(ctx context.Context) ([]Event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("event repository load : %w", err)
 	}
+
 	const query string = `select c.name as cron_name, r.name as report_name
 from report_crons rc
 join crons c on c.id = rc.cron_id
@@ -53,6 +54,7 @@ func (er *EventRepository) LoadByName(ctx context.Context, name string) ([]Event
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("event repository load by name : %w", err)
 	}
+
 	const query string = `select c.name as cron_name, r.name as report_name
 from report_crons rc
 join crons c on c.id = rc.cron_id
