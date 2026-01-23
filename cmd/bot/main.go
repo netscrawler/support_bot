@@ -5,16 +5,18 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
-	"syscall"
-	"time"
 )
 
-const (
-	debug string = "debug"
-	prod  string = "prod"
+var (
+	Version   = "v0.0.0"
+	Commit    = "unknown"
+	BuildTime = "unknown"
 )
 
 // Дай сил этому говну позорному запустится.
@@ -24,12 +26,18 @@ func main() {
 		panic(err)
 	}
 
-	log := setupLogger(cfg.LogLevel)
+	log := logger.Setup(cfg.Log)
 
 	ctx, cancelApp := context.WithCancel(context.Background())
 	defer cancelApp()
 
-	log.Debug("starting with config", slog.Any("config", cfg))
+	log.Debug(
+		"starting with config",
+		slog.Any("config", cfg),
+		slog.GroupAttrs("app_info", slog.Any("version", Version),
+			slog.Any("commit", Commit),
+			slog.Any("BuildTime", BuildTime)),
+	)
 
 	app, err := app.New(ctx, cfg)
 	if err != nil {
@@ -47,6 +55,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 
 	<-stop
+	log.Info("receive stop signal", slog.Any("finish time", 10*time.Second))
 
 	sCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -54,31 +63,4 @@ func main() {
 	shutdownCtx := logger.AppendCtx(sCtx,
 		slog.Any("function", "shutting down"))
 	app.GracefulShutdown(shutdownCtx)
-}
-
-func setupLogger(logLevel string) *slog.Logger {
-	var log *slog.Logger
-	var opts *slog.HandlerOptions
-
-	switch logLevel {
-	case debug:
-		opts = &slog.HandlerOptions{Level: slog.LevelDebug}
-	case prod:
-		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
-	default:
-		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
-	}
-
-	log = slog.New(
-		logger.ContextHandler{
-			Handler: slog.NewTextHandler(
-				os.Stdout,
-				opts,
-			),
-		},
-	)
-
-	slog.SetDefault(log)
-
-	return log
 }

@@ -15,7 +15,7 @@ type ContextHandler struct {
 	slog.Handler
 }
 
-// handler.
+// Handle ....
 func (h ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	if attrs, ok := ctx.Value(slogFields).([]slog.Attr); ok {
 		for _, v := range attrs {
@@ -26,7 +26,7 @@ func (h ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.Handler.Handle(ctx, r)
 }
 
-// included in any Record created with such context.
+// AppendCtx included in any Record created with such context.
 func AppendCtx(parent context.Context, attr ...slog.Attr) context.Context {
 	if parent == nil {
 		parent = context.Background()

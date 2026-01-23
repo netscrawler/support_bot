@@ -27,13 +27,12 @@ services:
     volumes:
       - ./migrations/init.sql/:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - internal
-
   samba:
     image: dperson/samba
     container_name: samba_test
@@ -42,8 +41,7 @@ services:
       - "139:139"
       - "445:445"
     command: >
-      -u "testuser;testpass"
-      -s "public;/share;yes;no;yes;all;all"
+      -u "testuser;testpass" -s "public;/share;yes;no;yes;all;all"
     volumes:
       - ./samba_share:/share
 

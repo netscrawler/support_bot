@@ -1,4 +1,6 @@
+-- Роли пользователей
 CREATE TYPE user_role AS ENUM ('admin', 'user', 'primary');
+
 -- Таблица пользователей
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -18,3 +20,4 @@ CREATE TABLE chats (
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true
 );
+
