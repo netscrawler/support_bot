@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	models "support_bot/internal/models/report"
 )
@@ -42,7 +43,15 @@ func (c *Collector) Collect(
 	ctx context.Context,
 	cards ...models.Card,
 ) (map[string][]map[string]any, error) {
-	c.log.DebugContext(ctx, "Start collecting data")
+	start := time.Now()
+	c.log.InfoContext(ctx, "Start collecting data")
+	defer func() {
+		c.log.InfoContext(
+			ctx,
+			"Finish collecting data",
+			slog.Any("time elapsed", time.Since(start)),
+		)
+	}()
 
 	if len(cards) == 0 {
 		c.log.ErrorContext(ctx, "empty card list")

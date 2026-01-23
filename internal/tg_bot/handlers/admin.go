@@ -130,7 +130,7 @@ func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
 
 	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
 	formString := fmt.Sprintf(
-		"%s\n```\n%s```",
+		"%s\n<pre><code>%s</code></pre>",
 		userString, msg,
 	)
 	//nolint:errcheck
@@ -336,7 +336,7 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 
 	return c.Send(
 		pkg.EscapeMarkdownV2(response.String()),
-		&tele.SendOptions{ParseMode: tele.ModeMarkdown},
+		&tele.SendOptions{ParseMode: tele.ModeMarkdownV2},
 	)
 }
 

@@ -78,6 +78,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 }
 
 func (s *Sheduler) Stop() {
+	s.log.Info("stoping sheduler")
 	s.cron.Stop()
 }
 

@@ -24,27 +24,34 @@ type TelegramNotify struct {
 	user   UserGetter
 	chat   ActiveChatGetter
 	sender *telegram.ChatAdaptor
+	log    *slog.Logger
 }
 
 func NewTelegramNotify(
 	up UserGetter,
 	chatGetter ActiveChatGetter,
 	sender *telegram.ChatAdaptor,
+	log *slog.Logger,
 ) *TelegramNotify {
+	l := log.With(slog.Any("module", "tg_bot.service.notify"))
 	return &TelegramNotify{
 		user:   up,
 		sender: sender,
 		chat:   chatGetter,
+		log:    l,
 	}
 }
 
 func (n *TelegramNotify) BroadcastToUsers(ctx context.Context, notify string) error {
+	n.log.DebugContext(ctx, "start broadcasting to users", slog.Any("notify", notify))
 	users, err := n.user.GetAll(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
+			n.log.InfoContext(ctx, "not found users")
 			return models.ErrNotFound
 		}
 
+		n.log.ErrorContext(ctx, "error while loading users", slog.Any("error", err))
 		return models.ErrInternal
 	}
 
@@ -55,6 +62,7 @@ func (n *TelegramNotify) BroadcastToUsers(ctx context.Context, notify string) er
 		jerr = errors.Join(jerr, lerr)
 	}
 
+	n.log.InfoContext(ctx, "finish broadcasting", slog.Any("error", jerr))
 	return jerr
 }
 
@@ -63,26 +71,32 @@ func (n *TelegramNotify) SendNotify(
 	tgID int64,
 	notify string,
 ) error {
-	l := slog.Default()
-
 	err := n.sender.Send(
 		ctx,
 		report.NewTargetTelegramChat(tgID, nil),
 		[]report.ReportData{report.NewTextData(notify)}...)
 	if err != nil {
-		l.ErrorContext(ctx, "Send notify error", slog.Any("error", err))
+		n.log.ErrorContext(
+			ctx,
+			"Send notify error",
+			slog.Any("error", err),
+			slog.Any("user_id", tgID),
+		)
 	}
 
 	return err
 }
 
 func (n *TelegramNotify) SendAdminNotify(ctx context.Context, notify string) error {
+	n.log.DebugContext(ctx, "start broadcasting to admins", slog.Any("notify", notify))
 	users, err := n.user.GetAllAdmins(ctx)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
+			n.log.InfoContext(ctx, "not found admins")
 			return models.ErrNotFound
 		}
 
+		n.log.ErrorContext(ctx, "error while loading admins", slog.Any("error", err))
 		return models.ErrInternal
 	}
 
@@ -93,6 +107,8 @@ func (n *TelegramNotify) SendAdminNotify(ctx context.Context, notify string) err
 		jerr = errors.Join(jerr, lerr)
 	}
 
+	n.log.InfoContext(ctx, "finish broadcasting", slog.Any("error", jerr))
+
 	return jerr
 }
 
@@ -100,11 +116,10 @@ func (n *TelegramNotify) BroadcastToChats(
 	ctx context.Context,
 	notify string,
 ) (string, error) {
-	l := slog.Default()
-
+	n.log.DebugContext(ctx, "start broadcasting to chats", slog.Any("notify", notify))
 	chats, err := n.chat.GetAllActive(ctx)
 	if err != nil {
-		l.ErrorContext(ctx, "error broadcast messages", slog.Any("error", err))
+		n.log.ErrorContext(ctx, "error broadcast messages", slog.Any("error", err))
 
 		if errors.Is(err, models.ErrNotFound) {
 			return "", models.ErrNotFound
@@ -135,6 +150,15 @@ func (n *TelegramNotify) BroadcastToChats(
 
 		resp.AddSuccess()
 	}
+
+	n.log.InfoContext(
+		ctx,
+		"finish broadcasting to chats",
+		slog.Any("chats_count", resp.ChatsCount),
+		slog.Any("success count", resp.SuccessCount),
+		slog.Any("error count", resp.ErrorCount),
+		slog.Any("error", resp.ErrorChatsTitles),
+	)
 
 	return resp.String(), nil
 }

@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	tele "gopkg.in/telebot.v4"
 	"support_bot/internal/errorz"
 	models "support_bot/internal/models/notify"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
+
+	tele "gopkg.in/telebot.v4"
 )
 
 type UserHandler struct {
@@ -83,7 +84,7 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 		&c.Sender().LastName,
 		false,
 	)
-	err := h.userService.AddUserComplete(&snd)
+	err := h.userService.AddUserComplete(ctx, &snd)
 	formatedString := fmt.Sprintf(
 		"Пользователь с ником @%s успешно прошел регистрацию",
 		c.Sender().Username,
@@ -164,7 +165,7 @@ func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 
 	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
 	formString := fmt.Sprintf(
-		"%s\n```\n%s```",
+		"%s\n<pre><code>%s</code></pre>",
 		userString, msg,
 	)
 	//nolint:errcheck

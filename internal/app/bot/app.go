@@ -1,9 +1,7 @@
 package bot
 
 import (
-	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	"support_bot/internal/delivery/telegram"
@@ -23,11 +21,6 @@ type Bot struct {
 	router *bot.Router
 
 	shed *sheduler.SheduleAPI
-
-	// goroutine lifecycle management
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
 }
 
 func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
@@ -56,14 +49,14 @@ func New(
 	chatRepo := repository.NewChatRepository(db.GetConn(), log)
 	userRepo := repository.NewUserRepository(db.GetConn(), log)
 
-	chatService := service.NewChat(chatRepo)
-	userService := service.NewUser(userRepo)
+	chatService := service.NewChat(chatRepo, log)
+	userService := service.NewUser(userRepo, log)
 
 	tgSender := telegram.NewChatAdaptor(tgBot, log)
 	shed := sheduler.NewSheduleAPI(shdAPI)
 	reportService := service.NewReportService(shed, log)
 
-	notifyier := service.NewTelegramNotify(userRepo, chatRepo, tgSender)
+	notifyier := service.NewTelegramNotify(userRepo, chatRepo, tgSender, log)
 
 	adminHandler := handlers.NewAdminHandler(
 		tgBot,
@@ -90,13 +83,9 @@ func New(
 
 	router.Setup()
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &Bot{
 		bot:    tgBot,
 		router: router,
-		ctx:    ctx,
-		cancel: cancel,
 		shed:   shed,
 	}, nil
 }
@@ -104,27 +93,11 @@ func New(
 func (b *Bot) Start() {
 	slog.Info("starting bot polling")
 
-	b.wg.Go(func() {
-		<-b.ctx.Done()
-		slog.Info("stopping bot polling due to context cancellation")
-		b.bot.Stop()
-	})
-
-	b.wg.Go(func() {
-		b.bot.Start()
-	})
+	go b.bot.Start()
 }
 
 func (b *Bot) Stop() {
 	slog.Info("stop bot polling")
-
-	// Cancel context to signal all goroutines to stop
-	b.cancel()
-
-	// Wait for all goroutines to finish
-	b.wg.Wait()
-
-	slog.Info("bot polling stopped")
 
 	b.shed.StopAPI()
 }

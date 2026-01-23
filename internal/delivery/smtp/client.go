@@ -176,7 +176,6 @@ func (s *SMTPSender) writeAttachment(
 	file *bytes.Buffer,
 	name string,
 ) error {
-	// 1. Заголовки части
 	fmt.Fprintf(buf, "--%s\r\n", boundary)
 
 	ext := filepath.Ext(name)
@@ -185,25 +184,21 @@ func (s *SMTPSender) writeAttachment(
 		mimeType = "application/octet-stream"
 	}
 
-	// Важно: имя файла в кавычках
 	fmt.Fprintf(buf, "Content-Type: %s; name=\"%s\"\r\n", mimeType, name)
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
 	fmt.Fprintf(buf, "Content-Disposition: attachment; filename=\"%s\"\r\n\r\n", name)
 
-	// 2. Кодирование файла в Base64
 	encoded := base64.StdEncoding.EncodeToString(file.Bytes())
 
-	// 3. Разбивка на строки по 76 символов (RFC compliant)
 	const maxLineLen = 76
 	totalLen := len(encoded)
 
 	for i := 0; i < totalLen; i += maxLineLen {
 		end := min(i+maxLineLen, totalLen)
 		buf.WriteString(encoded[i:end])
-		buf.WriteString("\r\n") // Обязательный перенос строки
+		buf.WriteString("\r\n")
 	}
 
-	// Пустая строка после блока данных (необязательно, но полезно для безопасности парсинга)
 	buf.WriteString("\r\n")
 
 	return nil

@@ -21,7 +21,7 @@ type Evaluator struct {
 func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
 	l := log.With(slog.String("module", "evaluator"))
 
-	lT1, err := lru.New[string, cel.Program](15)
+	lT1, err := lru.New[string, cel.Program](3)
 	if err != nil {
 		l.Error("unable create cache", slog.Any("error", err))
 

@@ -23,9 +23,8 @@ import (
 )
 
 const (
-	parralell uint8 = 255
-	// Fixed channel sizes according to Uber Go Style Guide.
-	channelBufferSize uint8 = 1
+	parralell         uint8 = 30
+	channelBufferSize uint8 = 15
 )
 
 type App struct {
@@ -117,4 +116,6 @@ func (r *App) Start(ctx context.Context) error {
 
 func (r *App) Stop(ctx context.Context) {
 	r.sheduler.Stop()
+	close(r.sheduleC)
+	close(r.eventC)
 }

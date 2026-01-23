@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	models "support_bot/internal/models/notify"
 )
@@ -21,17 +22,21 @@ type UserProvider interface {
 // User репозиторий для работы с данными пользователя.
 type User struct {
 	repo UserProvider
+	log  *slog.Logger
 }
 
-func NewUser(repo UserProvider) *User {
+func NewUser(repo UserProvider, log *slog.Logger) *User {
+	l := log.With(slog.Any("module", "tg_bot.service.user"))
 	return &User{
 		repo: repo,
+		log:  l,
 	}
 }
 
 func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 	users, err := u.repo.GetAll(ctx)
 	if err != nil {
+		u.log.ErrorContext(ctx, "loading all users", slog.Any("error", err))
 		return nil, err
 	}
 
@@ -41,6 +46,7 @@ func (u *User) GetAll(ctx context.Context) ([]models.User, error) {
 func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
 	user, err := u.repo.GetByTgID(ctx, id)
 	if err != nil {
+		u.log.ErrorContext(ctx, "allowed check failed", slog.Any("error", err))
 		return models.Denied, err
 	}
 
@@ -71,6 +77,7 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 func (u *User) Create(ctx context.Context, user *models.User) error {
 	err := u.repo.Create(ctx, user)
 	if err != nil {
+		u.log.ErrorContext(ctx, "create user", slog.Any("error", err))
 		return err
 	}
 
@@ -82,18 +89,23 @@ func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) e
 
 	err := u.repo.Create(ctx, &user)
 	if err != nil {
+		u.log.ErrorContext(ctx, "create empty user", slog.Any("error", err))
 		return err
 	}
 
 	return nil
 }
 
-func (u *User) Update(usr *models.User) error {
-	return u.repo.Update(context.Background(), usr)
+func (u *User) Update(ctx context.Context, usr *models.User) error {
+	if err := u.repo.Update(ctx, usr); err != nil {
+		u.log.ErrorContext(ctx, "updating user", slog.Any("error", err))
+		return err
+	}
+	return nil
 }
 
-func (u *User) AddUserComplete(user *models.User) error {
-	return u.Update(user)
+func (u *User) AddUserComplete(ctx context.Context, user *models.User) error {
+	return u.Update(ctx, user)
 }
 
 func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {

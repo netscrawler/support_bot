@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	models "support_bot/internal/models/notify"
 )
@@ -16,11 +17,14 @@ type ChatProvider interface {
 
 type Chat struct {
 	repo ChatProvider
+	log  *slog.Logger
 }
 
-func NewChat(repo ChatProvider) *Chat {
+func NewChat(repo ChatProvider, log *slog.Logger) *Chat {
+	l := log.With(slog.Any("module", "tg_bot.service.chat"))
 	return &Chat{
 		repo: repo,
+		log:  l,
 	}
 }
 

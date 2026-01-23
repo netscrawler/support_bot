@@ -3,10 +3,9 @@ package orchestrator
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	models "support_bot/internal/models/report"
-
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type ReportLoader interface {
@@ -21,7 +20,8 @@ type Orchestrator struct {
 
 	rL ReportLoader
 
-	cache *lru.Cache[string, []models.Report]
+	mu    sync.RWMutex
+	cache map[string][]models.Report
 
 	log *slog.Logger
 }
@@ -33,7 +33,7 @@ func New(
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
-	cache, _ := lru.New[string, []models.Report](5)
+	cache := make(map[string][]models.Report)
 
 	return &Orchestrator{
 		EventC:  evC,
@@ -51,7 +51,9 @@ func (o *Orchestrator) Start(ctx context.Context) {
 }
 
 func (o *Orchestrator) ReLoad() {
-	o.cache.Purge()
+	o.mu.Lock()
+	clear(o.cache)
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) run(ctx context.Context) {
@@ -100,9 +102,11 @@ func (o *Orchestrator) getReportByEvent(
 	l := o.log.With(slog.Any("event", event))
 	l.DebugContext(ctx, "getting report by event")
 
-	r, ok := o.cache.Get(event)
+	o.mu.RLock()
+	r, ok := o.cache[event]
 	if ok {
 		l.DebugContext(ctx, "find report in cache")
+		o.mu.RUnlock()
 
 		return r, nil
 	}
@@ -118,10 +122,12 @@ func (o *Orchestrator) getReportByEvent(
 
 	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", len(r)))
 
-	if rp, ok := o.cache.Peek(event); ok {
-		o.cache.Add(event, append(rp, *reports))
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if rp, ok := o.cache[event]; ok {
+		o.cache[event] = append(rp, *reports)
 	} else {
-		o.cache.Add(event, append([]models.Report{}, *reports))
+		o.cache[event] = append([]models.Report{}, *reports)
 	}
 
 	return []models.Report{*reports}, nil

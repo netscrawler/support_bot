@@ -73,10 +73,10 @@ func (a *App) Start(ctx context.Context) error {
 func (a *App) GracefulShutdown(ctx context.Context) {
 	log := slog.Default()
 	log.InfoContext(ctx, "start")
-	a.report.Stop(ctx)
 
 	a.tgBot.Stop()
 	a.bot.Stop()
+	a.report.Stop(ctx)
 	log.InfoContext(ctx, "bot stopped")
 
 	err := a.storage.Stop(ctx)

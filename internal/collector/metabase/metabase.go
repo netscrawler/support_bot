@@ -1,9 +1,7 @@
 package metabase
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -23,39 +21,20 @@ func New(baseURL string) *Metabase {
 	return &Metabase{client: metabase.NewClient(baseURL, &client)}
 }
 
-func (m *Metabase) FetchMatrix(ctx context.Context, cardUUID string) ([][]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("Metabase query %w", err)
-	}
-	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatCSV, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	reader := csv.NewReader(bytes.NewReader(data))
-
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	return records, nil
-}
-
 func (m *Metabase) Fetch(ctx context.Context, cardUUID string) ([]map[string]any, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("Metabase query %w", err)
+		return nil, fmt.Errorf("metabase query context : %w", err)
 	}
 	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("metabase card query : %w", err)
 	}
 
 	var result []map[string]any
 
 	err = json.Unmarshal(data, &result)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("metabase unmarshal query data : %w", err)
 	}
 
 	return result, nil

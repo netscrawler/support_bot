@@ -1,126 +1,198 @@
 # Support Bot
 
+Telegram-бот для управления уведомлениями, пользователями и автоматизированной генерации отчетов.
+
 ## Описание
 
-Support Bot - это телеграм-бот, написанный на Go с использованием библиотеки `telebot`. Бот предоставляет функционал для управления пользователями и чатами, а также отправки уведомлений.
+Support Bot - это телеграм-бот на Go с использованием библиотеки [telebot v4](https://github.com/tucnak/telebot), предоставляющий функционал для:
+- Управления пользователями и чатами
+- Отправки уведомлений и рассылок
+- Автоматической генерации и отправки отчетов
+- Интеграции с Metabase, SMB и SMTP
 
-## Функционал
+## Функциональность
 
-- Управление пользователями (добавление, удаление, список пользователей)
-- Управление чатами (добавление, удаление, список чатов)
-- Отправка уведомлений пользователям и в чаты
+### Основные возможности
+- **Управление пользователями**: добавление, удаление, просмотр списка пользователей
+- **Управление чатами**: добавление, удаление, просмотр списка чатов
+- **Система уведомлений**: отправка уведомлений пользователям и в чаты
+- **Генерация отчетов**: автоматическое создание отчетов из Metabase с расписанием (cron)
+- **Интеграция с файловыми хранилищами**: поддержка SMB для работы с файлами
+- **Email рассылка**: отправка отчетов через SMTP
 
-## Конфигурация
+### Команды бота
+- `/start` - Начало работы с ботом
+- `/admin` - Административная панель (только для администраторов)
+- `/register` - Регистрация пользователя
+- `/subscribe` - Подписка чата на уведомления
 
-Для запуска бота необходимо настроить конфигурационный файл. В проекте есть два примера конфигурационных файлов: `config/example.env` и `config/example.yaml`. Вы можете выбрать любой из них в зависимости от предпочтений.
+## Требования
 
-### Пример переменных окружения
+- Go 1.25.6+
+- PostgreSQL 12+
+- Docker и Docker Compose (опционально)
 
-```env
-DATABASE_PORT=5433
-DATABASE_HOST=localhost
-DATABASE_USER=your_database_user
-DATABASE_PASSWORD=your_password
-DATABASE_NAME=notification_bot
-APP_DEBUG=false
-APP_HOST=0.0.0.0
-APP_PORT=8080
-DATABASE_CONNECT_TIMEOUT=10
-BOT_POLL_TIMEOUT=10
-SHUTDOWN_TIMEOUT=5
-TELEGRAM_TOKEN=your_telegram_token
+## Быстрый старт
+
+### Клонирование репозитория
+
+```bash
+git clone https://github.com/netscrawler/support_bot.git
+cd support_bot
 ```
 
-### Пример переменной окружения с указанием пути до конфига
+### Настройка базы данных
 
-```env
-CONFIG_PATH=./config/config.yaml
+1. Создайте базу данных PostgreSQL
+2. Примените миграции из директории `migrations/init.sql/` в следующем порядке:
+   ```bash
+   psql -U your_user -d notification_bot -f migrations/init.sql/001_create_tables.sql
+   psql -U your_user -d notification_bot -f migrations/init.sql/002_create_report_tables.sql
+   psql -U your_user -d notification_bot -f migrations/init.sql/003_add_admin.sql
+   psql -U your_user -d notification_bot -f migrations/init.sql/004_insert_settings.sql
+   ```
+
+### Конфигурация
+
+Создайте конфигурационный файл на основе примера:
+
+```bash
+cp config/config.example.yaml config/local.yaml
 ```
 
-### Пример конфигурации в формате `.yaml`
+Отредактируйте `config/local.yaml`, указав необходимые параметры:
 
 ```yaml
+log:
+  level: info              # Уровень логирования: debug, info, warn, error
+  file: ./log.log          # Путь к файлу логов
+  output: [stdout, file]   # Куда выводить логи
+
+metabase_domain: https://your-metabase-instance.com  # URL Metabase (если используется)
+
 database:
   port: 5432
   host: localhost
   user: your_user
   password: your_password
   name: notification_bot
-app:
-  debug: false
-  host: 0.0.0.0
-  port: 8080
+
 timeout:
-  database_connect: 10s
-  bot_poll: 10s
-  shutdown: 5s
+  database_connect: 10s    # Таймаут подключения к БД
+  bot_poll: 10s            # Таймаут опроса Telegram API
+  shutdown: 5s             # Таймаут graceful shutdown
+
 bot:
-  telegram_token: your_telegram_token
+  telegram_token: your_telegram_bot_token
+  CleanUpTime: 5m          # Время очистки старых сообщений
+
+smb:                       # Настройки SMB (опционально)
+  adress: //server/share
+  user: username
+  password: password
+  domain: DOMAIN
+
+smtp:                      # Настройки SMTP (опционально)
+  host: smtp.example.com
+  port: 587
+  email: bot@example.com
+  password: email_password
 ```
 
-После заполнения конфигурационного файла, сохраните его и запустите бота. Бот автоматически загрузит конфигурацию из файла при запуске.
+**Альтернативный способ**: Укажите путь к конфигу через переменную окружения:
 
-## Настройка бд
-    - Перед запуском бота нужно применить скрипты из ./internal/database/migrations/init.sql
-    - 001_create_tables.sql - создаст нужные таблицы
-    - 002_add_admin.sql - нужно вставить данные для админа
-    - бд только Postgresql
+```bash
+export CONFIG_PATH=./config/local.yaml
+```
 
-## Сборка и запуск с использованием Docker
+## Запуск
 
-1. Склонируйте репозиторий:
-   ```sh
-   git clone https://github.com/netscrawler/support_bot.git
-   cd support_bot
-   ```
+### Локальный запуск
 
-2. Соберите Docker-образ:
-   ```sh
-   docker build -t support_bot .
-   ```
+```bash
+# Сборка
+make build
 
-3. Запустите контейнер:
-   ```sh
-   docker run -config=config/your_config.yaml -p 8080:8080 support_bot
-   ```
-3.1 Таже можно указать путь к конфигу через переменную окружения CONFIG_PATH=путь к файлу к конфигурации
+# Запуск (автоматически соберет и запустит)
+make run
+```
 
-Вот исправленный вариант с командами в формате Markdown:
+**Примечание**: В `Makefile` можно изменить параметр `CONFIG_NAME` для указания нужного конфигурационного файла.
 
-1. Склонируйте репозиторий:
-   ```bash
-   git clone https://github.com/netscrawler/support_bot.git
-   cd support_bot
-   ```
+### Запуск через Docker Compose (рекомендуется)
 
-2. Соберите приложение:
-   ```bash
-   make build
-   ```
+```bash
+# Запуск всех сервисов (бот, PostgreSQL, Samba)
+docker-compose up -d
 
-3. В Makefile необходимо указать название конфигурационного файла и путь к нему:
-   ```makefile
-   # Пример:
-   # CONFIG_FILE=path/to/config/file make build
-   ```
+# Просмотр логов
+docker-compose logs -f bottst
 
-4. Запустите приложение:
-   ```bash
-   make run
-   ```
+# Остановка
+docker-compose down
+```
 
-## Фунционал бота
-1. Используйте команды для взаимодействия с ботом:
-   - `/start` - Начало работы с ботом
-   - `/admin` - Доступ к административным функциям (для администраторов)
-   - `/register` - Регистрация пользователя
-   - `/subscribe` - Подписка на уведомления (для чатов)
+Docker Compose автоматически:
+- Создаст и инициализирует базу данных PostgreSQL
+- Применит миграции из `migrations/init.sql/`
+- Запустит бота с конфигурацией из `config/local_docker.yaml`
+- Настроит Samba сервер для тестирования (опционально)
 
-2. Управляйте пользователями и чатами через меню бота.
+### Запуск через Docker (standalone)
 
-3. Отправляйте уведомления пользователям и в чаты через соответствующие команды в меню.
-## Идеи при разработке
-  - Я придерживался методологии DDD - Долго Дорого Дерьмово
-  - KISS? - в скубиду это показывали
-  - Я вообще в шоке как это нечто работает
-  - i`m use Neovim for code this btw))
+```bash
+# Сборка образа
+docker build -t support_bot .
+
+# Запуск контейнера
+docker run -d \
+  --name support_bot \
+  -e CONFIG_PATH=/bot/config/local.yaml \
+  -v $(pwd)/config:/bot/config:ro \
+  support_bot
+```
+
+## Структура проекта
+
+```
+support_bot/
+├── cmd/bot/              # Точка входа приложения
+├── internal/
+│   ├── app/              # Логика приложения
+│   ├── config/           # Загрузка конфигурации
+│   ├── models/           # Модели данных
+│   ├── postgres/         # Работа с БД
+│   ├── tg_bot/           # Telegram bot handlers
+│   ├── collector/        # Сбор данных
+│   ├── evaluator/        # Обработка выражений
+│   ├── exporter/         # Экспорт отчетов
+│   ├── generator/        # Генерация отчетов
+│   ├── orchestrator/     # Оркестрация процессов
+│   └── sheduler/         # Планировщик задач
+├── config/               # Конфигурационные файлы
+├── migrations/           # SQL миграции
+└── docker-compose.yaml   # Docker Compose конфигурация
+```
+
+## Разработка
+
+### Сборка
+
+```bash
+make build
+```
+
+Параметры сборки включают:
+- Версию из Git тега
+- Commit hash
+- Время сборки
+
+### Очистка
+
+```bash
+make clean
+```
+
+## Лицензия
+
+Проект распространяется "как есть" без каких-либо гарантий.

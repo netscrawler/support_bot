@@ -55,6 +55,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 
 	<-stop
+	log.Info("receive stop signal", slog.Any("finish time", 10*time.Second))
 
 	sCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

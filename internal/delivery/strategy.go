@@ -14,7 +14,7 @@ type telegramChatSender interface {
 }
 
 type fileUploader interface {
-	Upload(remote string, file *models.FileData, image *models.ImageData) error
+	Upload(ctx context.Context, remote string, fileData ...models.ReportData) error
 }
 
 type SMTPSender interface {
@@ -73,7 +73,7 @@ func (ss *SenderStrategy) Send(
 				continue
 			}
 
-			err := ss.sendSMBDataStrategy(remote, data)
+			err := ss.sendSMBDataStrategy(ctx, remote, data)
 			if err != nil {
 				sendError = errors.Join(sendError, err)
 			}
@@ -100,37 +100,11 @@ func (ss *SenderStrategy) Send(
 }
 
 func (ss *SenderStrategy) sendSMBDataStrategy(
+	ctx context.Context,
 	target models.TargetFileServer,
 	datas []models.ReportData,
 ) error {
-	var sendErr error
-
-	for _, data := range datas {
-		if data == nil {
-			return errors.New("NOTHING TO SEND")
-		}
-
-		switch data.Kind() {
-		case models.SendFileKind:
-			dt, ok := data.(*models.FileData)
-			if !ok {
-				sendErr = errors.Join(sendErr, errors.New("INVALID SMB SEND DATA"))
-			}
-
-			sendErr = errors.Join(sendErr, ss.smb.Upload(target.Dest, dt, nil))
-		case models.SendImageKind:
-			it, ok := data.(*models.ImageData)
-			if !ok {
-				sendErr = errors.Join(sendErr, errors.New("INVALID SMB SEND DATA"))
-			}
-
-			sendErr = errors.Join(sendErr, ss.smb.Upload(target.Dest, nil, it))
-		default:
-			sendErr = errors.Join(sendErr, errors.New("NOT SUPPORTED SAMBA DATA TYPE"))
-		}
-	}
-
-	return sendErr
+	return ss.smb.Upload(ctx, target.Dest, datas...)
 }
 
 func (ss *SenderStrategy) sendSMTPDataStrategy(
@@ -159,7 +133,7 @@ func (ss *SenderStrategy) sendSMTPDataStrategy(
 		case models.SendImageKind:
 			it, ok := data.(*models.ImageData)
 			if !ok {
-				sendErr = errors.Join(sendErr, errors.New("INVALID SMB SEND DATA"))
+				sendErr = errors.Join(sendErr, errors.New("INVALID SMTP SEND DATA"))
 			}
 
 			for f, n := range it.Data() {
