@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build \
+RUN CGO_ENABLED=1 go build \
     -trimpath \
     -ldflags="-s -w -buildid= -extldflags=-static" \
     -buildvcs=false \

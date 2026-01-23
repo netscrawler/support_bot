@@ -3,74 +3,59 @@ package config
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
+	"support_bot/internal/delivery/smb"
+	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/pkg/logger"
+	"support_bot/internal/postgres"
 )
 
 type Config struct {
-	LogLevel       string   `yaml:"log_level"       env:"LOG_LEVEL"`
-	MetabaseDomain string   `yaml:"metabase_domain"`
-	Database       database `yaml:"database"`
-	Bot            bot      `yaml:"bot"`
-	Timeout        timeout  `yaml:"timeout"`
-	SMB            smb      `yaml:"smb"`
-}
-
-type smb struct {
-	Adress string `yaml:"adress"`
-	User   string `yaml:"user"`
-	PWD    string `yaml:"password"`
-	Domain string `yaml:"domain"`
-	Share  string `yaml:"share"`
-	Active bool   `yaml:"active"`
+	Log            logger.LogConfig        `yaml:"log"`
+	MetabaseDomain string                  `yaml:"metabase_domain" env:"METABASE_DOMAIN"`
+	Database       postgres.PostgresConfig `yaml:"database"`
+	Bot            bot                     `yaml:"bot"`
+	Timeout        timeout                 `yaml:"timeout"`
+	SMB            smb.SMBConfig           `yaml:"smb"`
+	SMTP           smtp.SMTPConfig         `yaml:"smtp"`
 }
 
 type bot struct {
-	TelegramToken string        `yaml:"telegram_token" env:"TELEGRAM_TOKEN"`
-	CleanUpTime   time.Duration `yaml:"CleanUpTime"                         env-default:"10m"`
-}
-type database struct {
-	Port     int    `yaml:"port"     env:"DATABASE_PORT"     env-default:"5432"`
-	Host     string `yaml:"host"     env:"DATABASE_HOST"     env-default:"localhost"`
-	User     string `yaml:"user"     env:"DATABASE_USER"     env-default:"user"`
-	Password string `yaml:"password" env:"DATABASE_PASSWORD"`
-	Name     string `yaml:"name"     env:"DATABASE_NAME"     env-default:"postgres"`
-	URL      string
+	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token"`
+	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"CleanUpTime"    env-default:"10m"`
+	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       env-default:"30s"`
 }
 
 type timeout struct {
-	DatabaseConnect time.Duration `yaml:"database_connect" env:"DATABASE_CONNECT_TIMEOUT" env-default:"30s"`
-	BotPoll         time.Duration `yaml:"bot_poll"         env:"BOT_POLL_TIMEOUT"         env-default:"30s"`
-	Shutdown        time.Duration `yaml:"shutdown"         env:"SHUTDOWN_TIMEOUT"         env-default:"5s"`
+	Shutdown time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s" yaml:"shutdown"`
 }
 
 // Load загружает конфигурацию из файла или из переменных окружения.
 func Load() (*Config, error) {
 	var cfg Config
 
+	_ = godotenv.Load()
 	configPath := fetchConfigPath()
 
 	// Загрузка конфигурации
 	if configPath != "" {
 		// Если путь к файлу указан, загружаем из YAML
-		if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		err := cleanenv.ReadConfig(configPath, &cfg)
+		if err != nil {
 			return nil, fmt.Errorf("error readYaml config: %w", err)
 		}
 	} else {
 		// Если путь не указан, загружаем из переменных окружения
-		if err := cleanenv.ReadEnv(&cfg); err != nil {
+		err := cleanenv.ReadEnv(&cfg)
+		if err != nil {
 			return nil, fmt.Errorf("error readEnv config: %w", err)
 		}
 	}
-
-	//nolint:nosprintfhostport
-	cfg.Database.URL = fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Database.User, cfg.Database.Password, cfg.Database.Host,
-		cfg.Database.Port, cfg.Database.Name,
-	)
 
 	return &cfg, nil
 }
@@ -97,4 +82,16 @@ func fetchConfigPath() string {
 	}
 
 	return configPath
+}
+
+type SafeConfig Config
+
+func (c Config) LogValue() slog.Value {
+	c.Database.Password = "***"
+	c.Bot.TelegramToken = "***"
+	c.Database.DSN = "postgres://***"
+	c.SMB.Password = "***"
+	c.SMTP.Password = "***"
+
+	return slog.AnyValue(SafeConfig(c))
 }

@@ -1,4 +1,7 @@
-log_level: prod
+log:
+  level: test
+  file: ./log.log
+  output: [stdout, file]
 metabase_domain: https://your-metabase-instance.com
 database:
   port: 5432
@@ -18,3 +21,9 @@ smb:
   user: user
   password: password
   domain: domain
+smtp:
+  host: imap.example.com
+  port: 235
+  email: jhon_doe@example.com
+  password: jhon_doe_password
+
