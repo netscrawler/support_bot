@@ -1,10 +1,10 @@
 # Support Bot
 
-Telegram-бот для управления уведомлениями, пользователями и автоматизированной генерации отчетов.
+Система создания отчетов по данным из Metabase и рассылки по адресатам + Тг Бот для рассылки уведомлений
 
 ## Описание
 
-Support Bot - это телеграм-бот на Go с использованием библиотеки [telebot v4](https://github.com/tucnak/telebot), предоставляющий функционал для:
+Support Bot - это телеграм-бот на Go с использованием библиотеки [telebot v4](https://github.com/tucnak/telebot), предоставляющий позволяющий:
 - Управления пользователями и чатами
 - Отправки уведомлений и рассылок
 - Автоматической генерации и отправки отчетов
@@ -29,7 +29,7 @@ Support Bot - это телеграм-бот на Go с использовани
 ## Требования
 
 - Go 1.25.6+
-- PostgreSQL 12+
+- PostgreSQL 9+
 - Docker и Docker Compose (опционально)
 
 ## Быстрый старт
@@ -64,27 +64,28 @@ cp config/config.example.yaml config/local.yaml
 
 ```yaml
 log:
-  level: info              # Уровень логирования: debug, info, warn, error
+  level: info              # Уровень логирования: debug, info, test
   file: ./log.log          # Путь к файлу логов
   output: [stdout, file]   # Куда выводить логи
 
-metabase_domain: https://your-metabase-instance.com  # URL Metabase (если используется)
+metabase_domain: https://your-metabase-instance.com  # URL Metabase
 
 database:
   port: 5432
   host: localhost
-  user: your_user
-  password: your_password
-  name: notification_bot
+  user: postgres
+  password: postgres
+  name: bottst
+  sslmode: disable
+  database_connect: 10s
 
 timeout:
-  database_connect: 10s    # Таймаут подключения к БД
-  bot_poll: 10s            # Таймаут опроса Telegram API
   shutdown: 5s             # Таймаут graceful shutdown
 
 bot:
   telegram_token: your_telegram_bot_token
-  CleanUpTime: 5m          # Время очистки старых сообщений
+  CleanUpTime: 5m
+  bot_poll: 10s
 
 smb:                       # Настройки SMB (опционально)
   adress: //server/share
@@ -92,11 +93,11 @@ smb:                       # Настройки SMB (опционально)
   password: password
   domain: DOMAIN
 
-smtp:                      # Настройки SMTP (опционально)
-  host: smtp.example.com
-  port: 587
-  email: bot@example.com
-  password: email_password
+smtp:
+  host: smtp.yandex.ru
+  port: 465
+  email: email
+  password: password
 ```
 
 **Альтернативный способ**: Укажите путь к конфигу через переменную окружения:
@@ -119,7 +120,7 @@ make run
 
 **Примечание**: В `Makefile` можно изменить параметр `CONFIG_NAME` для указания нужного конфигурационного файла.
 
-### Запуск через Docker Compose (рекомендуется)
+### Запуск через Docker Compose
 
 ```bash
 # Запуск всех сервисов (бот, PostgreSQL, Samba)
