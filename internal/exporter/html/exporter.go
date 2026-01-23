@@ -5,8 +5,9 @@ import (
 	"html/template"
 	"maps"
 
-	"github.com/Masterminds/sprig/v3"
 	models "support_bot/internal/models/report"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 type Exporter[T models.FileData] struct {

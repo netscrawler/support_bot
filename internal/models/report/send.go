@@ -3,7 +3,6 @@ package models
 import (
 	"bytes"
 	"iter"
-
 	"support_bot/internal/pkg/text"
 )
 

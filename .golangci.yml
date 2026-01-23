@@ -274,11 +274,8 @@ linters:
 
 formatters:
   enable:
-    - gci
-    - gofmt
     - gofumpt
     - goimports
-    - golines # сворачивает даже строки с функциями всего с одним аргументом
     - swaggo
   exclusions:
     generated: lax

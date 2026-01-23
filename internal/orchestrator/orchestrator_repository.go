@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jmoiron/sqlx"
 	models "support_bot/internal/models/report"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type OrchestratorRepository struct {

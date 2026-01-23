@@ -2,7 +2,6 @@ package service
 
 import (
 	"log/slog"
-
 	"support_bot/internal/sheduler"
 )
 

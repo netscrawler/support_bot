@@ -3,8 +3,9 @@ package pdf
 import (
 	"strings"
 
-	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 	models "support_bot/internal/models/report"
+
+	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 )
 
 type Exporter[T models.FileData] struct {

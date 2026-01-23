@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-
 	"support_bot/internal/delivery/smtp"
+
 	models "support_bot/internal/models/report"
 )
 

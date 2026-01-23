@@ -9,8 +9,9 @@ import (
 	"net"
 	"path/filepath"
 
-	"github.com/hirochachacha/go-smb2"
 	models "support_bot/internal/models/report"
+
+	"github.com/hirochachacha/go-smb2"
 )
 
 type SMB struct {

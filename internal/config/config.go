@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
-
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	"time"
+
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {

@@ -6,8 +6,9 @@ import (
 	"errors"
 	"log/slog"
 
-	"gopkg.in/telebot.v4"
 	models "support_bot/internal/models/report"
+
+	"gopkg.in/telebot.v4"
 )
 
 type ChatAdaptor struct {

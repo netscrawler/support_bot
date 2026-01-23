@@ -3,8 +3,6 @@ package report
 import (
 	"context"
 	"log/slog"
-
-	"gopkg.in/telebot.v4"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
@@ -13,12 +11,16 @@ import (
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
-	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
-	models "support_bot/internal/models/report"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
+
+	"gopkg.in/telebot.v4"
+
+	eventcreator "support_bot/internal/event_creator"
+
+	models "support_bot/internal/models/report"
 )
 
 const (

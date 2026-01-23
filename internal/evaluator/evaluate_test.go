@@ -3,11 +3,11 @@ package evaluator_test
 import (
 	"log/slog"
 	"os"
+	"support_bot/internal/evaluator"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"support_bot/internal/evaluator"
 )
 
 func TestEvaluator_Evaluate(t *testing.T) {

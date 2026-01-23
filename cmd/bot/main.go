@@ -5,12 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
-
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
+	"syscall"
+	"time"
 )
 
 var (
