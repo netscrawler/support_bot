@@ -2,12 +2,16 @@ package bot
 
 import (
 	"log/slog"
-	"support_bot/internal/infra/in/tg/handlers"
-	"support_bot/internal/infra/in/tg/middlewares"
-	"support_bot/internal/service"
 	"time"
 
-	bot "support_bot/internal/infra/in/tg"
+	"support_bot/internal/delivery/telegram"
+	"support_bot/internal/postgres"
+	"support_bot/internal/sheduler"
+	bot "support_bot/internal/tg_bot"
+	"support_bot/internal/tg_bot/handlers"
+	"support_bot/internal/tg_bot/middlewares"
+	"support_bot/internal/tg_bot/repository"
+	"support_bot/internal/tg_bot/service"
 
 	"gopkg.in/telebot.v4"
 )
@@ -15,6 +19,8 @@ import (
 type Bot struct {
 	bot    *telebot.Bot
 	router *bot.Router
+
+	shed *sheduler.SheduleAPI
 }
 
 func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
@@ -34,19 +40,30 @@ func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
 func New(
 	cleanupTime time.Duration,
 	tgBot *telebot.Bot,
-	userService *service.User,
-	chatService *service.Chat,
-	notifyier *service.TelegramNotify,
-	statsService *service.Report,
+	db *postgres.DB,
+	shdAPI chan sheduler.SheduleAPIEvent,
+	log *slog.Logger,
 ) (*Bot, error) {
 	state := handlers.NewState(cleanupTime)
+
+	chatRepo := repository.NewChatRepository(db.GetConn(), log)
+	userRepo := repository.NewUserRepository(db.GetConn(), log)
+
+	chatService := service.NewChat(chatRepo, log)
+	userService := service.NewUser(userRepo, log)
+
+	tgSender := telegram.NewChatAdaptor(tgBot, log)
+	shed := sheduler.NewSheduleAPI(shdAPI)
+	reportService := service.NewReportService(shed, log)
+
+	notifyier := service.NewTelegramNotify(userRepo, chatRepo, tgSender, log)
 
 	adminHandler := handlers.NewAdminHandler(
 		tgBot,
 		userService,
 		chatService,
 		notifyier,
-		statsService,
+		reportService,
 		state,
 	)
 
@@ -69,16 +86,18 @@ func New(
 	return &Bot{
 		bot:    tgBot,
 		router: router,
+		shed:   shed,
 	}, nil
 }
 
 func (b *Bot) Start() {
 	slog.Info("starting bot polling")
+
 	go b.bot.Start()
 }
 
 func (b *Bot) Stop() {
 	slog.Info("stop bot polling")
 
-	b.bot.Stop()
+	b.shed.StopAPI()
 }

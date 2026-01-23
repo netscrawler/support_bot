@@ -1,6 +1,6 @@
 all: true
 dir: "{{.InterfaceDir}}/mock"
-filename: mocks_test.go
+filename: mocks.go
 force-file-write: true
 formatter: goimports
 log-level: info
@@ -11,6 +11,6 @@ require-template-schema-exists: true
 template: testify
 template-schema: "{{.Template}}.schema.json"
 packages:
-  support_bot/internal/service:
+  support_bot/internal/collector:
     config:
       all: true
