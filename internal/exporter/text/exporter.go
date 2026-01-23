@@ -3,11 +3,12 @@ package text
 import (
 	"bytes"
 	"maps"
+	"support_bot/internal/pkg/text"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	models "support_bot/internal/models/report"
-	"support_bot/internal/pkg/text"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 type Exporter[T models.TextData] struct {

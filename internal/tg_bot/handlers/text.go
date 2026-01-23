@@ -1,8 +1,9 @@
 package handlers
 
 import (
-	tele "gopkg.in/telebot.v4"
 	models "support_bot/internal/models/notify"
+
+	tele "gopkg.in/telebot.v4"
 )
 
 type TextHandler struct {

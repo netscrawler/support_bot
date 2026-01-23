@@ -2,10 +2,10 @@ package pkg
 
 import (
 	"embed"
+	"support_bot/assets"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
-	"support_bot/assets"
 )
 
 func GetFontFaceBold(fontSize float64) (font.Face, error) {

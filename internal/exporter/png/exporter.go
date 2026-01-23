@@ -10,11 +10,12 @@ import (
 	"image/png"
 	"math"
 	"strings"
+	"support_bot/internal/pkg"
+
+	models "support_bot/internal/models/report"
 
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
-	models "support_bot/internal/models/report"
-	"support_bot/internal/pkg"
 )
 
 type Exporter[T models.ImageData] struct {
