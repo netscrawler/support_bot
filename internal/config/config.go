@@ -1,7 +1,6 @@
 package config
 
 import (
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,23 +15,23 @@ import (
 )
 
 type Config struct {
-	Log            logger.LogConfig        `yaml:"log"`
-	MetabaseDomain string                  `yaml:"metabase_domain" env:"METABASE_DOMAIN"`
-	Database       postgres.PostgresConfig `yaml:"database"`
-	Bot            bot                     `yaml:"bot"`
-	Timeout        timeout                 `yaml:"timeout"`
-	SMB            smb.SMBConfig           `yaml:"smb"`
-	SMTP           smtp.SMTPConfig         `yaml:"smtp"`
+	Log            logger.LogConfig        `yaml:"log"             comment:"Настройки логгирования"`
+	MetabaseDomain string                  `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
+	Database       postgres.PostgresConfig `yaml:"database"        comment:"Настройки подключения к Postgres"`
+	Bot            bot                     `yaml:"bot"             comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	Timeout        timeout                 `yaml:"timeout"         comment:"Настройка таймаутов"`
+	SMB            smb.SMBConfig           `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
+	SMTP           smtp.SMTPConfig         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
 }
 
 type bot struct {
-	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token"`
-	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  env-default:"10m"`
-	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       env-default:"30s"`
+	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token" comment:"Телеграмм токен бота полученый от @BotFather\nОбязателен для запуска бота."`
+	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  comment:"CleanUpTime — интервал очистки временных данных бота\n(кэш, состояния диалогов, временные сообщения и т.п.)." env-default:"10m"`
+	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       comment:"BotPoll — интервал long-polling запросов к Telegram API."                                                     env-default:"30s"`
 }
 
 type timeout struct {
-	Shutdown time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s" yaml:"shutdown"`
+	Shutdown time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s" yaml:"shutdown" comment:"Shutdown — максимальное время на корректное завершение приложения.\nЗа это время должны завершиться все активные операции.\nЕсли указать слишком маленький период не все процеесы могут завершится корректно"`
 }
 
 // Load загружает конфигурацию из файла или из переменных окружения.
@@ -62,28 +61,30 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
+func (c Config) Validate() error {
+	// TODO: add full config validation.
+	return c.Log.Validate()
+}
+
+var ConfigPath string
+
 // Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию.
 func fetchConfigPath() string {
-	var configPath string
-
-	flag.StringVar(&configPath, "config", "", "Путь к файлу конфигурации")
-	flag.Parse()
-
-	if configPath == "" {
-		configPath = os.Getenv("CONFIG_PATH")
+	if ConfigPath == "" {
+		ConfigPath = os.Getenv("CONFIG_PATH")
 	}
 
-	if configPath == "" {
-		configPath = "./config.yaml"
+	if ConfigPath == "" {
+		ConfigPath = "./config.yaml"
 	}
 
-	if configPath != "" {
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if ConfigPath != "" {
+		if _, err := os.Stat(ConfigPath); os.IsNotExist(err) {
 			return ""
 		}
 	}
 
-	return configPath
+	return ConfigPath
 }
 
 type SafeConfig Config

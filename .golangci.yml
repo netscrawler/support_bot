@@ -21,7 +21,6 @@ linters:
     - errorlint
     - exptostd
     - fatcontext
-    - forbidigo
     - funcorder
     - gochecknoinits
     - gochecksumtype
