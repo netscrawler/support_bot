@@ -10,3 +10,5 @@ TODO.md
 vendor/
 *.log
 reports/
+.env
+docker.env
