@@ -1,29 +1,99 @@
+# example config
+# Создайте файл config.yaml и поместите туда, заменив значения на свои
+# Настройки логгирования
 log:
-  level: test
-  file: ./log.log
-  output: [stdout, file]
-metabase_domain: https://your-metabase-instance.com
+    # Профиль логирования (debug - уровень DEBUG|prod - Уровень INFO|test - Уровень DEBUG + add source)
+    level: prod
+    # Путь к файлу куда писать логи(работает только если в output есть file)
+    file: ./log.log
+    # Вывод логов: (stdout|stdin|stderr|file) поддерживает несколько
+    output:
+        - stdout
+    # Формат в котором пишутся логи: (json|text)
+    format: text
+# Адрес Metabase для забора данных
+metabase_domain: https://metabase.domain
+# Настройки подключения к Postgres
 database:
-  port: 5432
-  host: localhost
-  user: your_user
-  password: your_password
-  name: notification_bot
-timeout:
-  database_connect: 10s
-  bot_poll: 10s
-  shutdown: 5s
+    # Порт для подключения к базе
+    port: 5432
+    # Адрес базы данных
+    host: localhost
+    user: postgres
+    # Пароль для подключения
+    password: postgres
+    # Имя базы данных
+    name: database_name
+    # SSL режим: (disable|require|verify-ca|verify-full|allow|prefer)
+    sslmode: disable
+    # Максимально количество соединений
+    max_conns: 10
+    # Максимальное количество ожидающий соединений
+    max_idle_conns: 5
+    # Максимальное время жизни одного соединения
+    max_conn_life_time: 30m0s
+    # Максимальное время ожидания соединения
+    max_conn_idle_time: 2m0s
+    # Таймаут на подключения к базе данных
+    database_connect: 30s
+
+# Настройки Telegram-бота.
+# Используется для приема команд и отправки уведомлений.
 bot:
-  telegram_token: your_telegram_token
-  CleanUpTime: 5m
+    # Телеграмм токен бота полученый от @BotFather
+    # Обязателен для запуска бота.
+    telegram_token: telegram_bot_token
+    # CleanUpTime — интервал очистки временных данных бота
+    # (кэш, состояния диалогов, временные сообщения и т.п.).
+    clean_up_time: 10m0s
+    # BotPoll — интервал long-polling запросов к Telegram API.
+    bot_poll: 30s
+# Настройка таймаутов
+timeout:
+    # Shutdown — максимальное время на корректное завершение приложения.
+    # За это время должны завершиться все активные операции.
+    # Если указать слишком маленький период не все процеесы могут завершится корректно
+    shutdown: 5s
+# Настройки подключения к SMB (Samba) файловой шаре.
+# Используется для чтения и/или записи файлов на сетевой ресурс.
+# Поддерживается аутентификация по логину/паролю.
 smb:
-  adress: your fs address
-  user: user
-  password: password
-  domain: domain
+    # Адрес SMB-сервера в формате: host:port
+    # Пример:192.168.1.10:445
+    address: localhost:542
+    # Имя пользователя для аутентификации на SMB-сервере.
+    user: user
+    # Пароль пользователя для подключения к SMB-серверу.
+    password: password
+    # Домен Windows / рабочая группа.
+    # Обычно: WORKGROUP.
+    # Может быть пустым, если домен не используется.
+    domain: WORKGROUP
+    # Share — имя сетевой SMB-шары
+    share: public
+    # Active — включает использование SMB.
+    # Если false, подключение к SMB не выполняется
+    active: true
+# Настройки SMTP-сервера.
+# Используется для отправки email-уведомлений и отчетов.
+# Поддерживается аутентификация по логину и паролю.
 smtp:
-  host: imap.example.com
-  port: 235
-  email: jhon_doe@example.com
-  password: jhon_doe_password
+    # Хост SMTP-сервера.
+    # Примеры:
+    #  smtp.gmail.com
+    #  smtp.yandex.ru
+    host: smtp.example.com
+    # Порт SMTP-сервера.
+    # Часто используемые:
+    #  465 — SMTPS (SSL)
+    #  587 — STARTTLS
+    port: "465"
+    # Email-адрес учетной записи,
+    # от имени которой будут отправляться письма.
+    # Этот адрес используется в поле From.
+    email: example@example.com
+    
+    # Пароль от email-учетной записи.
+    # Обычно это пароль приложения, а не основной пароль аккаунта.
+    password: password
 
