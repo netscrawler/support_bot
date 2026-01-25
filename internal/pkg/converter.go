@@ -60,7 +60,6 @@ func ConvertSortedRows(
 
 	cols := columns
 
-	// auto mode
 	if len(cols) == 0 {
 		cols = make([]string, 0, len(rows[0]))
 		for k := range rows[0] {
@@ -72,7 +71,6 @@ func ConvertSortedRows(
 
 	matrix := make([][]any, 0, len(rows)+1)
 
-	// header
 	header := make([]any, len(cols))
 	for i, col := range cols {
 		header[i] = col
@@ -80,11 +78,10 @@ func ConvertSortedRows(
 
 	matrix = append(matrix, header)
 
-	// data rows
 	for _, rowMap := range rows {
 		row := make([]any, len(cols))
 		for i, col := range cols {
-			row[i] = rowMap[col] // отсутствует → nil
+			row[i] = rowMap[col]
 		}
 
 		matrix = append(matrix, row)

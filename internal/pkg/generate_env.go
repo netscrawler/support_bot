@@ -20,7 +20,6 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 
 	var b strings.Builder
 
-	// Выводим комментарий группы, многострочный
 	if groupComment != "" {
 		for line := range strings.SplitSeq(groupComment, "\n") {
 			b.WriteString("# " + line + "\n")
@@ -33,7 +32,6 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 		field := rt.Field(i)
 		fv := rv.Field(i)
 
-		// Пропуск неэкспортируемых полей
 		if field.PkgPath != "" {
 			continue
 		}
@@ -42,7 +40,6 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 		comment := field.Tag.Get("comment")
 		def := field.Tag.Get("env-default")
 
-		// Вложенные структуры
 		if fv.Kind() == reflect.Struct {
 			subPrefix := prefix
 
@@ -54,7 +51,7 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 				subPrefix += envKey
 			}
 
-			subGroupComment := comment // комментарий верхнего уровня как групповой
+			subGroupComment := comment
 
 			subEnv, err := GenerateEnv(fv.Interface(), subPrefix, subGroupComment)
 			if err != nil {
@@ -80,14 +77,12 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 			value = fmt.Sprint(fv.Interface())
 		}
 
-		// Выводим многострочный комментарий перед каждой переменной
 		if comment != "" {
 			for line := range strings.SplitSeq(comment, "\n") {
 				b.WriteString("# " + line + "\n")
 			}
 		}
 
-		// Для слайсов выводим в виде [a,b,c]
 		if fv.Kind() == reflect.Slice {
 			sliceVals := make([]string, fv.Len())
 			for j := 0; j < fv.Len(); j++ {
