@@ -12,3 +12,4 @@ vendor/
 reports/
 .env
 docker.env
+config.json
