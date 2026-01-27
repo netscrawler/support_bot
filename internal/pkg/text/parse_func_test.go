@@ -2,10 +2,9 @@ package text_test
 
 import (
 	"fmt"
+	"support_bot/internal/pkg/text"
 	"testing"
 	"time"
-
-	"support_bot/internal/pkg/text"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
