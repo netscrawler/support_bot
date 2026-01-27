@@ -56,49 +56,37 @@ var FuncMap = template.FuncMap{
 	// Вход: "  hello  "
 	// Шаблон: {{ trim .text }}
 	// Результат: "hello"
-	"trim": func(s string) string {
-		return strings.TrimSpace(s)
-	},
+	"trim": strings.TrimSpace,
 
 	// contains - Проверяет, содержит ли строка подстроку
 	// Вход: s = "BANK Bank", substr = "BANK"
 	// Шаблон: {{ if contains .bank "BANK" }}Это BANK{{ end }}
 	// Результат: "Это BANK"
-	"contains": func(s, substr string) bool {
-		return strings.Contains(s, substr)
-	},
+	"contains": strings.Contains,
 
 	// hasPrefix - Проверяет, начинается ли строка с префикса
 	// Вход: s = "Итого по банку", prefix = "Итого"
 	// Шаблон: {{ if hasPrefix .text "Итого" }}Это итого{{ end }}
 	// Результат: "Это итого"
-	"hasPrefix": func(s, prefix string) bool {
-		return strings.HasPrefix(s, prefix)
-	},
+	"hasPrefix": strings.HasPrefix,
 
 	// hasSuffix - Проверяет, заканчивается ли строка суффиксом
 	// Вход: s = "report.pdf", suffix = ".pdf"
 	// Шаблон: {{ if hasSuffix .filename ".pdf" }}PDF файл{{ end }}
 	// Результат: "PDF файл"
-	"hasSuffix": func(s, suffix string) bool {
-		return strings.HasSuffix(s, suffix)
-	},
+	"hasSuffix": strings.HasSuffix,
 
 	// split - Разделяет строку по разделителю
 	// Вход: s = "one,two,three", sep = ","
 	// Шаблон: {{ range split .csv "," }}{{ . }} {{ end }}
 	// Результат: "one two three "
-	"split": func(s, sep string) []string {
-		return strings.Split(s, sep)
-	},
+	"split": strings.Split,
 
 	// replace - Заменяет все вхождения подстроки
 	// Вход: s = "hello world", old = "world", new = "Go"
 	// Шаблон: {{ replace .text "world" "Go" }}
 	// Результат: "hello Go"
-	"replace": func(s, old, new string) string {
-		return strings.ReplaceAll(s, old, new)
-	},
+	"replace": strings.ReplaceAll,
 
 	// money - Форматирует число как денежную сумму (простой формат)
 	// Вход: 1234567.89
@@ -118,6 +106,7 @@ var FuncMap = template.FuncMap{
 		default:
 			return "0.00"
 		}
+
 		return fmt.Sprintf("%.2f", f)
 	},
 
@@ -213,6 +202,7 @@ var FuncMap = template.FuncMap{
 		if t == 0 {
 			return 0
 		}
+
 		return (p / t) * 100
 	},
 
@@ -291,6 +281,7 @@ var FuncMap = template.FuncMap{
 	// Результат: 2026-01-25 00:00:00
 	"startOfDay": func(t time.Time) time.Time {
 		y, m, d := t.Date()
+
 		return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 	},
 
@@ -300,6 +291,7 @@ var FuncMap = template.FuncMap{
 	// Результат: 2026-01-01
 	"startOfMonth": func(t time.Time) time.Time {
 		y, m, _ := t.Date()
+
 		return time.Date(y, m, 1, 0, 0, 0, 0, t.Location())
 	},
 
@@ -309,6 +301,7 @@ var FuncMap = template.FuncMap{
 	// Результат: 2026-01-31 23:59:59
 	"endOfMonth": func(t time.Time) time.Time {
 		y, m, _ := t.Date()
+
 		return time.Date(y, m+1, 1, 0, 0, 0, 0, t.Location()).Add(-time.Nanosecond)
 	},
 
@@ -318,7 +311,8 @@ var FuncMap = template.FuncMap{
 	// Результат: 2026-01-01
 	"startOfYear": func(t time.Time) time.Time {
 		y := t.Year()
-		return time.Date(y, 1, 1, 0, 0, 0, 0, t.Location())
+
+		return time.Date(y, time.January, 1, 0, 0, 0, 0, t.Location())
 	},
 
 	// endOfYear - Возвращает последний момент года
@@ -326,7 +320,7 @@ var FuncMap = template.FuncMap{
 	// Шаблон: {{ endOfYear .date }}
 	// Результат: 2026-12-31 23:59:59
 	"endOfYear": func(t time.Time) time.Time {
-		return time.Date(t.Year()+1, 1, 1, 0, 0, 0, 0, t.Location()).
+		return time.Date(t.Year()+1, time.January, 1, 0, 0, 0, 0, t.Location()).
 			Add(-time.Nanosecond)
 	},
 
@@ -361,9 +355,9 @@ var FuncMap = template.FuncMap{
 		day := t.Day()
 		month := ruMonths[t.Month()]
 		year := t.Year()
-		hour, min := t.Hour(), t.Minute()
+		hour, minT := t.Hour(), t.Minute()
 
-		return fmt.Sprintf("%02d %s %d, %02d:%02d", day, month, year, hour, min)
+		return fmt.Sprintf("%02d %s %d, %02d:%02d", day, month, year, hour, minT)
 	},
 
 	// formatDateShort - Форматирует дату в кратком формате
@@ -420,6 +414,7 @@ var FuncMap = template.FuncMap{
 		if name, ok := months[monthNum]; ok {
 			return name
 		}
+
 		return ""
 	},
 
@@ -445,6 +440,7 @@ var FuncMap = template.FuncMap{
 		if name, ok := months[monthNum]; ok {
 			return name
 		}
+
 		return ""
 	},
 
@@ -456,6 +452,7 @@ var FuncMap = template.FuncMap{
 		if m == nil {
 			return nil
 		}
+
 		return m[key]
 	},
 
@@ -471,6 +468,7 @@ var FuncMap = template.FuncMap{
 		if !ok || val == nil {
 			return def
 		}
+
 		return val
 	},
 
@@ -483,6 +481,7 @@ var FuncMap = template.FuncMap{
 			return false
 		}
 		_, ok := m[key]
+
 		return ok
 	},
 
@@ -498,6 +497,7 @@ var FuncMap = template.FuncMap{
 		for k := range m {
 			keys = append(keys, k)
 		}
+
 		return keys
 	},
 
@@ -513,6 +513,7 @@ var FuncMap = template.FuncMap{
 		for _, v := range m {
 			vals = append(vals, v)
 		}
+
 		return vals
 	},
 
@@ -531,6 +532,7 @@ var FuncMap = template.FuncMap{
 				return v[0]
 			}
 		}
+
 		return nil
 	},
 
@@ -549,6 +551,7 @@ var FuncMap = template.FuncMap{
 				return v[len(v)-1]
 			}
 		}
+
 		return nil
 	},
 
@@ -601,6 +604,7 @@ var FuncMap = template.FuncMap{
 		if err != nil {
 			return "", err
 		}
+
 		return string(b), nil
 	},
 
@@ -611,6 +615,7 @@ var FuncMap = template.FuncMap{
 	"parseJson": func(s string) (any, error) {
 		var result any
 		err := json.Unmarshal([]byte(s), &result)
+
 		return result, err
 	},
 
@@ -624,6 +629,7 @@ var FuncMap = template.FuncMap{
 			return nil, nil
 		}
 		err := json.Unmarshal([]byte(s), &result)
+
 		return result, err
 	},
 
@@ -635,6 +641,7 @@ var FuncMap = template.FuncMap{
 		if condition {
 			return trueVal
 		}
+
 		return falseVal
 	},
 
@@ -648,6 +655,7 @@ var FuncMap = template.FuncMap{
 				return v
 			}
 		}
+
 		return nil
 	},
 
@@ -656,6 +664,7 @@ var FuncMap = template.FuncMap{
 	// Шаблон: {{ safe .html }}
 	// Результат: <b>Bold</b> (отрендерится как HTML)
 	"safe": func(s string) htmltmpl.HTML {
+		//nolint: gosec
 		return htmltmpl.HTML(s)
 	},
 	// isZero - Проверяет, является ли значение нулевым
@@ -691,6 +700,7 @@ var FuncMap = template.FuncMap{
 		if val == nil || val == "" || val == "null" {
 			return def
 		}
+
 		return val
 	},
 
@@ -734,6 +744,7 @@ var FuncMap = template.FuncMap{
 			">", "&gt;",
 			`"`, "&quot;",
 		)
+
 		return r.Replace(s)
 	},
 

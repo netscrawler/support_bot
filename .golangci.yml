@@ -69,7 +69,6 @@ linters:
     - thelper
     - tparallel
     - unconvert
-    - unqueryvet
     - unused
     - usestdlibvars
     - usetesting
