@@ -13,8 +13,8 @@ type Report struct {
 }
 
 type Card struct {
-	CardUUID string
-	Title    string
+	CardUUID string `json:"card_uuid"`
+	Title    string `json:"title"`
 }
 
 type RecipientType string
