@@ -34,5 +34,5 @@ func GetTarget(recipients ...models.Recipient) ([]models.Targeted, error) {
 		}
 	}
 
-	return targets, nil
+	return targets, err
 }

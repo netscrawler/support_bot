@@ -87,7 +87,7 @@ func (e *Evaluator) eval(
 		return false, fmt.Errorf("evaluator eval :%w", err)
 	}
 
-	prg, err := e.getProgram(expr)
+	prg, err := e.getProgram(ctx, expr)
 	if err != nil {
 		return false, fmt.Errorf("error while compiling program, invalid expr: (%w)", err)
 	}
@@ -129,31 +129,32 @@ func (e *Evaluator) eval(
 }
 
 func (e *Evaluator) getProgram(
+	ctx context.Context,
 	expr string,
 ) (cel.Program, error) {
 	if prg, ok := e.cache.Get(expr); ok {
-		e.log.Debug("program get from cache")
+		e.log.DebugContext(ctx, "program get from cache")
 
 		return prg, nil
 	}
 
-	e.log.Debug("cache miss, try compile program from expr")
+	e.log.DebugContext(ctx, "cache miss, try compile program from expr")
 
 	ast, iss := e.env.Compile(expr)
 	if iss != nil {
-		e.log.Error("error while compiling program to ast", slog.Any("error", iss))
+		e.log.ErrorContext(ctx, "error while compiling program to ast", slog.Any("error", iss))
 
 		return nil, iss.Err()
 	}
 
 	prg, err := e.env.Program(ast)
 	if err != nil {
-		e.log.Error("error while compiling program from ast", slog.Any("error", err))
+		e.log.ErrorContext(ctx, "error while compiling program from ast", slog.Any("error", err))
 
 		return nil, err
 	}
 
-	e.log.Debug("adding program to cache", slog.Any("expr", expr))
+	e.log.DebugContext(ctx, "adding program to cache", slog.Any("expr", expr))
 	e.cache.Add(expr, prg)
 
 	return prg, nil

@@ -112,6 +112,8 @@ func (o *Orchestrator) getReportByEvent(
 		return r, nil
 	}
 
+	o.mu.RUnlock()
+
 	l.DebugContext(ctx, "cache miss, loading report")
 
 	reports, err := o.rL.LoadByEvent(ctx, event)
@@ -121,7 +123,7 @@ func (o *Orchestrator) getReportByEvent(
 		return nil, err
 	}
 
-	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", len(r)))
+	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", 1))
 
 	o.mu.Lock()
 	defer o.mu.Unlock()

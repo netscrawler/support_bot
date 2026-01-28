@@ -30,9 +30,6 @@ jobs:
     - name: Test
       run: go test -v ./...
 
-    - name: lint
-      run: go test -v ./...
-
   golangci:
     name: lint
     runs-on: ubuntu-latest
