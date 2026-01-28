@@ -8,9 +8,6 @@ import (
 
 func Setup(logCfg LogConfig) (*slog.Logger, error) {
 	mw, err := getWriters(logCfg)
-	if err != nil {
-		return nil, err
-	}
 
 	opts := getOpts(logCfg.Level)
 
@@ -18,7 +15,7 @@ func Setup(logCfg LogConfig) (*slog.Logger, error) {
 
 	slog.SetDefault(log)
 
-	return log, nil
+	return log, err
 }
 
 func getLogger(format string, writer io.Writer, opts *slog.HandlerOptions) *slog.Logger {
@@ -69,10 +66,16 @@ func getWriters(logCfg LogConfig) (io.Writer, error) {
 				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
 				0o600,
 			)
-			err = cErr
+			if cErr != nil {
+				err = cErr
+			}
 
 			writers = append(writers, logFile)
 		}
+	}
+
+	if len(writers) == 0 {
+		writers = append(writers, os.Stdout)
 	}
 
 	return io.MultiWriter(writers...), err

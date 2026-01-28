@@ -84,7 +84,7 @@ func mapRecipientToModel(r recipient) models.Recipient {
 
 	var dest []string
 
-	if r.Copy != nil {
+	if r.Dest != nil {
 		dest = pqArrayToArray(*r.Dest)
 	}
 

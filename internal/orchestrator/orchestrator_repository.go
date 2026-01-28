@@ -139,7 +139,7 @@ func (o *OrchestratorRepository) loadReportByName(
 	const query = `select r.id, r.name, r.title, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
-where r.name = $1 and active = true
+where r.name = $1 and r.active = true
 ;
 
 `

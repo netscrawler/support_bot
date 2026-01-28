@@ -2,10 +2,13 @@ package generator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/collector"
 	"support_bot/internal/delivery"
 	"support_bot/internal/exporter"
+	"support_bot/internal/pkg/logger"
 	"time"
 
 	models "support_bot/internal/models/report"
@@ -92,8 +95,9 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 			}
 
 			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report", j.Name))
 
-			err := g.createReport(rCtx, j)
+			err := g.createReport(rvCtx, j)
 			if err != nil {
 				g.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
 			}
@@ -104,11 +108,11 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 }
 
 func (g *Generator) createReport(ctx context.Context, report models.Report) error {
-	l := g.log.With("report", report.Name)
+	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
 	data, err := g.clct.Collect(ctx, report.Queries...)
-	if err != nil {
+	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 
 		return err

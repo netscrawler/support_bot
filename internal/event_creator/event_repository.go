@@ -32,6 +32,7 @@ func (er *EventRepository) Load(ctx context.Context) ([]Event, error) {
 from report_crons rc
 join crons c on c.id = rc.cron_id
 join reports r on r.id = rc.report_id
+where r.active = true
 ;
 
 `
@@ -59,7 +60,7 @@ func (er *EventRepository) LoadByName(ctx context.Context, name string) ([]Event
 from report_crons rc
 join crons c on c.id = rc.cron_id
 join reports r on r.id = rc.report_id
-where c.name = $1
+where c.name = $1 and r.active = true
 ;
 
 `

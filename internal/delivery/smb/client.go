@@ -39,7 +39,7 @@ func New(
 
 	err := r.connect()
 	if err != nil {
-		l.Error("Error while connect to share", slog.Any("error", err))
+		l.ErrorContext(ctx, "Error while connect to share", slog.Any("error", err))
 
 		return nil, err
 	}
@@ -62,7 +62,11 @@ func (smb *SMB) Upload(
 	}
 
 	if smb.fs == nil {
-		smb.log.Error("error upload file", slog.Any("error", "smb share is not mounted"))
+		smb.log.ErrorContext(
+			ctx,
+			"error upload file",
+			slog.Any("error", "smb share is not mounted"),
+		)
 
 		return errors.New("SMB share is not mounted")
 	}
@@ -72,9 +76,9 @@ func (smb *SMB) Upload(
 	for _, file := range fileData {
 		switch f := file.(type) {
 		case *models.FileData:
-			f.Data()(smb.upload(remote, &uploadErr))
+			f.Data()(smb.upload(ctx, remote, &uploadErr))
 		case *models.ImageData:
-			f.Data()(smb.upload(remote, &uploadErr))
+			f.Data()(smb.upload(ctx, remote, &uploadErr))
 		default:
 			uploadErr = errors.Join(uploadErr, fmt.Errorf("undefined file type %v", f.Kind()))
 		}
@@ -115,13 +119,18 @@ func (smb *SMB) Close() error {
 	return nil
 }
 
-func (smb *SMB) upload(remote string, uploadErr *error) func(buf *bytes.Buffer, name string) bool {
+func (smb *SMB) upload(
+	ctx context.Context,
+	remote string,
+	uploadErr *error,
+) func(buf *bytes.Buffer, name string) bool {
 	return func(buf *bytes.Buffer, name string) bool {
 		remotePath := filepath.Join(remote, name)
 
 		f, err := smb.fs.Create(remotePath)
 		if err != nil {
-			smb.log.Error(
+			smb.log.ErrorContext(
+				ctx,
 				"failed create remote file",
 				slog.Any("file", name),
 				slog.Any("error", err),
@@ -139,12 +148,13 @@ func (smb *SMB) upload(remote string, uploadErr *error) func(buf *bytes.Buffer, 
 		defer func() {
 			err := f.Close()
 			if err != nil {
-				smb.log.Error("unable close file body", slog.Any("error", err))
+				smb.log.ErrorContext(ctx, "unable close file body", slog.Any("error", err))
 			}
 		}()
 
 		if err != nil {
-			smb.log.Error(
+			smb.log.ErrorContext(
+				ctx,
 				"failed write remote file",
 				slog.Any("file", name),
 				slog.Any("error", err),

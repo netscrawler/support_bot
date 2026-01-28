@@ -48,7 +48,7 @@ func (ca *ChatAdaptor) Send(
 				continue
 			}
 
-			err := ca.sendText(chat, *dt)
+			err := ca.sendText(ctx, chat, *dt)
 			if err != nil {
 				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
@@ -60,7 +60,7 @@ func (ca *ChatAdaptor) Send(
 				continue
 			}
 
-			err := ca.sendDocument(chat, *dt)
+			err := ca.sendDocument(ctx, chat, *dt)
 			if err != nil {
 				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
@@ -72,7 +72,7 @@ func (ca *ChatAdaptor) Send(
 				continue
 			}
 
-			err := ca.sendMedia(chat, *dt)
+			err := ca.sendMedia(ctx, chat, *dt)
 			if err != nil {
 				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
 			}
@@ -86,14 +86,18 @@ func (ca *ChatAdaptor) Send(
 	return nil
 }
 
-func (ca *ChatAdaptor) sendText(chat models.TargetTelegramChat, msg models.TextData) error {
+func (ca *ChatAdaptor) sendText(
+	ctx context.Context,
+	chat models.TargetTelegramChat,
+	msg models.TextData,
+) error {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
 			slog.Any("chat", chat.ChatID), slog.Any("thread id", chat.ThreadID),
 		))
 
-	l.Info("Start sending text message", slog.Any("parse_mode", msg.Parse))
+	l.InfoContext(ctx, "Start sending text message", slog.Any("parse_mode", msg.Parse))
 	p := msg.Parse
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{
@@ -103,17 +107,18 @@ func (ca *ChatAdaptor) sendText(chat models.TargetTelegramChat, msg models.TextD
 
 	_, err := ca.bot.Send(c, msg.Msg, o)
 	if err != nil {
-		l.Error("Error send text message", slog.Any("error", err))
+		l.ErrorContext(ctx, "Error send text message", slog.Any("error", err))
 
 		return err
 	}
 
-	l.Info("Successfully send text message")
+	l.InfoContext(ctx, "Successfully send text message")
 
 	return nil
 }
 
 func (ca *ChatAdaptor) sendMedia(
+	ctx context.Context,
 	chat models.TargetTelegramChat,
 	imgs models.ImageData,
 ) error {
@@ -125,7 +130,7 @@ func (ca *ChatAdaptor) sendMedia(
 			slog.Any("chat", chat.ChatID), slog.Any("thread id", chat.ThreadID),
 		))
 
-	l.Info("Start sending media")
+	l.InfoContext(ctx, "Start sending media")
 
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
@@ -140,17 +145,18 @@ func (ca *ChatAdaptor) sendMedia(
 
 	_, err := ca.bot.SendAlbum(c, album, o)
 	if err != nil {
-		l.Error("Error send media", slog.Any("error", err))
+		l.ErrorContext(ctx, "Error send media", slog.Any("error", err))
 
 		return err
 	}
 
-	l.Info("Successfully send media")
+	l.InfoContext(ctx, "Successfully send media")
 
 	return nil
 }
 
 func (ca *ChatAdaptor) sendDocument(
+	ctx context.Context,
 	chat models.TargetTelegramChat,
 	doc models.FileData,
 ) error {
@@ -160,7 +166,7 @@ func (ca *ChatAdaptor) sendDocument(
 			slog.Any("chat", chat.ChatID), slog.Any("thread id", chat.ThreadID),
 		))
 
-	l.Info("Start sending document")
+	l.InfoContext(ctx, "Start sending document")
 
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 	c := &telebot.Chat{ID: chat.ChatID}
@@ -175,7 +181,8 @@ func (ca *ChatAdaptor) sendDocument(
 
 		_, err := ca.bot.Send(c, tgDoc, o)
 		if err != nil {
-			l.Error(
+			l.ErrorContext(
+				ctx,
 				"Error send document",
 				slog.Any("error", err),
 				slog.Any("document_name", tgDoc.FileName),
@@ -185,7 +192,7 @@ func (ca *ChatAdaptor) sendDocument(
 			continue
 		}
 
-		l.Info("Successfully send document", slog.Any("document_name", tgDoc.FileName))
+		l.InfoContext(ctx, "Successfully send document", slog.Any("document_name", tgDoc.FileName))
 	}
 
 	return rerr

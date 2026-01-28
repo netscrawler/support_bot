@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -14,15 +15,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"support_bot/internal/collector"
+	"support_bot/internal/collector/metabase"
+	"support_bot/internal/pkg/text"
 	"sync"
 	"syscall"
 	tmplTXT "text/template"
 	"time"
-
-	"support_bot/internal/collector"
-	"support_bot/internal/collector/metabase"
-	"support_bot/internal/pkg/text"
 
 	models "support_bot/internal/models/report"
 
@@ -31,12 +32,92 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var (
+	Version   = "v0.0.0"
+	Commit    = "unknown"
+	BuildTime = "unknown"
+)
+
+var (
+	SetModeVer          = false
+	SetModeHelp         = false
+	SetModeCreateConfig = false
+	SetModeCreateEnv    = false
+	ConfigPath          = ""
+	TemplatesPath       = ""
+)
+
+func modeStart() {
+	flag.BoolVar(&SetModeVer, "v", false, "Версия приложения")
+	flag.BoolVar(&SetModeHelp, "h", false, "Помощь")
+	flag.StringVar(&ConfigPath, "config", "", "Путь к файлу конфигурации")
+	flag.StringVar(&TemplatesPath, "templates", "", "Путь к директории с шаблонами")
+	flag.BoolVar(
+		&SetModeCreateConfig,
+		"example-config",
+		false,
+		"Сгенерировать пример файла конфигурации",
+	)
+	flag.Parse()
+
+	if SetModeVer {
+		version()
+	}
+
+	if SetModeHelp {
+		help()
+	}
+
+	if SetModeCreateConfig {
+		configDef()
+	}
+}
+
+func version() {
+	fmt.Printf(
+		"Version: %s\nCommit: %s\nBuildTime: %s\nRuntime: %s",
+		Version,
+		Commit,
+		BuildTime,
+		runtime.Version(),
+	)
+	os.Exit(0)
+}
+
+func configDef() {
+	raw, err := json.MarshalIndent(config{
+		Cards: []models.Card{{
+			CardUUID: "288ac24c-73e2-4fac-b386-2b5cc5cb5934",
+			Title:    "Example card",
+		}, {
+			CardUUID: "a7dcc5d9-d3f1-4066-853b-f8f21f4b5134",
+			Title:    "Example card 2",
+		}},
+		MetabaseBaseURL: "https://metabase.example.com",
+	}, " ", "  ")
+	if err != nil {
+		fmt.Printf("unable create config: %s", err.Error())
+		os.Exit(1)
+	}
+
+	fmt.Println(string(raw))
+	os.Exit(0)
+}
+
+func help() {
+	fmt.Println("Доступные флаги и их описания:")
+	flag.PrintDefaults()
+	os.Exit(0)
+}
+
 type config struct {
 	Cards           []models.Card `json:"cards"`
 	MetabaseBaseURL string        `json:"metabase"`
 }
 
 func main() {
+	modeStart()
+
 	log := slog.Default()
 
 	log.Info("starting live server")
@@ -47,9 +128,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("loading config", slog.Any("dir", cwd))
+	cfgPath := ConfigPath
+	if cfgPath == "" {
+		cfgPath = filepath.Join(cwd, "config.json")
+	}
 
-	cfgPath := filepath.Join(cwd, "config.json")
+	log.Info("loading config", slog.Any("dir", cfgPath))
 
 	rawCfg, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -63,7 +147,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	fsCwd := os.DirFS(cwd)
+	var fsCwd fs.FS
+
+	if TemplatesPath != "" {
+		fsCwd = os.DirFS(TemplatesPath)
+	} else {
+		fsCwd = os.DirFS(cwd)
+	}
 
 	ctx := context.Background()
 
@@ -90,6 +180,7 @@ func main() {
 	}
 
 	slog.Info("Starting watcher")
+
 	if err := watchTemplateDir(
 		wsH.notifyReload,
 		append(templatesText, templatesHTML...)...); err != nil {
@@ -199,7 +290,6 @@ func (h *handler) HandleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// html.
 const textWrap = `<!doctype html>
 <html lang="en">
   <head>
@@ -279,6 +369,7 @@ func (h *handler) existMiddleware(next http.Handler) http.Handler {
 func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rc := &responseCapture{ResponseWriter: w}
+
 		slog.InfoContext(r.Context(), "getting request", slog.Any("path", r.URL.String()))
 
 		next.ServeHTTP(rc, r)
@@ -294,6 +385,7 @@ func logMiddleware(next http.Handler) http.Handler {
 			)
 			w.WriteHeader(rc.statusCode)
 		}
+
 		w.Write([]byte(buf))
 	})
 }
@@ -313,7 +405,6 @@ func (r *responseCapture) Write(b []byte) (int, error) {
 	return r.buf.Write(b)
 }
 
-// html.
 const liveReloadScript = `
 <script>
   (() => {
@@ -450,6 +541,7 @@ func watchTemplate(path string, onEvent func(tmpl string)) error {
 						slog.Any("event", ev.Name),
 						slog.Any("event_op", ev.Op.String()),
 					)
+
 					if debounce != nil {
 						debounce.Stop()
 					}

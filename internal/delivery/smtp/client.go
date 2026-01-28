@@ -50,7 +50,7 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 	conn, err := tls.Dial("tcp", addr, tlsConfig)
 	if err != nil {
-		s.log.Error("failed to connect to SMTP server", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to connect to SMTP server", slog.Any("error", err))
 
 		return fmt.Errorf("connect to SMTP: %w", err)
 	}
@@ -64,7 +64,7 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		s.log.Error("failed to create SMTP client", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to create SMTP client", slog.Any("error", err))
 
 		return fmt.Errorf("create SMTP client: %w", err)
 	}
@@ -77,13 +77,13 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 	}()
 
 	if err = client.Auth(auth); err != nil {
-		s.log.Error("failed to authenticate", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to authenticate", slog.Any("error", err))
 
 		return fmt.Errorf("authenticate: %w", err)
 	}
 
 	if err = client.Mail(s.cfg.Email); err != nil {
-		s.log.Error("failed to set sender", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to set sender", slog.Any("error", err))
 
 		return fmt.Errorf("set sender: %w", err)
 	}
@@ -91,7 +91,8 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 	for _, recipient := range recipients {
 		err = client.Rcpt(recipient)
 		if err != nil {
-			s.log.Error(
+			s.log.ErrorContext(
+				ctx,
 				"failed to add recipient",
 				slog.String("recipient", recipient),
 				slog.Any("error", err),
@@ -103,24 +104,24 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 
 	w, err := client.Data()
 	if err != nil {
-		s.log.Error("failed to get data writer", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to get data writer", slog.Any("error", err))
 
 		return fmt.Errorf("get data writer: %w", err)
 	}
 
 	if _, err = w.Write(message); err != nil {
-		s.log.Error("failed to write message", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to write message", slog.Any("error", err))
 
 		return fmt.Errorf("write message: %w", err)
 	}
 
 	if err = w.Close(); err != nil {
-		s.log.Error("failed to close writer", slog.Any("error", err))
+		s.log.ErrorContext(ctx, "failed to close writer", slog.Any("error", err))
 
 		return fmt.Errorf("close writer: %w", err)
 	}
 
-	s.log.Info("email sent successfully", slog.Int("recipients", len(recipients)))
+	s.log.InfoContext(ctx, "email sent successfully", slog.Int("recipients", len(recipients)))
 
 	return nil
 }
