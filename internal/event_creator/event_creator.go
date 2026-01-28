@@ -47,6 +47,8 @@ func New(
 }
 
 func (e *EventCreator) Start(ctx context.Context) error {
+	e.cleaner(ctx)
+
 	err := e.heat(ctx)
 	if err != nil {
 		return err
@@ -120,7 +122,11 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]string
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	var names []string
+
 	for _, ev := range events {
+		names = append(names, ev.Name)
+
 		events, ok := e.cache[ev.CronName]
 		if !ok {
 			e.cache[ev.CronName] = []string{ev.Name}
@@ -131,12 +137,25 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]string
 		e.cache[ev.CronName] = append(events, ev.Name)
 	}
 
-	names, ok := e.cache[name]
-	if !ok {
-		return nil, fmt.Errorf("not found")
-	}
-
 	return names, nil
+}
+
+func (e *EventCreator) cleaner(ctx context.Context) {
+	tick := time.NewTicker(5 * time.Minute)
+
+	go func() {
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				e.ReLoad()
+				e.log.DebugContext(ctx, "cache cleaned")
+			}
+		}
+	}()
 }
 
 func (e *EventCreator) heat(ctx context.Context) error {

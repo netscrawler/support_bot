@@ -95,11 +95,11 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 			}
 
 			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report", j.Name))
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Name))
 
 			err := g.createReport(rvCtx, j)
 			if err != nil {
-				g.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
+				g.log.ErrorContext(rvCtx, "error create report", slog.Any("error", err))
 			}
 
 			cancel()
