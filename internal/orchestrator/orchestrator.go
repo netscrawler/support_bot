@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	models "support_bot/internal/models/report"
 )
@@ -48,6 +49,8 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	o.log.InfoContext(ctx, "starting...")
 
 	go o.run(ctx)
+
+	o.cleaner(ctx)
 }
 
 func (o *Orchestrator) ReLoad() {
@@ -93,6 +96,24 @@ func (o *Orchestrator) run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (o *Orchestrator) cleaner(ctx context.Context) {
+	tick := time.NewTicker(5 * time.Minute)
+
+	go func() {
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				o.ReLoad()
+				o.log.DebugContext(ctx, "cache cleaned")
+			}
+		}
+	}()
 }
 
 func (o *Orchestrator) getReportByEvent(
