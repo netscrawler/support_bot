@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"html/template"
 	"maps"
+	"support_bot/internal/pkg/text"
 
 	models "support_bot/internal/models/report"
 
@@ -26,7 +27,7 @@ func New[T models.FileData](data any, template string, name string) *Exporter[T]
 
 func (e *Exporter[T]) Export() (*T, error) {
 	allFuncs := sprig.FuncMap()
-	maps.Copy(allFuncs, funcMap)
+	maps.Copy(allFuncs, text.FuncMap)
 
 	t, err := template.New("html_tmpl").
 		Funcs(allFuncs).

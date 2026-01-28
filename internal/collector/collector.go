@@ -58,7 +58,7 @@ func (c *Collector) Collect(
 	if len(cards) == 0 {
 		c.log.ErrorContext(ctx, "empty card list")
 
-		return nil, errors.New("empty cards")
+		return nil, ErrEmtyCard
 	}
 
 	collected := make(map[string][]map[string]any)

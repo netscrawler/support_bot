@@ -85,6 +85,7 @@ func (e *EventCreator) Start(ctx context.Context) error {
 
 						return
 					case e.OutC <- en:
+						e.log.DebugContext(ctx, "sending report event", slog.Any("event", ev))
 					}
 				}
 			}

@@ -25,24 +25,7 @@ var (
 )
 
 func main() {
-	switch modeStart() {
-	case helpMode:
-		help()
-
-		return
-	case verMode:
-		version()
-
-		return
-	case createEnvMode:
-		createEnv()
-
-		return
-	case createYamlMode:
-		createConf()
-
-		return
-	}
+	modeStart()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -55,7 +38,9 @@ func main() {
 	}
 
 	log, err := logger.Setup(cfg.Log)
-	log.Error("config creating error", slog.Any("error", err))
+	if err != nil {
+		log.Error("log creating error", slog.Any("error", err))
+	}
 
 	ctx, cancelApp := context.WithCancel(context.Background())
 	defer cancelApp()
@@ -103,17 +88,7 @@ var (
 	SetModeCreateEnv    = false
 )
 
-type mode int
-
-const (
-	commonMode mode = iota
-	helpMode
-	verMode
-	createEnvMode
-	createYamlMode
-)
-
-func modeStart() mode {
+func modeStart() {
 	flag.BoolVar(&SetModeVer, "v", false, "Версия приложения")
 	flag.BoolVar(&SetModeHelp, "h", false, "Помощь")
 	flag.StringVar(&config.ConfigPath, "config", "", "Путь к файлу конфигурации")
@@ -132,22 +107,20 @@ func modeStart() mode {
 	flag.Parse()
 
 	if SetModeVer {
-		return verMode
+		version()
 	}
 
 	if SetModeHelp {
-		return helpMode
+		help()
 	}
 
 	if SetModeCreateEnv {
-		return createEnvMode
+		createEnv()
 	}
 
 	if SetModeCreateConfig {
-		return createYamlMode
+		createConf()
 	}
-
-	return commonMode
 }
 
 func version() {
@@ -158,6 +131,7 @@ func version() {
 		BuildTime,
 		runtime.Version(),
 	)
+	os.Exit(0)
 }
 
 func createEnv() {
@@ -167,12 +141,13 @@ func createEnv() {
 	if err != nil {
 		fmt.Printf("Unable to create env: %s", err.Error())
 
-		return
+		os.Exit(1)
 	}
 
 	fmt.Println("# Пример .env файла")
 	fmt.Println("# Создайте файл .env и поместите туда, заменив значения на свои")
 	fmt.Println(defEnv)
+	os.Exit(0)
 }
 
 func createConf() {
@@ -181,20 +156,19 @@ func createConf() {
 	node, err := pkg.StructToYAMLNode(defaultConf)
 	if err != nil {
 		fmt.Printf("Unable to create config: %s", err.Error())
-
-		return
+		os.Exit(1)
 	}
 
 	mCfg, err := yaml.Marshal(node)
 	if err != nil {
 		fmt.Printf("Unable to create config: %s", err.Error())
-
-		return
+		os.Exit(1)
 	}
 
 	fmt.Println("# example config")
 	fmt.Println("# Создайте файл config.yaml и поместите туда, заменив значения на свои")
 	fmt.Println(string(mCfg))
+	os.Exit(0)
 }
 
 func help() {
@@ -233,4 +207,5 @@ Support Bot CLI
 	// Также можно напечатать все флаги автоматически:
 	fmt.Println("Доступные флаги и их описания:")
 	flag.PrintDefaults()
+	os.Exit(0)
 }

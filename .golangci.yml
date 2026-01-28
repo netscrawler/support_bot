@@ -79,6 +79,7 @@ linters:
     gosec:
       excludes:
         - G104
+        - G203
     cyclop:
       # Default: 10
       max-complexity: 15

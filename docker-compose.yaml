@@ -14,7 +14,7 @@ services:
     networks:
       - internal
   db:
-    image: postgres:9.3
+    image: postgres:9.6
     container_name: db
     restart: unless-stopped
     environment:
