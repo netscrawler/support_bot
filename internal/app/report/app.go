@@ -80,7 +80,7 @@ func New(
 
 	delivery := delivery.NewSender(tg, smb, smtpS, log)
 
-	generator := generator.New(reportChan, clct, delivery, eval, 16, log)
+	generator := generator.New(reportChan, clct, delivery, eval, 4, log)
 
 	orchRepo := orchestrator.NewRepository(db.GetConn(), log)
 	orch := orchestrator.New(eventChan, reportChan, orchRepo, log)

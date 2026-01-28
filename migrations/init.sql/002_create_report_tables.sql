@@ -59,7 +59,7 @@ CREATE TABLE templates (
 CREATE TABLE crons(
     id SERIAL PRIMARY KEY,
     cron TEXT NOT NULL,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     description TEXT,
     is_active bool NOT NULL DEFAULT FALSE
 );
