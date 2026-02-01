@@ -14,3 +14,6 @@ packages:
   support_bot/internal/collector:
     config:
       all: true
+  support_bot/internal/plugin/stdlib:
+    config:
+      all: true

@@ -13,3 +13,4 @@ reports/
 .env
 docker.env
 config.json
+*.sql
