@@ -2,9 +2,11 @@ package plugins
 
 import (
 	"context"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -23,13 +25,32 @@ import (
 type LuaPlugin struct {
 	MetaData
 
-	filePath string // путь к файлу .lua на диске
+	plugingStr string
+	filePath   *string
 
 	// Runtime и статистика
 	runtime *LuaRuntime  // безопасная среда выполнения с песочницей
 	vm      *lua.LState  // виртуальная машина Lua (прямая ссылка из runtime)
 	stdlib  *stdlib.STD  // стандартная библиотека для плагинов
 	mu      sync.RWMutex // мьютекс для потокобезопасного доступа
+}
+
+func normalizeForLua(value any) (any, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	data, err := stdjson.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+
+	var normalized any
+	if err := stdjson.Unmarshal(data, &normalized); err != nil {
+		return nil, err
+	}
+
+	return normalized, nil
 }
 
 // NewLuaPlugin создает новый экземпляр Lua-плагина из файла.
@@ -42,10 +63,10 @@ type LuaPlugin struct {
 //   - указатель на LuaPlugin при успехе
 //   - ошибку если файл не найден, содержит ошибки или некорректные метаданные
 func NewLuaPlugin(filePath string) (*LuaPlugin, error) {
-	return NewLuaPluginWithConfig(filePath, DefaultRuntimeConfig(), nil)
+	return NewLuaPluginWithConfigFromFile(filePath, DefaultRuntimeConfig(), nil)
 }
 
-// NewLuaPluginWithConfig создает плагин с кастомной конфигурацией runtime.
+// NewLuaPluginWithConfigFromFile создает плагин с кастомной конфигурацией runtime.
 // Позволяет настроить лимиты памяти, таймауты и белый список модулей.
 //
 // Параметры:
@@ -54,8 +75,34 @@ func NewLuaPlugin(filePath string) (*LuaPlugin, error) {
 //   - std: стандартная библиотека для плагинов (nil = без stdlib)
 //
 // Возвращает настроенный плагин в безопасной песочнице.
-func NewLuaPluginWithConfig(
+func NewLuaPluginWithConfigFromFile(
 	filePath string,
+	config *RuntimeConfig,
+	std *stdlib.STD,
+) (*LuaPlugin, error) {
+	plugStr, err := readPluginFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	plug, err := NewLuaPluginWithConfigFromString(plugStr, config, std)
+	if err != nil {
+		return nil, err
+	}
+	plug.filePath = &filePath
+	return plug, nil
+}
+
+// NewLuaPluginWithConfigFromString создает плагин с кастомной конфигурацией runtime.
+// Позволяет настроить лимиты памяти, таймауты и белый список модулей.
+//
+// Параметры:
+//   - filePath: путь к .lua файлу плагина
+//   - config: конфигурация runtime (nil = использовать по умолчанию)
+//   - std: стандартная библиотека для плагинов (nil = без stdlib)
+//
+// Возвращает настроенный плагин в безопасной песочнице.
+func NewLuaPluginWithConfigFromString(
+	pluginStr string,
 	config *RuntimeConfig,
 	std *stdlib.STD,
 ) (*LuaPlugin, error) {
@@ -68,10 +115,10 @@ func NewLuaPluginWithConfig(
 	vm := runtime.GetVM()
 
 	plugin := &LuaPlugin{
-		filePath: filePath,
-		runtime:  runtime,
-		vm:       vm,
-		stdlib:   std,
+		plugingStr: pluginStr,
+		runtime:    runtime,
+		vm:         vm,
+		stdlib:     std,
 	}
 
 	// предзагружаем дополнительные модули для плагинов
@@ -80,7 +127,7 @@ func NewLuaPluginWithConfig(
 
 	// загружаем и выполняем Lua-скрипт
 	// при этом определяются все функции и глобальная таблица plugin
-	if err := vm.DoFile(filePath); err != nil {
+	if err := vm.DoString(pluginStr); err != nil {
 		runtime.Close()
 
 		return nil, fmt.Errorf("failed to load plugin: %w", err)
@@ -110,7 +157,11 @@ func (p *LuaPlugin) Init(config map[string]any) error {
 
 	// конвертируем Go map в Lua table используя gopher-json
 	// это автоматически обрабатывает вложенные структуры
-	configValue := json.DecodeValue(p.vm, config)
+	normalizedConfig, err := normalizeForLua(config)
+	if err != nil {
+		return fmt.Errorf("failed to normalize config: %w", err)
+	}
+	configValue := json.DecodeValue(p.vm, normalizedConfig)
 
 	// вызываем Lua-функцию plugin.init(config)
 	// NRet:2 означает что ожидаем 2 возвращаемых значения
@@ -161,7 +212,11 @@ func (p *LuaPlugin) Execute(_ context.Context, params map[string]any) ([]byte, e
 	defer p.mu.Unlock()
 
 	// конвертируем параметры из Go map в Lua table
-	paramsValue := json.DecodeValue(p.vm, params)
+	normalizedParams, err := normalizeForLua(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize params: %w", err)
+	}
+	paramsValue := json.DecodeValue(p.vm, normalizedParams)
 
 	fn, ok := p.vm.GetGlobal("plugin").(*lua.LTable)
 	if !ok {
@@ -218,7 +273,11 @@ func (p *LuaPlugin) Validate(params map[string]any) error {
 	defer p.mu.RUnlock()
 
 	// конвертируем параметры для передачи в Lua
-	paramsValue := json.DecodeValue(p.vm, params)
+	normalizedParams, err := normalizeForLua(params)
+	if err != nil {
+		return fmt.Errorf("failed to normalize params: %w", err)
+	}
+	paramsValue := json.DecodeValue(p.vm, normalizedParams)
 
 	// получаем таблицу plugin и проверяем её тип
 	pluginTable := p.vm.GetGlobal("plugin")
@@ -372,13 +431,6 @@ func (p *LuaPlugin) preloadModules() {
 	// JSON - работа с JSON данными (encode/decode)
 	p.vm.PreloadModule("json", json.Loader)
 
-	// HTTP - выполнение HTTP запросов (GET, POST, PUT, DELETE)
-	// создаем HTTP клиент с разумными таймаутами
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	p.vm.PreloadModule("http", gluahttp.NewHttpModule(httpClient).Loader)
-
 	// URL - парсинг и построение URL
 	p.vm.PreloadModule("url", gluaurl.Loader)
 
@@ -388,6 +440,15 @@ func (p *LuaPlugin) preloadModules() {
 	// Time, inspect, strings и другие утилиты из gopher-lua-libs
 	// это добавляет много полезных функций для работы со временем, строками и т.д.
 	libs.Preload(p.vm)
+
+	// HTTP - выполнение HTTP запросов (GET, POST, PUT, DELETE)
+	// создаем HTTP клиент с разумными таймаутами
+	// важно: preload после libs.Preload, чтобы переопределить модуль "http"
+	// из gopher-lua-libs и гарантировать API gluahttp.
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	p.vm.PreloadModule("http", gluahttp.NewHttpModule(httpClient).Loader)
 
 	// Регистрируем stdlib если он передан
 	if p.stdlib != nil {
@@ -419,4 +480,12 @@ func (p *MetaData) Version() string {
 // Используется в UI и логах для понимания назначения плагина.
 func (p *MetaData) Description() string {
 	return p.description
+}
+
+func readPluginFile(filePath string) (string, error) {
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("unable read plugin: %w", err)
+	}
+	return string(raw), nil
 }

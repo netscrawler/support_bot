@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
+
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
+	plugins "support_bot/internal/plugin"
 	"support_bot/internal/postgres"
-	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/joho/godotenv"
@@ -22,6 +24,7 @@ type Config struct {
 	Timeout        timeout                 `yaml:"timeout"         comment:"Настройка таймаутов"`
 	SMB            smb.SMBConfig           `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
 	SMTP           smtp.SMTPConfig         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
+	LuaPlugins     plugins.Config          `yaml:"plugin"          comment:"Настройка lua плагинов и их runtime"`
 }
 
 type bot struct {

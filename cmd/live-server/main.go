@@ -17,13 +17,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"support_bot/internal/collector"
-	"support_bot/internal/collector/metabase"
-	"support_bot/internal/pkg/text"
 	"sync"
 	"syscall"
 	tmplTXT "text/template"
 	"time"
+
+	"support_bot/internal/collector"
+	"support_bot/internal/collector/metabase"
+	"support_bot/internal/pkg/text"
 
 	models "support_bot/internal/models/report"
 

@@ -64,7 +64,9 @@ type PluginInfo struct {
 	Author string
 
 	// FilePath - путь к файлу плагина на диске
-	FilePath string
+	FilePath *string
+
+	DBID *int
 
 	// Healthy - флаг работоспособности плагина
 	Healthy bool

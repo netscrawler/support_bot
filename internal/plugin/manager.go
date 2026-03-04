@@ -20,6 +20,8 @@ type Manager struct {
 	plugins map[string]Plugin // карта загруженных плагинов (ключ - имя плагина)
 	config  *Config           // конфигурация системы плагинов
 	mu      sync.RWMutex      // мьютекс для потокобезопасного доступа
+
+	repo *PluginRepository
 }
 
 // NewManager создает новый менеджер плагинов с заданной конфигурацией.
@@ -34,16 +36,16 @@ func NewManager(cfg *Config) (*Manager, error) {
 		config:  cfg,
 	}
 
-	// Автоматически загружает плагины из директории.
+	// Автоматически загружает плагины.
 	err := m.autoLoad()
 	if err != nil {
-		err = fmt.Errorf("auto load plugins from %s failed : %w", m.config.PluginsDir, err)
+		err = fmt.Errorf("auto load plugins failed : %w", err)
 	}
 
 	return m, err
 }
 
-// LoadPlugin загружает один плагин из указанного файла.
+// LoadPluginFromFile загружает один плагин из указанного файла.
 // Создает новый экземпляр LuaPlugin и регистрирует его в системе.
 //
 // Параметры:
@@ -55,7 +57,7 @@ func NewManager(cfg *Config) (*Manager, error) {
 //   - не удалось извлечь метаданные
 //
 // После успешной загрузки плагин доступен через GetPlugin(name).
-func (m *Manager) LoadPlugin(filePath string) error {
+func (m *Manager) LoadPluginFromFile(filePath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -72,7 +74,7 @@ func (m *Manager) LoadPlugin(filePath string) error {
 
 	// создаем новый экземпляр Lua-плагина
 	// при этом загружается и выполняется Lua-скрипт
-	plugin, err := NewLuaPluginWithConfig(filePath, runtimeCfg, m.config.Stdlib)
+	plugin, err := NewLuaPluginWithConfigFromFile(filePath, runtimeCfg, m.config.Stdlib)
 	if err != nil {
 		return fmt.Errorf("failed to create plugin: %w", err)
 	}
@@ -121,7 +123,7 @@ func (m *Manager) LoadPluginsFromDir(dir string) error {
 
 	// загружаем каждый найденный файл
 	for _, path := range matches {
-		if err := m.LoadPlugin(path); err != nil {
+		if err := m.LoadPluginFromFile(path); err != nil {
 			// если хотя бы один плагин не загрузился, возвращаем ошибку
 			// это позволяет отловить проблемы на старте приложения
 			loadErr = errors.Join(loadErr, fmt.Errorf("failed to load plugin %s: %w", path, err))
@@ -129,6 +131,84 @@ func (m *Manager) LoadPluginsFromDir(dir string) error {
 	}
 
 	return loadErr
+}
+
+// LoadPluginsFromDB загружает все плагины из базы данных.
+//
+// Возвращает ошибку если:
+//   - не удалось прочитать директорию
+//   - хотя бы один плагин не загрузился
+//
+// Если config.Enable == false, функция ничего не делает и возвращает nil.
+// Это позволяет отключить систему плагинов через конфигурацию.
+func (m *Manager) LoadPluginsFromDB() error {
+	// если система плагинов отключена, ничего не делаем
+	if !m.config.Enable {
+		return ErrPluginManagerDisabled
+	}
+
+	// FIX: add loading from db
+
+	// ищем все .lua файлы в директории
+	pattern := filepath.Join("", "*.lua")
+
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("failed to glob plugin directory: %w", err)
+	}
+
+	var loadErr error
+
+	// загружаем каждый найденный файл
+	for _, path := range matches {
+		if err := m.LoadPluginFromFile(path); err != nil {
+			// если хотя бы один плагин не загрузился, возвращаем ошибку
+			// это позволяет отловить проблемы на старте приложения
+			loadErr = errors.Join(loadErr, fmt.Errorf("failed to load plugin %s: %w", path, err))
+		}
+	}
+
+	return loadErr
+}
+
+func (m *Manager) LoadPluginsFromDBByName(name string) error {
+	return nil
+}
+
+func (m *Manager) LoadPluginFromString(plugStr string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.config.Enable {
+		return ErrPluginManagerDisabled
+	}
+
+	// создаем конфигурацию runtime из AllowedModules
+	runtimeCfg := &RuntimeConfig{
+		AllowedModules: m.config.AllowedModules,
+		CallStackSize:  256,
+		RegistrySize:   256,
+	}
+
+	// создаем новый экземпляр Lua-плагина
+	// при этом загружается и выполняется Lua-скрипт
+	plugin, err := NewLuaPluginWithConfigFromString(plugStr, runtimeCfg, m.config.Stdlib)
+	if err != nil {
+		return fmt.Errorf("failed to create plugin: %w", err)
+	}
+
+	// проверяем что плагин с таким именем еще не загружен
+	// имена плагинов должны быть уникальными
+	if _, exists := m.plugins[plugin.Name()]; exists {
+		_ = plugin.Cleanup() // освобождаем ресурсы нового плагина
+
+		return fmt.Errorf("plugin %s already loaded", plugin.Name())
+	}
+
+	// регистрируем плагин в карте
+	m.plugins[plugin.Name()] = plugin
+
+	return nil
 }
 
 // UnloadPlugin выгружает плагин по имени.
@@ -203,6 +283,9 @@ func (m *Manager) ReloadPlugin(name string) error {
 	}
 
 	filePath := luaPlugin.filePath
+	if filePath == nil {
+		return fmt.Errorf("reload for not file plugin")
+	}
 
 	// очищаем старый плагин (закрываем VM и ресурсы)
 	if err := plugin.Cleanup(); err != nil {
@@ -217,7 +300,7 @@ func (m *Manager) ReloadPlugin(name string) error {
 	}
 
 	// загружаем новую версию плагина из файла
-	newPlugin, err := NewLuaPluginWithConfig(filePath, runtimeCfg, m.config.Stdlib)
+	newPlugin, err := NewLuaPluginWithConfigFromFile(*filePath, runtimeCfg, m.config.Stdlib)
 	if err != nil {
 		return fmt.Errorf("failed to reload plugin: %w", err)
 	}

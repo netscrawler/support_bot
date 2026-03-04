@@ -66,7 +66,7 @@ end
 	}
 
 	// test loading
-	if err := manager.LoadPlugin(pluginPath); err != nil {
+	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 		t.Fatalf("failed to load plugin: %v", err)
 	}
 
@@ -115,12 +115,12 @@ function plugin.cleanup() end
 	}
 
 	// load first time
-	if err := manager.LoadPlugin(pluginPath); err != nil {
+	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 		t.Fatalf("failed to load plugin first time: %v", err)
 	}
 
 	// try to load again - should fail
-	err = manager.LoadPlugin(pluginPath)
+	err = manager.LoadPluginFromFile(pluginPath)
 	if err == nil {
 		t.Error("expected error when loading duplicate plugin")
 	}
@@ -151,7 +151,7 @@ function plugin.cleanup() end
 		t.Fatalf("failed to write test plugin: %v", err)
 	}
 
-	if err := manager.LoadPlugin(pluginPath); err != nil {
+	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 		t.Fatalf("failed to load plugin: %v", err)
 	}
 
@@ -210,7 +210,7 @@ function plugin.cleanup() end
 			t.Fatalf("failed to write test plugin %d: %v", i, err)
 		}
 
-		if err := manager.LoadPlugin(pluginPath); err != nil {
+		if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 			t.Fatalf("failed to load plugin %d: %v", i, err)
 		}
 	}
@@ -253,7 +253,7 @@ function plugin.cleanup() end
 		t.Fatalf("failed to write test plugin: %v", err)
 	}
 
-	if err := manager.LoadPlugin(pluginPath); err != nil {
+	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 		t.Fatalf("failed to load plugin: %v", err)
 	}
 
@@ -299,7 +299,7 @@ function plugin.cleanup() end
 			t.Fatalf("failed to write test plugin: %v", err)
 		}
 
-		if err := manager.LoadPlugin(pluginPath); err != nil {
+		if err := manager.LoadPluginFromFile(pluginPath); err != nil {
 			t.Fatalf("failed to load plugin: %v", err)
 		}
 	}

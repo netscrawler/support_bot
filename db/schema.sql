@@ -127,6 +127,12 @@ CREATE TABLE report_queries (
     CONSTRAINT fk_notify_queries_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE
 );
 
+CREATE TABLE plugins(
+    id SERIAL PRIMARY KEY,
+    plugin_str text,
+    name text
+)
+
 
 -- Триггер: при удалении чата уведомления становятся неактивными
 create or replace function deactivate_notify_on_chat_delete()
