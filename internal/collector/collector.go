@@ -10,7 +10,7 @@ import (
 	models "support_bot/internal/models/report"
 )
 
-const defaultParralellCollectors = 32
+const defaultParallelCollectors = 32
 
 type DataFetcher interface {
 	Fetch(ctx context.Context, uuid string) ([]map[string]any, error)
@@ -22,15 +22,15 @@ type Collector struct {
 	parallel chan struct{}
 }
 
-func NewCollector(parralell uint8, mb DataFetcher, log *slog.Logger) *Collector {
+func NewCollector(parallel uint8, mb DataFetcher, log *slog.Logger) *Collector {
 	l := log.With(slog.Any("module", "collector"))
 
-	if parralell == 0 {
-		parralell = defaultParralellCollectors
+	if parallel == 0 {
+		parallel = defaultParallelCollectors
 	}
 
-	l.Info("create collector", slog.Any("parralell_query", parralell))
-	semaphor := make(chan struct{}, parralell)
+	l.Info("create collector", slog.Any("parallel_query", parallel))
+	semaphor := make(chan struct{}, parallel)
 
 	return &Collector{
 		mb:       mb,
@@ -45,10 +45,10 @@ func (c *Collector) Collect(
 ) (map[string][]map[string]any, error) {
 	start := time.Now()
 
-	c.log.InfoContext(ctx, "Start collecting data")
+	c.log.DebugContext(ctx, "Start collecting data")
 
 	defer func() {
-		c.log.InfoContext(
+		c.log.DebugContext(
 			ctx,
 			"Finish collecting data",
 			slog.Any("time elapsed", time.Since(start)),
@@ -56,7 +56,7 @@ func (c *Collector) Collect(
 	}()
 
 	if len(cards) == 0 {
-		c.log.ErrorContext(ctx, "empty card list")
+		c.log.DebugContext(ctx, "empty card list")
 
 		return nil, ErrEmtyCard
 	}
