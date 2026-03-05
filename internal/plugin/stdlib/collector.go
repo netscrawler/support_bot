@@ -15,11 +15,11 @@ type Collector interface {
 }
 
 type CollectPlugin struct {
-	collct Collector
+	collect Collector
 }
 
-func NewCollector(collct Collector) *CollectPlugin {
-	return &CollectPlugin{collct: collct}
+func NewCollector(collect Collector) *CollectPlugin {
+	return &CollectPlugin{collect: collect}
 }
 
 func (c *CollectPlugin) luaCollect(L *lua.LState) int {
@@ -57,7 +57,7 @@ func (c *CollectPlugin) luaCollect(L *lua.LState) int {
 		return 2
 	}
 
-	res, err := c.collct.Collect(ctx, cards...)
+	res, err := c.collect.Collect(ctx, cards...)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
