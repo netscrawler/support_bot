@@ -2,10 +2,11 @@ package stdlib_test
 
 import (
 	"errors"
+	"support_bot/internal/plugin/stdlib"
 	"testing"
 
 	models "support_bot/internal/models/report"
-	"support_bot/internal/plugin/stdlib"
+
 	pmock "support_bot/internal/plugin/stdlib/mock"
 
 	"github.com/stretchr/testify/mock"
@@ -18,6 +19,7 @@ func TestCollector(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
+
 		mockCollector := &pmock.MockCollector{}
 
 		cards := []models.Card{
@@ -70,6 +72,7 @@ func TestCollector(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		t.Parallel()
+
 		mockCollector := &pmock.MockCollector{}
 
 		cards := []models.Card{
@@ -110,7 +113,7 @@ func TestCollector(t *testing.T) {
 
 		goResult := luaValueToGo(luaResult)
 
-		require.Equal(t, nil, goResult)
+		require.Nil(t, goResult)
 
 		mockCollector.AssertExpectations(t)
 	})

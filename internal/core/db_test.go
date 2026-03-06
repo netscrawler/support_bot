@@ -22,15 +22,16 @@ func TestDataFromMapSlice(t *testing.T) {
 		}()
 
 		data := map[string][]map[string]any{
-			"some_table": []map[string]any{
-				map[string]any{
+			"some_table": {
+				{
 					"id":   int32(10),
 					"name": "john",
 				},
-				map[string]any{
+				{
 					"id":   int32(11),
-					"name": "jhoe"},
-				map[string]any{
+					"name": "jhoe",
+				},
+				{
 					"id":   int32(12),
 					"name": "petr",
 				},
@@ -57,30 +58,30 @@ func TestDataFromMapSlice(t *testing.T) {
 		}()
 
 		data := map[string][]map[string]any{
-			"some_table": []map[string]any{
-				map[string]any{
+			"some_table": {
+				{
 					"id":   10,
 					"name": "john",
 				},
-				map[string]any{
+				{
 					"id":   11,
 					"name": "jhoe",
 				},
-				map[string]any{
+				{
 					"id":   12,
 					"name": "petr",
 				},
 			},
-			"other_table": []map[string]any{
-				map[string]any{
+			"other_table": {
+				{
 					"id":       10,
 					"vacation": "it",
 				},
-				map[string]any{
+				{
 					"id":       11,
 					"vacation": "it",
 				},
-				map[string]any{
+				{
 					"id":       12,
 					"vacation": "svarshik",
 				},
@@ -127,17 +128,17 @@ left join other_table on some_table.id = other_table.id`)
 		}()
 
 		data := map[string][]map[string]any{
-			"some_table": []map[string]any{
-				map[string]any{
+			"some_table": {
+				{
 					"id":   10,
 					"name": "john",
 				},
-				map[string]any{
+				{
 					"id":      11,
 					"name":    "jhoe",
 					"surname": "doe",
 				},
-				map[string]any{
+				{
 					"id":       12,
 					"name":     "petr",
 					"vacation": "it",

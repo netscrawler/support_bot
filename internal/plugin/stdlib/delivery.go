@@ -3,9 +3,9 @@ package stdlib
 import (
 	"bytes"
 	"context"
+	"support_bot/internal/delivery/smtp"
 	"time"
 
-	"support_bot/internal/delivery/smtp"
 	models "support_bot/internal/models/report"
 
 	lua "github.com/yuin/gopher-lua"
@@ -63,6 +63,7 @@ func (p *DeliveryPlugin) luaSend(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -70,6 +71,7 @@ func (p *DeliveryPlugin) luaSend(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -77,11 +79,13 @@ func (p *DeliveryPlugin) luaSend(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(lua.LBool(true))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -101,6 +105,7 @@ func targetsFromLua(t *lua.LTable) ([]models.Targeted, error) {
 			threadID := tbl.RawGetString("thread_id")
 
 			var tid int
+
 			if threadID.Type() == lua.LTNumber {
 				tid = int(lua.LVAsNumber(threadID))
 			}
@@ -123,6 +128,7 @@ func targetsFromLua(t *lua.LTable) ([]models.Targeted, error) {
 			body := tbl.RawGetString("body")
 
 			var dest, copy []string
+
 			if arr, ok := destTbl.(*lua.LTable); ok {
 				arr.ForEach(func(_, val lua.LValue) {
 					dest = append(dest, val.String())
@@ -182,26 +188,29 @@ func (p *DeliveryPlugin) luaSendTelegram(L *lua.LState) int {
 	defer cancel()
 
 	chatID := L.CheckNumber(1)
-	threadID := L.OptInt(2, 0)
 	luaData := L.CheckTable(3)
 
 	data, err := reportDataFromLua(luaData)
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
-	chat := models.NewTargetTelegramChat(int64(chatID), &threadID)
+	chat := models.NewTargetTelegramChat(int64(chatID), new(L.OptInt(2, 0)))
+
 	err = p.tg.Send(ctx, chat, data...)
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(lua.LBool(true))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -216,6 +225,7 @@ func (p *DeliveryPlugin) luaSendFileServer(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -223,11 +233,13 @@ func (p *DeliveryPlugin) luaSendFileServer(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(lua.LBool(true))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -241,6 +253,7 @@ func (p *DeliveryPlugin) luaSendEmail(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -248,11 +261,13 @@ func (p *DeliveryPlugin) luaSendEmail(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LBool(false))
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(lua.LBool(true))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -264,6 +279,7 @@ func mailFromLua(t *lua.LTable) (smtp.Mail, error) {
 	attachmentsTbl := t.RawGetString("attachments")
 
 	var recipients, copy []string
+
 	if arr, ok := recipientsTbl.(*lua.LTable); ok {
 		arr.ForEach(func(_, val lua.LValue) {
 			recipients = append(recipients, val.String())
@@ -277,13 +293,14 @@ func mailFromLua(t *lua.LTable) (smtp.Mail, error) {
 	}
 
 	fileData := models.NewEmptyFileData()
+
 	if arr, ok := attachmentsTbl.(*lua.LTable); ok {
 		arr.ForEach(func(_, val lua.LValue) {
 			if attTbl, ok := val.(*lua.LTable); ok {
 				name := attTbl.RawGetString("name")
 				content := attTbl.RawGetString("content")
 				fileData.ExtendWithoutTemplate(
-					bytes.NewBuffer([]byte(content.String())),
+					bytes.NewBufferString(content.String()),
 					name.String(),
 				)
 			}

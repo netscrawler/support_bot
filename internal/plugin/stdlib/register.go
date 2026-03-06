@@ -7,6 +7,7 @@ type STD struct {
 	*EvaluatorPlugin
 	*ExporterPlugin
 	*DeliveryPlugin
+	*DatabasePlugin
 }
 
 func NewSTD(
@@ -35,6 +36,8 @@ func (s *STD) Register(L *lua.LState) {
 	L.SetField(stdlib, "SendTelegram", L.NewFunction(s.luaSendTelegram))
 	L.SetField(stdlib, "SendFileServer", L.NewFunction(s.luaSendFileServer))
 	L.SetField(stdlib, "SendEmail", L.NewFunction(s.luaSendEmail))
+	L.SetField(stdlib, "LoadData", L.NewFunction(s.luaLoadData))
+	L.SetField(stdlib, "ExecuteQuery", L.NewFunction(s.luaExecuteQuery))
 	L.SetField(stdlib, "ExecuteTemplate", L.NewFunction(luaExecuteTemplate))
 	L.SetGlobal("stdlib", stdlib)
 }

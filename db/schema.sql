@@ -129,9 +129,16 @@ CREATE TABLE report_queries (
 
 CREATE TABLE plugins(
     id SERIAL PRIMARY KEY,
-    plugin_str text,
-    name text
-)
+    name text,
+    version text,
+    description text,
+    author text,
+
+    created_at timestamp,
+    updated_at timestamp,
+
+    plugin_str text
+);
 
 
 -- Триггер: при удалении чата уведомления становятся неактивными

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
+	"support_bot/internal/plugin/stdlib"
 	"sync"
 	"time"
-
-	"support_bot/internal/plugin/stdlib"
 
 	"github.com/cjoudrey/gluahttp"
 	"github.com/cjoudrey/gluaurl"
@@ -23,34 +21,13 @@ import (
 // LuaPlugin - обертка вокруг Lua-скрипта, реализующая интерфейс Plugin.
 // Каждый экземпляр содержит отдельную Lua VM для изоляции выполнения.
 type LuaPlugin struct {
-	MetaData
-
-	plugingStr string
-	filePath   *string
+	pluginStr string
 
 	// Runtime и статистика
 	runtime *LuaRuntime  // безопасная среда выполнения с песочницей
 	vm      *lua.LState  // виртуальная машина Lua (прямая ссылка из runtime)
 	stdlib  *stdlib.STD  // стандартная библиотека для плагинов
 	mu      sync.RWMutex // мьютекс для потокобезопасного доступа
-}
-
-func normalizeForLua(value any) (any, error) {
-	if value == nil {
-		return nil, nil
-	}
-
-	data, err := stdjson.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-
-	var normalized any
-	if err := stdjson.Unmarshal(data, &normalized); err != nil {
-		return nil, err
-	}
-
-	return normalized, nil
 }
 
 // NewLuaPlugin создает новый экземпляр Lua-плагина из файла.
@@ -62,34 +39,8 @@ func normalizeForLua(value any) (any, error) {
 // Возвращает:
 //   - указатель на LuaPlugin при успехе
 //   - ошибку если файл не найден, содержит ошибки или некорректные метаданные
-func NewLuaPlugin(filePath string) (*LuaPlugin, error) {
-	return NewLuaPluginWithConfigFromFile(filePath, DefaultRuntimeConfig(), nil)
-}
-
-// NewLuaPluginWithConfigFromFile создает плагин с кастомной конфигурацией runtime.
-// Позволяет настроить лимиты памяти, таймауты и белый список модулей.
-//
-// Параметры:
-//   - filePath: путь к .lua файлу плагина
-//   - config: конфигурация runtime (nil = использовать по умолчанию)
-//   - std: стандартная библиотека для плагинов (nil = без stdlib)
-//
-// Возвращает настроенный плагин в безопасной песочнице.
-func NewLuaPluginWithConfigFromFile(
-	filePath string,
-	config *RuntimeConfig,
-	std *stdlib.STD,
-) (*LuaPlugin, error) {
-	plugStr, err := readPluginFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	plug, err := NewLuaPluginWithConfigFromString(plugStr, config, std)
-	if err != nil {
-		return nil, err
-	}
-	plug.filePath = &filePath
-	return plug, nil
+func NewLuaPlugin(pluginStr *string) (*LuaPlugin, error) {
+	return NewLuaPluginWithConfigFromString(*pluginStr, DefaultRuntimeConfig(), nil)
 }
 
 // NewLuaPluginWithConfigFromString создает плагин с кастомной конфигурацией runtime.
@@ -115,10 +66,10 @@ func NewLuaPluginWithConfigFromString(
 	vm := runtime.GetVM()
 
 	plugin := &LuaPlugin{
-		plugingStr: pluginStr,
-		runtime:    runtime,
-		vm:         vm,
-		stdlib:     std,
+		pluginStr: pluginStr,
+		runtime:   runtime,
+		vm:        vm,
+		stdlib:    std,
 	}
 
 	// предзагружаем дополнительные модули для плагинов
@@ -131,13 +82,6 @@ func NewLuaPluginWithConfigFromString(
 		runtime.Close()
 
 		return nil, fmt.Errorf("failed to load plugin: %w", err)
-	}
-
-	// извлекаем метаданные из глобальной таблицы plugin
-	if err := plugin.loadMetadata(); err != nil {
-		runtime.Close()
-
-		return nil, fmt.Errorf("failed to load metadata: %w", err)
 	}
 
 	return plugin, nil
@@ -161,14 +105,20 @@ func (p *LuaPlugin) Init(config map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("failed to normalize config: %w", err)
 	}
+
 	configValue := json.DecodeValue(p.vm, normalizedConfig)
+
+	// проверяем что глобальная таблица plugin существует
+	pluginTable := p.vm.GetGlobal("plugin")
+	if pluginTable.Type() != lua.LTTable {
+		return ErrPluginTableNotFound
+	}
 
 	// вызываем Lua-функцию plugin.init(config)
 	// NRet:2 означает что ожидаем 2 возвращаемых значения
 	// Protect:true включает защиту от паники в Lua-коде
 	if err := p.vm.CallByParam(lua.P{
-		//nolint:errcheck // проверка типа выше
-		Fn:      p.vm.GetGlobal("plugin").(*lua.LTable).RawGetString("init"),
+		Fn:      pluginTable.(*lua.LTable).RawGetString("init"),
 		NRet:    2,
 		Protect: true,
 	}, configValue); err != nil {
@@ -216,6 +166,7 @@ func (p *LuaPlugin) Execute(_ context.Context, params map[string]any) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to normalize params: %w", err)
 	}
+
 	paramsValue := json.DecodeValue(p.vm, normalizedParams)
 
 	fn, ok := p.vm.GetGlobal("plugin").(*lua.LTable)
@@ -277,6 +228,7 @@ func (p *LuaPlugin) Validate(params map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("failed to normalize params: %w", err)
 	}
+
 	paramsValue := json.DecodeValue(p.vm, normalizedParams)
 
 	// получаем таблицу plugin и проверяем её тип
@@ -361,63 +313,6 @@ func (p *LuaPlugin) Cleanup() error {
 	return nil
 }
 
-// IsHealthy проверяет работоспособность плагина.
-// Используется для health checks и мониторинга.
-//
-// Плагин считается неработоспособным если:
-//   - последний вызов завершился ошибкой
-//   - ошибка произошла менее минуты назад
-//
-// Это позволяет отслеживать проблемные плагины в реальном времени.
-func (p *LuaPlugin) IsHealthy() bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	// FIX: переделать систему определения здоровья у плагина.
-	// если последняя ошибка была недавно (< 1 минуты), плагин нездоров
-	// if p.stats.LastError != nil {
-	// 	if time.Since(p.stats.LastCallTime) < time.Minute {
-	// 		return false
-	// 	}
-	// }
-
-	return true
-}
-
-// loadMetadata извлекает метаданные плагина из глобальной Lua-таблицы plugin.
-// Ожидается что в Lua-скрипте определена таблица plugin с полями:
-//   - name (обязательно): уникальное имя плагина
-//   - version: версия плагина
-//   - description: описание функциональности
-//   - author: автор плагина
-//
-// Возвращает ошибку если таблица plugin не найдена или name пустое.
-func (p *LuaPlugin) loadMetadata() error {
-	// получаем глобальную переменную plugin
-	pluginTable := p.vm.GetGlobal("plugin")
-	if pluginTable.Type() != lua.LTTable {
-		return ErrPluginTableNotFound
-	}
-
-	table, ok := pluginTable.(*lua.LTable)
-	if !ok {
-		return ErrPluginTableNotFound
-	}
-
-	// извлекаем все поля метаданных из таблицы
-	p.name = table.RawGetString("name").String()
-	p.version = table.RawGetString("version").String()
-	p.description = table.RawGetString("description").String()
-	p.author = table.RawGetString("author").String()
-
-	// имя плагина обязательно - оно используется как уникальный идентификатор
-	if p.name == "" {
-		return ErrPluginNameRequired
-	}
-
-	return nil
-}
-
 // preloadModules загружает дополнительные модули в песочницу.
 // Это модули которые нужны для работы с внешними API и данными.
 func (p *LuaPlugin) preloadModules() {
@@ -456,36 +351,20 @@ func (p *LuaPlugin) preloadModules() {
 	}
 }
 
-type MetaData struct {
-	// Метаданные плагина, извлекаемые из Lua-таблицы plugin
-	name        string // уникальное имя плагина
-	version     string // версия в формате semver
-	description string // описание функциональности
-	author      string // автор плагина
-}
-
-// Name возвращает уникальное имя плагина.
-// Используется как идентификатор при регистрации в Manager.
-func (p *MetaData) Name() string {
-	return p.name
-}
-
-// Version возвращает версию плагина в формате semver.
-// Например: "1.0.0", "2.1.3-beta".
-func (p *MetaData) Version() string {
-	return p.version
-}
-
-// Description возвращает человекочитаемое описание плагина.
-// Используется в UI и логах для понимания назначения плагина.
-func (p *MetaData) Description() string {
-	return p.description
-}
-
-func readPluginFile(filePath string) (string, error) {
-	raw, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("unable read plugin: %w", err)
+func normalizeForLua(value any) (any, error) {
+	if value == nil {
+		return nil, nil
 	}
-	return string(raw), nil
+
+	data, err := stdjson.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+
+	var normalized any
+	if err := stdjson.Unmarshal(data, &normalized); err != nil {
+		return nil, err
+	}
+
+	return normalized, nil
 }

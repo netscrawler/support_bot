@@ -2,11 +2,12 @@ package stdlib_test
 
 import (
 	"errors"
+	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/plugin/stdlib"
 	"testing"
 
-	"support_bot/internal/delivery/smtp"
 	models "support_bot/internal/models/report"
-	"support_bot/internal/plugin/stdlib"
+
 	pmock "support_bot/internal/plugin/stdlib/mock"
 
 	"github.com/stretchr/testify/mock"
@@ -62,7 +63,7 @@ func TestDeliverySend(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		mockSender.AssertExpectations(t)
 	})
@@ -111,7 +112,7 @@ func TestDeliverySend(t *testing.T) {
 		require.Equal(t, lua.LString("send failed"), luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, false, lua.LVAsBool(luaResult))
+		require.False(t, lua.LVAsBool(luaResult))
 
 		mockSender.AssertExpectations(t)
 	})
@@ -122,6 +123,7 @@ func TestDeliverySendTelegram(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
+
 		mockTgSender := &pmock.MockTelegramChatSender{}
 
 		mockTgSender.
@@ -158,13 +160,14 @@ func TestDeliverySendTelegram(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		mockTgSender.AssertExpectations(t)
 	})
 
 	t.Run("error case", func(t *testing.T) {
 		t.Parallel()
+
 		mockTgSender := &pmock.MockTelegramChatSender{}
 
 		wantErr := errors.New("telegram send failed")
@@ -200,7 +203,7 @@ func TestDeliverySendTelegram(t *testing.T) {
 		require.Equal(t, lua.LString("telegram send failed"), luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, false, lua.LVAsBool(luaResult))
+		require.False(t, lua.LVAsBool(luaResult))
 
 		mockTgSender.AssertExpectations(t)
 	})
@@ -211,6 +214,7 @@ func TestDeliverySendFileServer(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
+
 		mockFsUploader := &pmock.MockFileUploader{}
 
 		mockFsUploader.
@@ -243,13 +247,14 @@ func TestDeliverySendFileServer(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		mockFsUploader.AssertExpectations(t)
 	})
 
 	t.Run("error case", func(t *testing.T) {
 		t.Parallel()
+
 		mockFsUploader := &pmock.MockFileUploader{}
 
 		wantErr := errors.New("upload failed")
@@ -284,7 +289,7 @@ func TestDeliverySendFileServer(t *testing.T) {
 		require.Equal(t, lua.LString("upload failed"), luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, false, lua.LVAsBool(luaResult))
+		require.False(t, lua.LVAsBool(luaResult))
 
 		mockFsUploader.AssertExpectations(t)
 	})
@@ -330,7 +335,7 @@ func TestDeliverySendEmail(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		mockSMTPSender.AssertExpectations(t)
 	})
@@ -374,7 +379,7 @@ func TestDeliverySendEmail(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		mockSMTPSender.AssertExpectations(t)
 	})
@@ -413,7 +418,7 @@ func TestDeliverySendEmail(t *testing.T) {
 		require.Equal(t, lua.LString("smtp send failed"), luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, false, lua.LVAsBool(luaResult))
+		require.False(t, lua.LVAsBool(luaResult))
 
 		mockSMTPSender.AssertExpectations(t)
 	})

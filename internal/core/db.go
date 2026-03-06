@@ -20,7 +20,7 @@ type DB struct {
 func NewDB() (DB, error) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return DB{}, fmt.Errorf("error opening db: %v", err)
+		return DB{}, fmt.Errorf("error opening db: %w", err)
 	}
 
 	return DB{db: db, schema: make(map[string]map[string]string)}, nil
@@ -30,52 +30,57 @@ func (d *DB) LoadDataFromMapSlice(ctx context.Context, sample map[string][]map[s
 	for table, data := range sample {
 		err := d.createTableFromMap(ctx, table, data)
 		if err != nil {
-			return fmt.Errorf("error creating table %s: %v", table, err)
+			return fmt.Errorf("error creating table %s: %w", table, err)
 		}
 
 		err = d.InsertData(ctx, table, data)
 		if err != nil {
-			return fmt.Errorf("error inserting data into table %s: %v", table, err)
+			return fmt.Errorf("error inserting data into table %s: %w", table, err)
 		}
 	}
+
 	return nil
 }
 
 func (d *DB) ExecuteQuery(ctx context.Context, query string) ([]map[string]any, error) {
 	rows, err := d.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("error executing query %s: %v", query, err)
+		return nil, fmt.Errorf("error executing query %s: %w", query, err)
 	}
 	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, fmt.Errorf("error getting columns: %v", err)
+		return nil, fmt.Errorf("error getting columns: %w", err)
 	}
 
 	var results []map[string]any
+
 	for rows.Next() {
 		values := make([]any, len(columns))
+
 		valuePtrs := make([]any, len(columns))
 		for i := range columns {
 			valuePtrs[i] = &values[i]
 		}
 
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, fmt.Errorf("error scanning row: %v", err)
+			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
 
 		rowMap := make(map[string]any)
+
 		for i, col := range columns {
 			val := values[i]
 
 			rowMap[col] = val
 		}
+
 		results = append(results, rowMap)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %v", err)
+		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	return results, nil
@@ -93,18 +98,20 @@ func (d *DB) createTableFromMap(ctx context.Context, table string, sample []map[
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+
 		for name, val := range record {
 			if _, ok := schema[name]; ok {
 				continue
 			}
+
 			t, err := duckType(val)
 			if err != nil {
 				return err
 			}
+
 			schema[name] = t
 			colDefs = append(colDefs, fmt.Sprintf("%s %s", name, t))
 		}
-
 	}
 
 	query := fmt.Sprintf(
@@ -115,9 +122,11 @@ func (d *DB) createTableFromMap(ctx context.Context, table string, sample []map[
 
 	_, err := d.db.Exec(query)
 	if err != nil {
-		return fmt.Errorf("error creating table %s: %v", table, err)
+		return fmt.Errorf("error creating table %s: %w", table, err)
 	}
+
 	d.schema[table] = schema
+
 	return nil
 }
 
@@ -127,6 +136,7 @@ func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any
 	}
 
 	columns := make([]string, 0, len(rows[0]))
+
 	for col := range d.schema[table] {
 		columns = append(columns, col)
 	}
@@ -137,6 +147,7 @@ func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any
 	for i := range placeholders {
 		placeholders[i] = "?"
 	}
+
 	placeholderStr := "(" + strings.Join(placeholders, ", ") + ")"
 
 	insertSQL := fmt.Sprintf(
@@ -152,12 +163,14 @@ func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any
 		for _, col := range columns {
 			values = append(values, row[col])
 		}
+
 		placeholderRows[i] = placeholderStr
 	}
 
 	insertSQL += strings.Join(placeholderRows, ", ")
 
 	_, err := d.db.ExecContext(ctx, insertSQL, values...)
+
 	return err
 }
 

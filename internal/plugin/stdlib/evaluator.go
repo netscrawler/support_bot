@@ -37,6 +37,7 @@ func (p *EvaluatorPlugin) luaEvaluate(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -45,11 +46,13 @@ func (p *EvaluatorPlugin) luaEvaluate(L *lua.LState) int {
 	if evalErr != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(evalErr.Error()))
+
 		return 2
 	}
 
 	// --- Go → Lua ---
 	L.Push(lua.LBool(ok))
 	L.Push(lua.LNil)
+
 	return 2
 }

@@ -29,6 +29,7 @@ func (c *CollectPlugin) luaCollect(L *lua.LState) int {
 	luaCards := L.CheckTable(1)
 
 	cards := make([]models.Card, 0, luaCards.Len())
+
 	var convErr error
 
 	luaCards.ForEach(func(_, v lua.LValue) {
@@ -39,12 +40,14 @@ func (c *CollectPlugin) luaCollect(L *lua.LState) int {
 		tbl, ok := v.(*lua.LTable)
 		if !ok {
 			convErr = errors.New("each card must be table")
+
 			return
 		}
 
 		card, err := cardFromLua(tbl)
 		if err != nil {
 			convErr = err
+
 			return
 		}
 
@@ -54,6 +57,7 @@ func (c *CollectPlugin) luaCollect(L *lua.LState) int {
 	if convErr != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(convErr.Error()))
+
 		return 2
 	}
 
@@ -61,11 +65,13 @@ func (c *CollectPlugin) luaCollect(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(mapResultToLua(L, res))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -80,9 +86,11 @@ func mapResultToLua(
 
 		for _, row := range rows {
 			rowTbl := L.NewTable()
+
 			for k, v := range row {
 				rowTbl.RawSetString(k, goValueToLua(L, v))
 			}
+
 			arr.Append(rowTbl)
 		}
 

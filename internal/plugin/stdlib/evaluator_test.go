@@ -2,9 +2,9 @@ package stdlib_test
 
 import (
 	"errors"
+	"support_bot/internal/plugin/stdlib"
 	"testing"
 
-	"support_bot/internal/plugin/stdlib"
 	pmock "support_bot/internal/plugin/stdlib/mock"
 
 	"github.com/stretchr/testify/mock"
@@ -17,6 +17,7 @@ func TestEvaluator(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		t.Parallel()
+
 		mockEvaluator := &pmock.MockEvaluator{}
 
 		expected := true
@@ -48,7 +49,7 @@ func TestEvaluator(t *testing.T) {
 		require.Equal(t, lua.LNil, luaErr)
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, true, lua.LVAsBool(luaResult))
+		require.True(t, lua.LVAsBool(luaResult))
 
 		goResult := luaValueToGo(luaResult)
 
@@ -59,6 +60,7 @@ func TestEvaluator(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		t.Parallel()
+
 		mockEvaluator := &pmock.MockEvaluator{}
 
 		expected := false
@@ -90,11 +92,11 @@ func TestEvaluator(t *testing.T) {
 		require.Equal(t, "some error", luaErr.String())
 
 		luaResult := L.GetGlobal("result")
-		require.Equal(t, false, lua.LVAsBool(luaResult))
+		require.False(t, lua.LVAsBool(luaResult))
 
 		goResult := luaValueToGo(luaResult)
 
-		require.Equal(t, nil, goResult)
+		require.Nil(t, goResult)
 
 		mockEvaluator.AssertExpectations(t)
 	})

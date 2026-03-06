@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	plugins "support_bot/internal/plugin"
 	"support_bot/internal/plugin/stdlib"
+
+	plugins "support_bot/internal/plugin"
 
 	"github.com/stretchr/testify/require"
 )
@@ -37,37 +38,35 @@ plugin = {
 
 	-- на вход подается map[string][]map[string]any из go как обогатить map[string]any и вернуть новое значение
 	execute = function(params)
+		local result = {}
 
-        local result = {}
+		for key, list in pairs(params) do
+			result[key] = {}
 
-        for key, list in pairs(params) do
-            result[key] = {}
+			for i, item in ipairs(list) do
+				local new_item = {
+					Phone = item.Phone,
+					Name  = item.Name,
+					Data  = item.Data,
+				}
 
-            for i, item in ipairs(list) do
+				new_item.processed = true
+				new_item.index = i
+				new_item.source = key
+				new_item.processed_at = os.time()
 
-                local new_item = {
-                    Phone = item.Phone,
-                    Name  = item.Name,
-                    Data  = item.Data,
-                }
-
-                new_item.processed = true
-                new_item.index = i
-                new_item.source = key
-                new_item.processed_at = os.time()
-
-                table.insert(result[key], new_item)
-            end
-        end
-
-        return result
-    end,
+				table.insert(result[key], new_item)
+			end
+		end
+		return result
+	end,
 
 	-- Очистка ресурсов
 	cleanup = function()
 		plugin.config = nil
-	end,
-}`
+	end
+}
+`
 
 		plugin, err := plugins.NewLuaPluginWithConfigFromString(
 			plug,
@@ -105,6 +104,7 @@ plugin = {
 		t.Log(string(data))
 
 		var newData map[string][]map[string]any
+
 		err = json.Unmarshal(data, &newData)
 		require.NoError(t, err)
 		t.Log(newData)
@@ -115,31 +115,31 @@ plugin = {
 -- Пример Lua плагина с использованием stdlib
 --
 function getOperatorFromNumber(number)
-    local http = require("http")
-    local json = require("json")
+	local http = require("http")
+	local json = require("json")
 
-    -- убираем первую 7
-    local trimmedNumber = tostring(number):sub(2)
+	-- убираем первую 7
+	local trimmedNumber = tostring(number):sub(2)
 
-    -- формируем URL с query
-    local url = "https://num.voxlink.ru/get/?num=" .. trimmedNumber
+	-- формируем URL с query
+	local url = "https://num.voxlink.ru/get/?num=" .. trimmedNumber
 
-    -- делаем запрос
-    local response, err = http.request("GET", url)
-    if not response then
-        return nil, err
-    end
+	-- делаем запрос
+	local response, err = http.request("GET", url)
+	if not response then
+		return nil, err
+	end
 
-    if response.status_code ~= 200 then
-        return nil, "bad status: " .. response.status_code
-    end
+	if response.status_code ~= 200 then
+		return nil, "bad status: " .. response.status_code
+	end
 
-    local data, _, parseErr = json.decode(response.body, 1, nil)
-    if parseErr then
-        return nil, parseErr
-    end
+	local data, _, parseErr = json.decode(response.body, 1, nil)
+	if parseErr then
+		return nil, parseErr
+	end
 
-    return data.operator
+	return data.operator
 end
 
 plugin = {
@@ -183,14 +183,13 @@ plugin = {
 				table.insert(result[key], new_item)
 			end
 		end
-
 		return result
 	end,
 
 	-- Очистка ресурсов
 	cleanup = function()
 		plugin.config = nil
-	end,
+	end
 }
 `
 
@@ -230,6 +229,7 @@ plugin = {
 		t.Log(string(data))
 
 		var newData map[string][]map[string]any
+
 		err = json.Unmarshal(data, &newData)
 		require.NoError(t, err)
 		t.Log(newData)

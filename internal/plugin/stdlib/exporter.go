@@ -34,6 +34,7 @@ func (p *ExporterPlugin) luaExport(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -41,6 +42,7 @@ func (p *ExporterPlugin) luaExport(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
@@ -48,11 +50,13 @@ func (p *ExporterPlugin) luaExport(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	L.Push(reportDataToLua(L, result))
 	L.Push(lua.LNil)
+
 	return 2
 }
 
@@ -62,15 +66,20 @@ func exportFromLua(t *lua.LTable) (models.Export, error) {
 	orderTbl := t.RawGetString("order")
 
 	var order map[string][]string
+
 	if tbl, ok := orderTbl.(*lua.LTable); ok {
 		order = make(map[string][]string)
+
 		tbl.ForEach(func(k, v lua.LValue) {
 			key := k.String()
+
 			if arr, ok := v.(*lua.LTable); ok {
 				var cols []string
+
 				arr.ForEach(func(_, val lua.LValue) {
 					cols = append(cols, val.String())
 				})
+
 				order[key] = cols
 			}
 		})
@@ -82,8 +91,7 @@ func exportFromLua(t *lua.LTable) (models.Export, error) {
 	}
 
 	if fileName.Type() == lua.LTString {
-		fn := fileName.String()
-		exp.FileName = &fn
+		exp.FileName = new(fileName.String())
 	}
 
 	templateTbl := t.RawGetString("template")
@@ -102,5 +110,6 @@ func exportFromLua(t *lua.LTable) (models.Export, error) {
 func reportDataToLua(L *lua.LState, data models.ReportData) *lua.LTable {
 	result := L.NewTable()
 	result.RawSetString("kind", lua.LNumber(data.Kind()))
+
 	return result
 }

@@ -13,6 +13,7 @@ func luaExecuteTemplate(L *lua.LState) int {
 
 	// --- Lua → Go ---
 	var data any
+
 	if dataTable != nil {
 		data = luaValueToGo(dataTable)
 	}
@@ -22,11 +23,13 @@ func luaExecuteTemplate(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
+
 		return 2
 	}
 
 	// --- Go → Lua ---
 	L.Push(lua.LString(result))
 	L.Push(lua.LNil)
+
 	return 2
 }

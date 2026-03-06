@@ -13,6 +13,7 @@ func TestNewLuaRuntime(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err, "failed to create runtime")
+
 	require.NotNil(t, runtime)
 	defer runtime.Close()
 
@@ -31,6 +32,7 @@ func TestNewLuaRuntime_CustomConfig(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(config)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	assert.Equal(t, config.CallStackSize, runtime.GetConfig().CallStackSize)
@@ -68,6 +70,7 @@ func TestSandbox_DangerousModulesRemoved(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -117,6 +120,7 @@ func TestSandbox_SafeFunctionsAvailable(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -145,10 +149,12 @@ func TestSandbox_SafeFunctionsAvailable(t *testing.T) {
 
 func TestSandbox_SafeModulesAvailable(t *testing.T) {
 	t.Parallel()
+
 	config := &RuntimeConfig{AllowedModules: []string{"io"}}
 
 	runtime, err := NewLuaRuntime(config)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -173,6 +179,7 @@ func TestSandbox_OSModuleRestricted(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -205,6 +212,7 @@ func TestSandbox_ExecuteBasicLua(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -228,6 +236,7 @@ func TestSandbox_StringOperations(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -251,6 +260,7 @@ func TestSandbox_TableOperations(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -271,6 +281,7 @@ func TestSandbox_MathOperations(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -301,6 +312,7 @@ func TestIsModuleAllowed(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(config)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	// разрешенные модули
@@ -324,6 +336,7 @@ func TestIsModuleAllowed_EmptyWhitelist(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(config)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	// при пустом белом списке разрешены все модули
@@ -340,8 +353,8 @@ func TestDefaultRuntimeConfig(t *testing.T) {
 	assert.NotEmpty(t, config.AllowedModules)
 	assert.Contains(t, config.AllowedModules, "json")
 	assert.Contains(t, config.AllowedModules, "http")
-	assert.Greater(t, config.CallStackSize, 0)
-	assert.Greater(t, config.RegistrySize, 0)
+	assert.Positive(t, config.CallStackSize)
+	assert.Positive(t, config.RegistrySize)
 }
 
 func TestSandbox_PreventFileAccess(t *testing.T) {
@@ -349,6 +362,7 @@ func TestSandbox_PreventFileAccess(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()
@@ -375,6 +389,7 @@ func TestSandbox_PreventDebugAccess(t *testing.T) {
 
 	runtime, err := NewLuaRuntime(nil)
 	require.NoError(t, err)
+
 	defer runtime.Close()
 
 	vm := runtime.GetVM()

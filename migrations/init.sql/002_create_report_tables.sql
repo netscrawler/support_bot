@@ -14,8 +14,7 @@ CREATE TABLE reports (
 
 create table email_templates(
     id serial PRIMARY KEY,
-    dest text[] NOT NULL,
-    copy text[],
+    dest text[] NOT NULL, copy text[],
     subject text NOT NULL,
     body text
 );
@@ -105,3 +104,15 @@ CREATE TABLE report_queries (
     CONSTRAINT fk_notify_queries_query FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE
 );
 
+CREATE TABLE plugins(
+    id SERIAL PRIMARY KEY,
+    name text,
+    version text,
+    description text,
+    author text,
+
+    created_at timestamp,
+    updated_at timestamp,
+
+    plugin_str text
+);

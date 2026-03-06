@@ -4,6 +4,7 @@ import (
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
+	plugins "support_bot/internal/plugin"
 	"support_bot/internal/postgres"
 	"time"
 )
@@ -51,6 +52,11 @@ func Default() *Config {
 			Port:     "465",
 			Email:    "example@example.com",
 			Password: "password",
+		},
+		LuaPlugins: plugins.Config{
+			ExecutionTimeout: 1 * time.Minute,
+			MaxMemoryMB:      10 * 1024 * 1024,
+			AllowedModules:   make([]string, 0),
 		},
 	}
 }

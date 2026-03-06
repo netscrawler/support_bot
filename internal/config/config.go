@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
-
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
-	plugins "support_bot/internal/plugin"
 	"support_bot/internal/postgres"
+	"time"
+
+	plugins "support_bot/internal/plugin"
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/joho/godotenv"

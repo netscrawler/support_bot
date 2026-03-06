@@ -3,10 +3,10 @@ package stdlib_test
 import (
 	"context"
 	"errors"
+	"support_bot/internal/plugin/stdlib"
 	"testing"
 
 	models "support_bot/internal/models/report"
-	"support_bot/internal/plugin/stdlib"
 
 	"github.com/stretchr/testify/require"
 	lua "github.com/yuin/gopher-lua"

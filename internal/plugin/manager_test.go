@@ -1,317 +1,149 @@
 package plugins
 
 import (
-	"os"
-	"path/filepath"
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewManager(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Enable: true,
-	}
-
-	manager, err := NewManager(cfg)
-	require.NoError(t, err)
-	require.NotNil(t, manager, "expected manager to be created")
-
-	assert.Empty(t, manager.plugins, "expected empty plugins map")
+type mockPluginLoader struct {
+	loadByNameFn           func(ctx context.Context, name string) (LuaPluginDTO, error)
+	loadByNameAndVersionFn func(ctx context.Context, name, version string) (LuaPluginDTO, error)
 }
 
-func TestLoadPlugin(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Enable: true,
+func (f *mockPluginLoader) LoadByName(ctx context.Context, name string) (LuaPluginDTO, error) {
+	if f.loadByNameFn != nil {
+		return f.loadByNameFn(ctx, name)
 	}
 
-	manager, err := NewManager(cfg)
-	require.NoError(t, err)
+	return LuaPluginDTO{}, nil
+}
 
-	// create temporary test plugin
-	tmpDir := t.TempDir()
-	pluginPath := filepath.Join(tmpDir, "test.lua")
-	pluginContent := `
+func (f *mockPluginLoader) LoadByNameAndVersion(ctx context.Context, name string, version string) (LuaPluginDTO, error) {
+	if f.loadByNameAndVersionFn != nil {
+		return f.loadByNameAndVersionFn(ctx, name, version)
+	}
+
+	return LuaPluginDTO{}, nil
+}
+
+func (f *mockPluginLoader) LoadByID(_ context.Context, _ int) (LuaPluginDTO, error) {
+	return LuaPluginDTO{}, errors.New("not implemented")
+}
+
+func (f *mockPluginLoader) LoadByNameAll(_ context.Context, _ string) ([]LuaPluginDTO, error) {
+	return nil, errors.New("not implemented")
+}
+
+const validPluginScript = `
 plugin = {
     name = "test_plugin",
     version = "1.0.0",
-    description = "test",
-    author = "test"
+    description = "test plugin",
+    author = "test",
+
+    init = function(config)
+        plugin.config = config
+        return true, nil
+    end,
+
+    execute = function(params)
+        return {ok = true, input = params}, nil
+    end,
+
+    validate = function(params)
+        return true, nil
+    end,
+
+    cleanup = function()
+    end
 }
-
-function plugin.init(config)
-    return true, nil
-end
-
-function plugin.fetch_data(params)
-    local json = require("json")
-    return json.encode({test = "data"}), nil
-end
-
-function plugin.validate(params)
-    return true, nil
-end
-
-function plugin.cleanup()
-end
 `
 
-	if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-		t.Fatalf("failed to write test plugin: %v", err)
-	}
-
-	// test loading
-	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-		t.Fatalf("failed to load plugin: %v", err)
-	}
-
-	// verify plugin was loaded
-	plugin, err := manager.GetPlugin("test_plugin")
-	if err != nil {
-		t.Fatalf("failed to get loaded plugin: %v", err)
-	}
-
-	if plugin.Name() != "test_plugin" {
-		t.Errorf("expected plugin name 'test_plugin', got '%s'", plugin.Name())
-	}
-
-	if plugin.Version() != "1.0.0" {
-		t.Errorf("expected version '1.0.0', got '%s'", plugin.Version())
-	}
-}
-
-func TestLoadPlugin_Duplicate(t *testing.T) {
+func TestNewManager(t *testing.T) {
 	t.Parallel()
 
-	cfg := &Config{
-		Enable: true,
-	}
+	cfg := &Config{}
+	repo := &mockPluginLoader{}
 
-	manager, err := NewManager(cfg)
+	manager := NewManager(cfg, repo, nil)
 
-	require.NoError(t, err)
-
-	// create temporary test plugin
-	tmpDir := t.TempDir()
-	pluginPath := filepath.Join(tmpDir, "test.lua")
-	pluginContent := `
-plugin = {
-    name = "duplicate",
-    version = "1.0.0"
-}
-function plugin.init(config) return true, nil end
-function plugin.fetch_data(params) return "{}", nil end
-function plugin.validate(params) return true, nil end
-function plugin.cleanup() end
-`
-
-	if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-		t.Fatalf("failed to write test plugin: %v", err)
-	}
-
-	// load first time
-	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-		t.Fatalf("failed to load plugin first time: %v", err)
-	}
-
-	// try to load again - should fail
-	err = manager.LoadPluginFromFile(pluginPath)
-	if err == nil {
-		t.Error("expected error when loading duplicate plugin")
-	}
+	require.NotNil(t, manager)
+	assert.Equal(t, cfg, manager.config)
+	assert.Equal(t, repo, manager.repo)
 }
 
-func TestUnloadPlugin(t *testing.T) {
+func TestLoadPluginsFromDBByName_WithoutVersion(t *testing.T) {
 	t.Parallel()
 
-	cfg := &Config{
-		Enable: true,
+	repo := &mockPluginLoader{
+		loadByNameFn: func(_ context.Context, name string) (LuaPluginDTO, error) {
+			require.Equal(t, "test_plugin", name)
+
+			return LuaPluginDTO{PluginStr: validPluginScript}, nil
+		},
 	}
 
-	manager, err := NewManager(cfg)
+	manager := NewManager(&Config{}, repo, nil)
+
+	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", nil)
 	require.NoError(t, err)
+	require.NotNil(t, plugin)
 
-	// create and load test plugin
-	tmpDir := t.TempDir()
-	pluginPath := filepath.Join(tmpDir, "test.lua")
-	pluginContent := `
-plugin = {name = "unload_test", version = "1.0.0"}
-function plugin.init(config) return true, nil end
-function plugin.fetch_data(params) return "{}", nil end
-function plugin.validate(params) return true, nil end
-function plugin.cleanup() end
-`
-
-	if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-		t.Fatalf("failed to write test plugin: %v", err)
-	}
-
-	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-		t.Fatalf("failed to load plugin: %v", err)
-	}
-
-	// unload plugin
-	if err := manager.UnloadPlugin("unload_test"); err != nil {
-		t.Fatalf("failed to unload plugin: %v", err)
-	}
-
-	// verify plugin is gone
-	_, err = manager.GetPlugin("unload_test")
-	if err == nil {
-		t.Error("expected error when getting unloaded plugin")
-	}
+	err = plugin.Init(map[string]any{"a": "b"})
+	require.NoError(t, err)
 }
 
-func TestGetPlugin_NotFound(t *testing.T) {
+func TestLoadPluginsFromDBByName_WithVersion(t *testing.T) {
 	t.Parallel()
 
-	cfg := &Config{
-		Enable: true,
+	calledByName := false
+	calledByVersion := false
+	ver := "1.2.3"
+
+	repo := &mockPluginLoader{
+		loadByNameFn: func(_ context.Context, _ string) (LuaPluginDTO, error) {
+			calledByName = true
+
+			return LuaPluginDTO{}, nil
+		},
+		loadByNameAndVersionFn: func(_ context.Context, name, version string) (LuaPluginDTO, error) {
+			calledByVersion = true
+			require.Equal(t, "test_plugin", name)
+			require.Equal(t, ver, version)
+
+			return LuaPluginDTO{PluginStr: validPluginScript}, nil
+		},
 	}
 
-	manager, err := NewManager(cfg)
+	manager := NewManager(&Config{}, repo, nil)
+
+	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", &ver)
 	require.NoError(t, err)
-
-	_, err = manager.GetPlugin("nonexistent")
-	if err == nil {
-		t.Error("expected error when getting nonexistent plugin")
-	}
+	require.NotNil(t, plugin)
+	assert.True(t, calledByVersion)
+	assert.False(t, calledByName)
 }
 
-func TestListPlugins(t *testing.T) {
+func TestLoadPluginsFromDBByName_RepoError(t *testing.T) {
 	t.Parallel()
 
-	cfg := &Config{
-		Enable: true,
+	repoErr := errors.New("db is down")
+	repo := &mockPluginLoader{
+		loadByNameFn: func(_ context.Context, _ string) (LuaPluginDTO, error) {
+			return LuaPluginDTO{}, repoErr
+		},
 	}
 
-	manager, err := NewManager(cfg)
-	require.NoError(t, err)
+	manager := NewManager(&Config{}, repo, nil)
 
-	// create multiple test plugins
-	tmpDir := t.TempDir()
-
-	for i := 1; i <= 3; i++ {
-		pluginPath := filepath.Join(tmpDir, "test"+string(rune('0'+i))+".lua")
-
-		pluginContent := `
-plugin = {name = "plugin` + string(rune('0'+i)) + `", version = "1.0.0"}
-function plugin.init(config) return true, nil end
-function plugin.fetch_data(params) return "{}", nil end
-function plugin.validate(params) return true, nil end
-function plugin.cleanup() end
-`
-		if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-			t.Fatalf("failed to write test plugin %d: %v", i, err)
-		}
-
-		if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-			t.Fatalf("failed to load plugin %d: %v", i, err)
-		}
-	}
-
-	// list all plugins
-	infos := manager.ListPlugins()
-	if len(infos) != 3 {
-		t.Errorf("expected 3 plugins, got %d", len(infos))
-	}
-}
-
-func TestPluginInit(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Enable: true,
-	}
-
-	manager, err := NewManager(cfg)
-	require.NoError(t, err)
-
-	// create test plugin
-	tmpDir := t.TempDir()
-	pluginPath := filepath.Join(tmpDir, "init_test.lua")
-	pluginContent := `
-plugin = {name = "init_test", version = "1.0.0"}
-function plugin.init(config)
-    plugin.test_value = config.test_key
-    return true, nil
-end
-function plugin.fetch_data(params) 
-    local json = require("json")
-    return json.encode({value = plugin.test_value}), nil
-end
-function plugin.validate(params) return true, nil end
-function plugin.cleanup() end
-`
-
-	if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-		t.Fatalf("failed to write test plugin: %v", err)
-	}
-
-	if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-		t.Fatalf("failed to load plugin: %v", err)
-	}
-
-	plugin, err := manager.GetPlugin("init_test")
-	if err != nil {
-		t.Fatalf("failed to get plugin: %v", err)
-	}
-
-	// test init with config
-	config := map[string]any{
-		"test_key": "test_value",
-	}
-
-	if err := plugin.Init(config); err != nil {
-		t.Fatalf("failed to init plugin: %v", err)
-	}
-}
-
-func TestShutdown(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Enable: true,
-	}
-
-	manager, err := NewManager(cfg)
-	require.NoError(t, err)
-
-	// load some plugins
-	tmpDir := t.TempDir()
-
-	for i := 1; i <= 2; i++ {
-		pluginPath := filepath.Join(tmpDir, "shutdown"+string(rune('0'+i))+".lua")
-
-		pluginContent := `
-plugin = {name = "shutdown` + string(rune('0'+i)) + `", version = "1.0.0"}
-function plugin.init(config) return true, nil end
-function plugin.fetch_data(params) return "{}", nil end
-function plugin.validate(params) return true, nil end
-function plugin.cleanup() end
-`
-		if err := os.WriteFile(pluginPath, []byte(pluginContent), 0o600); err != nil {
-			t.Fatalf("failed to write test plugin: %v", err)
-		}
-
-		if err := manager.LoadPluginFromFile(pluginPath); err != nil {
-			t.Fatalf("failed to load plugin: %v", err)
-		}
-	}
-
-	// shutdown
-	if err := manager.Shutdown(); err != nil {
-		t.Fatalf("shutdown failed: %v", err)
-	}
-
-	// verify all plugins are gone
-	infos := manager.ListPlugins()
-	if len(infos) != 0 {
-		t.Errorf("expected 0 plugins after shutdown, got %d", len(infos))
-	}
+	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", nil)
+	require.Error(t, err)
+	assert.NotNil(t, plugin)
+	assert.True(t, strings.Contains(err.Error(), "error loading plugin by name"))
+	assert.ErrorIs(t, err, repoErr)
 }

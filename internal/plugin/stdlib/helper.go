@@ -30,6 +30,7 @@ func luaTableToGoData(t *lua.LTable) (map[string][]map[string]any, error) {
 			}
 
 			m := make(map[string]any)
+
 			rowTbl.ForEach(func(fk, fv lua.LValue) {
 				m[fk.String()] = luaValueToGo(fv)
 			})
@@ -62,21 +63,24 @@ func luaValueToGo(v lua.LValue) any {
 
 func luaTableToGo(t *lua.LTable) any {
 	maxn := t.MaxN()
-	
+
 	if maxn > 0 {
 		arr := make([]any, 0, maxn)
 		for i := 1; i <= maxn; i++ {
 			arr = append(arr, luaValueToGo(t.RawGetInt(i)))
 		}
+
 		return arr
 	}
-	
+
 	m := make(map[string]any)
+
 	t.ForEach(func(k, v lua.LValue) {
 		if str, ok := k.(lua.LString); ok {
 			m[string(str)] = luaValueToGo(v)
 		}
 	})
+
 	return m
 }
 
@@ -86,7 +90,6 @@ func goValueToLua(L *lua.LState, v any) lua.LValue {
 	}
 
 	switch x := v.(type) {
-
 	case string:
 		return lua.LString(x)
 	case bool:
@@ -121,16 +124,20 @@ func goValueToLua(L *lua.LState, v any) lua.LValue {
 
 	case map[string]any:
 		t := L.NewTable()
+
 		for k, v := range x {
 			t.RawSetString(k, goValueToLua(L, v))
 		}
+
 		return t
 
 	case []any:
 		t := L.NewTable()
+
 		for _, v := range x {
 			t.Append(goValueToLua(L, v))
 		}
+
 		return t
 
 	default:
@@ -146,11 +153,11 @@ func reflectToLua(L *lua.LState, v any) lua.LValue {
 		if rv.IsNil() {
 			return lua.LNil
 		}
+
 		return reflectToLua(L, rv.Elem().Interface())
 	}
 
 	switch rv.Kind() {
-
 	case reflect.Struct:
 		t := L.NewTable()
 		rt := rv.Type()
@@ -172,13 +179,16 @@ func reflectToLua(L *lua.LState, v any) lua.LValue {
 				goValueToLua(L, rv.Field(i).Interface()),
 			)
 		}
+
 		return t
 
 	case reflect.Slice, reflect.Array:
 		t := L.NewTable()
+
 		for i := 0; i < rv.Len(); i++ {
 			t.Append(goValueToLua(L, rv.Index(i).Interface()))
 		}
+
 		return t
 
 	case reflect.Map:
@@ -187,12 +197,14 @@ func reflectToLua(L *lua.LState, v any) lua.LValue {
 		}
 
 		t := L.NewTable()
+
 		for _, key := range rv.MapKeys() {
 			t.RawSetString(
 				key.String(),
 				goValueToLua(L, rv.MapIndex(key).Interface()),
 			)
 		}
+
 		return t
 
 	default:
