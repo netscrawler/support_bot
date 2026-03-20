@@ -40,6 +40,10 @@ type App struct {
 	log *slog.Logger
 }
 
+type fileUploader interface {
+	Upload(ctx context.Context, remote string, fileData ...models.ReportData) error
+}
+
 func New(
 	ctx context.Context,
 	cfg *config.Config,
@@ -54,11 +58,18 @@ func New(
 	tg := telegram.NewChatAdaptor(bot, log)
 	smtpS := smtp.New(cfg.SMTP, log)
 
-	smb, err := smb.New(
-		ctx,
-		cfg.SMB,
-		log,
-	)
+	var smbS fileUploader
+	var err error
+
+	if cfg.SMB.Active {
+		smbS, err = smb.New(
+			ctx,
+			cfg.SMB,
+			log,
+		)
+	} else {
+		smbS = smb.UnimplementedSMBSenderServer{}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +89,7 @@ func New(
 		return nil, err
 	}
 
-	delivery := delivery.NewSender(tg, smb, smtpS, log)
+	delivery := delivery.NewSender(tg, smbS, smtpS, log)
 
 	generator := generator.New(reportChan, clct, delivery, eval, 4, log)
 
