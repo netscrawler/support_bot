@@ -331,7 +331,7 @@ func (h *AdminHandler) ListUsers(c tele.Context) error {
 	response.WriteString("📋 *Список пользователей:*\n\n")
 
 	for i, user := range users {
-		fmt.Fprintf(&response, "%d. @%s - Role: %s\n", i+1, user.Username, user.Role)
+		fmt.Fprintf(&response, "%d. @%s - UserRole: %s\n", i+1, user.Username, user.Role)
 	}
 
 	return c.Send(

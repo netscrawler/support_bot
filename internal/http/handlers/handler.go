@@ -8,13 +8,18 @@ import (
 )
 
 type AuthProvider interface {
-	Login(ctx context.Context, email, password string) (any, error)
+	Login(ctx context.Context, email, password string) (string, string, error)
+	Refresh(ctx context.Context, refreshToken string) (string, string, error)
 }
 
 type AuthHandler struct {
 	validator *validator.Validate
 	auth      AuthProvider
 	log       *slog.Logger
+}
+
+func NewAuthHandler(auth AuthProvider, log *slog.Logger) *AuthHandler {
+	return &AuthHandler{auth: auth, log: log, validator: validator.New()}
 }
 
 type ReportSchemeProvider interface {

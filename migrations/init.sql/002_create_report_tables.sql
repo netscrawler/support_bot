@@ -9,8 +9,11 @@ CREATE TABLE reports (
     active BOOLEAN NOT NULL DEFAULT FALSE,
     title TEXT NOT NULL,
     eval_id bigint NOT NULL,
+    save_to bool default false,
+    storage_time_min bigint default 0,
     CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate(id) ON DELETE RESTRICT
 );
+
 
 create table email_templates(
     id serial PRIMARY KEY,
@@ -115,4 +118,20 @@ CREATE TABLE plugins(
     updated_at timestamp,
 
     plugin_str text
+);
+
+CREATE TABLE created_reports(
+    id SERIAL PRIMARY KEY,
+    report_id bigint NOT NULL,
+
+    report bytea NOT NULL,
+
+    format_id bigint NOT NULL,
+    file_name varchar(255),
+
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    expired_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_created_reports_reports foreign key (report_id) references reports(id) on delete cascade,
+    constraint fk_created_reports_reports_type foreign key (format_id) references export_formats(id)
 );

@@ -2,21 +2,20 @@ package models
 
 import "encoding/json"
 
+type Card struct {
+	CardUUID string
+	Title    string
+}
+
 type Report struct {
 	Name  string
 	Title string
 
-	Queries    []Card
 	Recipients []Recipient
-	Exports    []Export
-	Evaluation string
 
 	Workflow json.RawMessage
-}
 
-type Card struct {
-	CardUUID string `json:"card_uuid"`
-	Title    string `json:"title"`
+	Meta map[string]string
 }
 
 type RecipientType string

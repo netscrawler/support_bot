@@ -90,7 +90,7 @@ func TestLoadPluginsFromDBByName_WithoutVersion(t *testing.T) {
 
 	manager := NewManager(&Config{}, repo, nil)
 
-	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", nil)
+	plugin, err := manager.NewPlugin(t.Context(), "test_plugin", nil)
 	require.NoError(t, err)
 	require.NotNil(t, plugin)
 
@@ -122,7 +122,7 @@ func TestLoadPluginsFromDBByName_WithVersion(t *testing.T) {
 
 	manager := NewManager(&Config{}, repo, nil)
 
-	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", &ver)
+	plugin, err := manager.NewPlugin(t.Context(), "test_plugin", &ver)
 	require.NoError(t, err)
 	require.NotNil(t, plugin)
 	assert.True(t, calledByVersion)
@@ -141,7 +141,7 @@ func TestLoadPluginsFromDBByName_RepoError(t *testing.T) {
 
 	manager := NewManager(&Config{}, repo, nil)
 
-	plugin, err := manager.LoadPluginsFromDBByName(t.Context(), "test_plugin", nil)
+	plugin, err := manager.NewPlugin(t.Context(), "test_plugin", nil)
 	require.Error(t, err)
 	assert.NotNil(t, plugin)
 	assert.True(t, strings.Contains(err.Error(), "error loading plugin by name"))

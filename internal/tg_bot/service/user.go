@@ -89,9 +89,7 @@ func (u *User) Create(ctx context.Context, user *models.User) error {
 }
 
 func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) error {
-	user := models.NewEmptyUser(username, isAdmin)
-
-	err := u.repo.Create(ctx, &user)
+	err := u.repo.Create(ctx, new(models.NewEmptyUser(username, isAdmin)))
 	if err != nil {
 		u.log.ErrorContext(ctx, "create empty user", slog.Any("error", err))
 

@@ -43,7 +43,7 @@ func NewManager(cfg *Config, plugRepo PluginLoader, std *stdlib.STD) *Manager {
 	}
 }
 
-func (m *Manager) LoadPluginsFromDBByName(ctx context.Context, name string, version *string) (*LuaPlugin, error) {
+func (m *Manager) NewPlugin(ctx context.Context, name string, version *string) (*LuaPlugin, error) {
 	var plug LuaPluginDTO
 	var err error
 	if version != nil {

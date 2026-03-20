@@ -77,14 +77,13 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 	}
 
 	ctx := context.Background()
-	snd := models.NewUser(
+	err := h.userService.AddUserComplete(ctx, new(models.NewUser(
 		c.Sender().ID,
 		c.Sender().Username,
 		c.Sender().FirstName,
 		&c.Sender().LastName,
 		false,
-	)
-	err := h.userService.AddUserComplete(ctx, &snd)
+	)))
 	formatedString := fmt.Sprintf(
 		"Пользователь с ником @%s успешно прошел регистрацию",
 		c.Sender().Username,

@@ -2,8 +2,6 @@ package dto
 
 import (
 	"fmt"
-	"time"
-
 	"support_bot/internal/http/errorz"
 
 	val "github.com/go-playground/validator/v10"
@@ -19,16 +17,15 @@ func (a AuthUserRequestDTO) Validate(v *val.Validate) error {
 	if err != nil {
 		return fmt.Errorf("%w : %w", errorz.ErrValidationError, err)
 	}
+
 	return nil
 }
 
 type AuthUserResponseDTO struct {
-	AccessToken           string        `json:"access_token"`
-	ExpiresIn             time.Duration `json:"expires_in"`
-	RefreshToken          string        `json:"refresh_token"`
-	RefreshTokenExpiresIn time.Duration `json:"refresh_token_expires_in"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
-func NewAuthUserResponseDTOfromDomain(resp any) *AuthUserResponseDTO {
-	return &AuthUserResponseDTO{}
+func NewAuthUserResponseDTOfromDomain(accessToken string, refreshToken string) AuthUserResponseDTO {
+	return AuthUserResponseDTO{AccessToken: accessToken, RefreshToken: refreshToken}
 }

@@ -53,7 +53,7 @@ func main() {
 			slog.Any("BuildTime", BuildTime)),
 	)
 
-	app, err := app.New(ctx, cfg)
+	app, err := app.New(ctx, cfg, log)
 	if err != nil {
 		log.Error("failing creating app", slog.Any("error", err))
 

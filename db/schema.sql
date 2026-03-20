@@ -2,13 +2,34 @@
 CREATE TYPE user_role AS ENUM ('admin', 'user', 'primary');
 
 -- Таблица пользователей
-CREATE TABLE users (
+CREATE TABLE tg_users (
     id SERIAL PRIMARY KEY,
     telegram_id BIGINT UNIQUE NOT NULL,
     username VARCHAR(255),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     role user_role NOT NULL DEFAULT 'user'
+);
+
+CREATE TABLE users (
+    p_id SERIAL PRIMARY KEY,
+    id varchar(255) unique NOT NULL,
+    login VARCHAR(255) unique NOT NULL,
+    email VARCHAR(255),
+    password VARCHAR(255),
+    role user_role NOT NULL DEFAULT 'user',
+    tg_profile bigint,
+    active boolean,
+    constraint tg_profile foreign key (tg_profile) references users(id)
+);
+
+CREATE TABLE refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES site_users(id) ON DELETE CASCADE,
+    token_hash CHAR(64) NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL
 );
 
 create table evaluate(
@@ -22,7 +43,25 @@ CREATE TABLE reports (
     active BOOLEAN NOT NULL DEFAULT FALSE,
     title TEXT NOT NULL,
     eval_id bigint NOT NULL,
+    save_to bool default false,
+    storage_time_min bigint default 0,
     CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE created_reports(
+    id SERIAL PRIMARY KEY,
+    report_id bigint NOT NULL,
+
+    report bytea NOT NULL,
+
+    format_id bigint NOT NULL,
+    file_name varchar(255),
+
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    expired_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_created_reports_reports foreign key (report_id) references reports(id) on delete cascade,
+    constraint fk_created_reports_reports_type foreign key (format_id) references export_formats(id)
 );
 
 -- Таблица чатов для уведомлений

@@ -2,7 +2,8 @@ package models
 
 import (
 	"bytes"
-	"iter"
+	"encoding/base64"
+
 	"support_bot/internal/pkg/text"
 )
 
@@ -85,16 +86,31 @@ func NewTargetEmail(tmpl EmailTemplate) (TargetEmail, error) {
 
 func (t TargetEmail) Kind() TargetKind { return TargetEmailKind }
 
-type SendKind int
+type SendKind string
 
 const (
-	SendTextKind SendKind = iota
-	SendImageKind
-	SendFileKind
+	SendTextKind  SendKind = "text"
+	SendImageKind          = "image"
+	SendFileKind           = "File"
 )
 
-type ReportData interface {
-	Kind() SendKind
+func (s SendKind) String() string {
+	return string(s)
+}
+
+type ExportedReport struct {
+	Raw    string       `json:"raw,omitempty"`
+	Type   string       `json:"type,omitempty"`
+	Config ReportConfig `json:"config,omitempty"`
+}
+
+func (e *ExportedReport) ToReady() {
+}
+
+type ReportConfig struct {
+	FileName  *string `json:"file_name,omitempty"`
+	ParseMode *string `json:"parse_mode,omitempty"`
+	SendKind  *string `json:"send_kind,omitempty"`
 }
 
 type TextData struct {
@@ -113,136 +129,65 @@ func NewTextData(text string) *TextData {
 
 func (TextData) Kind() SendKind { return SendTextKind }
 
-type ImageData struct {
-	img   []*bytes.Buffer
-	name  []string
-	Entry int
-}
-
-func NewImageData(img *bytes.Buffer, name string) (*ImageData, error) {
-	f := []*bytes.Buffer{}
-	n := []string{}
-
-	pn, err := text.ExecuteTemplate(name, nil)
+func (t TextData) Export() (*ExportedReport, error) {
+	var buf bytes.Buffer
+	_, err := base64.NewEncoder(base64.StdEncoding, &buf).Write([]byte(t.Msg))
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImageData{
-		img:   append(f, img),
-		name:  append(n, pn),
-		Entry: len(f),
+	return &ExportedReport{
+		Raw:  buf.String(),
+		Type: "text",
+		Config: ReportConfig{
+			ParseMode: &t.Parse,
+		},
 	}, nil
 }
 
-func NewEmptyImageData() *ImageData {
-	f := []*bytes.Buffer{}
-	n := []string{}
-
-	return &ImageData{
-		img:   f,
-		name:  n,
-		Entry: 0,
-	}
-}
-
-func (id *ImageData) Extend(img *bytes.Buffer, name string) error {
-	n, err := text.ExecuteTemplate(name, nil)
-	if err != nil {
-		return err
-	}
-
-	id.img = append(id.img, img)
-	id.name = append(id.name, n)
-	id.Entry++
-
-	return nil
-}
-
-func (id *ImageData) Data() iter.Seq2[*bytes.Buffer, string] {
-	return func(yield func(*bytes.Buffer, string) bool) {
-		for i := 0; i < len(id.img) && i < len(id.name); i++ {
-			if !yield(id.img[i], id.name[i]) {
-				return
-			}
-		}
-	}
-}
-
-func (*ImageData) Kind() SendKind { return SendImageKind }
-
 type FileData struct {
-	file  []*bytes.Buffer
-	name  []string
-	Entry int
+	File *bytes.Buffer
+	name string
+	kind SendKind
 }
 
 func NewFileData(file *bytes.Buffer, name string) (*FileData, error) {
-	f := []*bytes.Buffer{}
-	n := []string{}
-
 	nm, err := text.ExecuteTemplate(name, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return &FileData{
-		file:  append(f, file),
-		name:  append(n, nm),
-		Entry: 1,
+		File: file,
+		name: nm,
+		kind: SendFileKind,
 	}, nil
 }
 
-func NewEmptyFileData() *FileData {
-	f := []*bytes.Buffer{}
-	n := []string{}
-
-	return &FileData{
-		file:  f,
-		name:  n,
-		Entry: 0,
-	}
-}
-
-func (fd *FileData) Len() int {
-	return len(fd.file)
-}
-
-func (fd *FileData) Extend(file *bytes.Buffer, name string) error {
+func NewImageData(file *bytes.Buffer, name string) (*FileData, error) {
 	nm, err := text.ExecuteTemplate(name, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fd.file = append(fd.file, file)
-	fd.name = append(fd.name, nm)
-	fd.Entry++
-
-	return nil
+	return &FileData{
+		File: file,
+		name: nm,
+		kind: SendImageKind,
+	}, nil
 }
+func (FileData) Kind() SendKind { return SendFileKind }
 
-func (fd *FileData) ExtendWithoutTemplate(file *bytes.Buffer, name string) {
-	fd.file = append(fd.file, file)
-	fd.name = append(fd.name, name)
-	fd.Entry++
-}
-
-func (fd *FileData) Append(datas ...FileData) {
-	for _, d := range datas {
-		fd.file = append(fd.file, d.file...)
-		fd.name = append(fd.name, d.name...)
-		fd.Entry += d.Entry
+func (f FileData) Export() (*ExportedReport, error) {
+	var buf bytes.Buffer
+	_, err := base64.NewEncoder(base64.StdEncoding, &buf).Write(f.File.Bytes())
+	if err != nil {
+		return nil, err
 	}
-}
 
-func (*FileData) Kind() SendKind { return SendFileKind }
-
-func (fd *FileData) Data() iter.Seq2[*bytes.Buffer, string] {
-	return func(yield func(*bytes.Buffer, string) bool) {
-		for i := 0; i < len(fd.file) && i < len(fd.name); i++ {
-			if !yield(fd.file[i], fd.name[i]) {
-				return
-			}
-		}
-	}
+	return &ExportedReport{
+		Raw:    buf.String(),
+		Type:   "File",
+		Config: ReportConfig{SendKind: new(f.kind.String()), FileName: &f.name},
+	}, nil
 }

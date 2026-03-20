@@ -3,22 +3,18 @@ package report
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/collector"
-	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
+	"support_bot/internal/core"
+	"support_bot/internal/core/actions/builtin"
+	"support_bot/internal/core/actions/builtin/collector"
+	"support_bot/internal/core/actions/builtin/collector/metabase"
 	"support_bot/internal/delivery"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
-	"support_bot/internal/evaluator"
-	"support_bot/internal/generator"
-	"support_bot/internal/orchestrator"
 	"support_bot/internal/postgres"
-	"support_bot/internal/sheduler"
 
 	"gopkg.in/telebot.v4"
-
-	eventcreator "support_bot/internal/event_creator"
 
 	models "support_bot/internal/models/report"
 )
@@ -31,10 +27,10 @@ const (
 type App struct {
 	sheduleC  chan string
 	eventC    chan string
-	sheduler  *sheduler.Sheduler
-	event     *eventcreator.EventCreator
-	orch      *orchestrator.Orchestrator
-	generator *generator.Generator
+	sheduler  *core.Sheduler
+	event     *core.EventCreator
+	orch      *core.Orchestrator
+	generator *core.Generator
 	delivery  *delivery.SenderStrategy
 
 	log *slog.Logger
@@ -45,7 +41,7 @@ func New(
 	cfg *config.Config,
 	bot *telebot.Bot,
 	db *postgres.DB,
-	shdAPI chan sheduler.SheduleAPIEvent,
+	shdAPI chan core.SheduleAPIEvent,
 	log *slog.Logger,
 ) (*App, error) {
 	mb := metabase.New(cfg.MetabaseDomain)
@@ -67,23 +63,23 @@ func New(
 	eventChan := make(chan string, channelBufferSize)
 	reportChan := make(chan models.Report, channelBufferSize)
 
-	shdLoader := sheduler.NewSheduleRepo(db.GetConn(), log)
-	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
+	shdLoader := core.NewSheduleRepo(db.GetConn(), log)
+	shd := core.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
 
-	evRepository := eventcreator.NewRepository(db.GetConn(), log)
-	evC := eventcreator.New(sheduleEvents, eventChan, log, evRepository)
+	evRepository := core.NewEventRepository(db.GetConn(), log)
+	evC := core.NewEventCreator(sheduleEvents, eventChan, log, evRepository)
 
-	eval, err := evaluator.NewEvaluator(log)
+	eval, err := builtin.NewEvaluator(log)
 	if err != nil {
 		return nil, err
 	}
 
 	delivery := delivery.NewSender(tg, smb, smtpS, log)
 
-	generator := generator.New(reportChan, clct, delivery, eval, 4, log)
+	generator := core.New(reportChan, clct, delivery, eval, 4, log)
 
-	orchRepo := orchestrator.NewRepository(db.GetConn(), log)
-	orch := orchestrator.New(eventChan, reportChan, orchRepo, log)
+	orchRepo := core.NewOrchestratorRepository(db.GetConn(), log)
+	orch := core.NewOrchestrator(eventChan, reportChan, orchRepo, log)
 
 	return &App{
 		sheduleC:  sheduleEvents,

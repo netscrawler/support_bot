@@ -2,4 +2,4 @@ package handlers
 
 import "net/http"
 
-func (rh *ReportSchemeHandler) GetReportByID(w http.ResponseWriter, r *http.Request)
+func (rh *ReportSchemeHandler) CreateScheme(w http.ResponseWriter, r *http.Request) {}

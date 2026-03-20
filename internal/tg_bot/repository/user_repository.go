@@ -22,7 +22,7 @@ func NewUserRepository(db *sqlx.DB, log *slog.Logger) *UserRepository {
 }
 
 func (u *UserRepository) Create(ctx context.Context, user *models.User) error {
-	const query = `INSERT INTO users (
+	const query = `INSERT INTO tg_users (
     telegram_id, username, first_name, last_name, role
 ) VALUES ( $1,$2,$3,$4, $5)
 RETURNING *;`
@@ -48,7 +48,7 @@ RETURNING *;`
 }
 
 func (u *UserRepository) Update(ctx context.Context, user *models.User) error {
-	const query = `UPDATE users
+	const query = `UPDATE tg_users
     SET telegram_id = $2,
         first_name = $3,
         last_name = $4
@@ -78,7 +78,7 @@ func (u *UserRepository) Update(ctx context.Context, user *models.User) error {
 }
 
 func (u *UserRepository) GetByUsername(ctx context.Context, username string) (*models.User, error) {
-	const query = `SELECT * FROM users
+	const query = `SELECT * FROM tg_users
 WHERE username = $1
 LIMIT 1;`
 
@@ -97,7 +97,7 @@ LIMIT 1;`
 }
 
 func (u *UserRepository) GetAll(ctx context.Context) ([]models.User, error) {
-	const query = `SELECT * FROM users;`
+	const query = `SELECT * FROM tg_users;`
 
 	err := ctx.Err()
 	if err != nil {
@@ -115,7 +115,7 @@ func (u *UserRepository) GetAll(ctx context.Context) ([]models.User, error) {
 }
 
 func (u *UserRepository) GetByTgID(ctx context.Context, id int64) (*models.User, error) {
-	const query = `SELECT * FROM users
+	const query = `SELECT * FROM tg_users
 WHERE telegram_id = $1
 LIMIT 1;`
 
@@ -134,7 +134,7 @@ LIMIT 1;`
 }
 
 func (u *UserRepository) GetAllAdmins(ctx context.Context) ([]models.User, error) {
-	const query = `SELECT * FROM users
+	const query = `SELECT * FROM tg_users
 WHERE role in ('admin', 'primary');`
 
 	err := ctx.Err()
@@ -153,7 +153,7 @@ WHERE role in ('admin', 'primary');`
 }
 
 func (u *UserRepository) Delete(ctx context.Context, tgID int64) error {
-	const query = `DELETE FROM users
+	const query = `DELETE FROM tg_users
     WHERE telegram_id = $1;`
 
 	if err := ctx.Err(); err != nil {

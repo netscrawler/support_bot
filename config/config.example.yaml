@@ -96,4 +96,27 @@ smtp:
     # Пароль от email-учетной записи.
     # Обычно это пароль приложения, а не основной пароль аккаунта.
     password: password
+http:
+    jwt:
+        secret: "very_secret"
+        access_token_ttl: 15m
+        refresh_token_ttl: 720h
+    cors:
+        enabled: false
+        allowed_origins:
+            - "*"
+        allowed_methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+        allowed_headers:
+            - Authorization
+            - Content-Type
+            - X-Trace-ID
+        exposed_headers:
+            - X-Trace-ID
+        allow_credentials: true
+        max_age: 600
 

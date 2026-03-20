@@ -2,9 +2,9 @@ package bot
 
 import (
 	"log/slog"
+	"support_bot/internal/core"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
-	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
@@ -20,7 +20,7 @@ type Bot struct {
 	bot    *telebot.Bot
 	router *bot.Router
 
-	shed *sheduler.SheduleAPI
+	shed *core.SheduleAPI
 }
 
 func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
@@ -41,7 +41,7 @@ func New(
 	cleanupTime time.Duration,
 	tgBot *telebot.Bot,
 	db *postgres.DB,
-	shdAPI chan sheduler.SheduleAPIEvent,
+	shdAPI chan core.SheduleAPIEvent,
 	log *slog.Logger,
 ) (*Bot, error) {
 	state := handlers.NewState(cleanupTime)
@@ -53,7 +53,7 @@ func New(
 	userService := service.NewUser(userRepo, log)
 
 	tgSender := telegram.NewChatAdaptor(tgBot, log)
-	shed := sheduler.NewSheduleAPI(shdAPI)
+	shed := core.NewSheduleAPI(shdAPI)
 	reportService := service.NewReportService(shed, log)
 
 	notifyier := service.NewTelegramNotify(userRepo, chatRepo, tgSender, log)

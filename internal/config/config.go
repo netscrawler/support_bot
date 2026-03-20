@@ -6,6 +6,7 @@ import (
 	"os"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/http"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"time"
@@ -25,6 +26,8 @@ type Config struct {
 	SMB            smb.SMBConfig           `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
 	SMTP           smtp.SMTPConfig         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
 	LuaPlugins     plugins.Config          `yaml:"plugin"          comment:"Настройка lua плагинов и их runtime"`
+
+	HTTP http.HTTPConfig `yaml:"http"`
 }
 
 type bot struct {
@@ -53,12 +56,11 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error readYaml config: %w", err)
 		}
-	} else {
-		// Если путь не указан, загружаем из переменных окружения
-		err := cleanenv.ReadEnv(&cfg)
-		if err != nil {
-			return nil, fmt.Errorf("error readEnv config: %w", err)
-		}
+	}
+	// Если путь не указан, загружаем из переменных окружения
+	err := cleanenv.ReadEnv(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error readEnv config: %w", err)
 	}
 
 	return &cfg, nil

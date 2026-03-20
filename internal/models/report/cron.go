@@ -29,12 +29,3 @@ func NewCron(cronExpr string) (CronVO, error) {
 
 	return CronVO(cronExpr), nil
 }
-
-type NotificationResult struct {
-	Title string
-	Text  *string
-	HTML  *any
-	Image *ImageData
-	XLSX  *map[string][][]string
-	CSV   *FileData
-}

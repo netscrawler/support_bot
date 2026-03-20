@@ -4,11 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"support_bot/internal/app/bot"
+	"support_bot/internal/app/httpapp"
 	"support_bot/internal/app/report"
 	"support_bot/internal/config"
+	"support_bot/internal/core"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
-	"support_bot/internal/sheduler"
 
 	"gopkg.in/telebot.v4"
 )
@@ -19,13 +20,12 @@ type App struct {
 	cfg     *config.Config
 	report  *report.App
 	tgBot   *bot.Bot
+	http    *httpapp.App
 }
 
-func New(ctx context.Context, cfg *config.Config) (*App, error) {
+func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error) {
 	connCtx, cancel := context.WithTimeout(ctx, cfg.Database.DatabaseConnect)
 	defer cancel()
-
-	log := slog.Default()
 
 	connCtx = logger.AppendCtx(connCtx, slog.Any("function", "connecting to database"))
 
@@ -41,7 +41,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	shdAPI := make(chan sheduler.SheduleAPIEvent, 5)
+	shdAPI := make(chan core.SheduleAPIEvent, 5)
 
 	report, err := report.New(ctx, cfg, tgBot, rdb, shdAPI, log)
 	if err != nil {
@@ -53,19 +53,24 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	hApp := httpapp.NewApp(cfg.HTTP, rdb.GetConn(), log)
+
 	return &App{
 		bot:     tgBot,
 		storage: rdb,
 		cfg:     cfg,
 		report:  report,
 		tgBot:   tgBotUser,
+		http:    hApp,
 	}, nil
 }
 
 func (a *App) Start(ctx context.Context) error {
 	go a.bot.Start()
 	go a.tgBot.Start()
+	go a.http.Start()
 
+	//return nil
 	return a.report.Start(ctx)
 }
 
