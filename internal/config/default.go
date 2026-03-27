@@ -31,7 +31,7 @@ func Default() *Config {
 			MaxConnIdleTime: 2 * time.Minute,
 			DatabaseConnect: 30 * time.Second,
 		},
-		Bot: bot{
+		Bot: Bot{
 			TelegramToken: "telegram_bot_token",
 			CleanUpTime:   10 * time.Minute,
 			BotPoll:       30 * time.Second,

@@ -13,7 +13,7 @@ type ExportFunc func(
 	ctx context.Context,
 	data map[string][]map[string]any,
 	exp models.Export,
-) (models.ReportData, error)
+) (models.ExportedReport, error)
 
 type ExporterPlugin struct {
 	exp ExportFunc
@@ -107,9 +107,10 @@ func exportFromLua(t *lua.LTable) (models.Export, error) {
 	return exp, nil
 }
 
-func reportDataToLua(L *lua.LState, data models.ReportData) *lua.LTable {
+func reportDataToLua(L *lua.LState, data models.ExportedReport) *lua.LTable {
 	result := L.NewTable()
-	result.RawSetString("kind", lua.LNumber(data.Kind()))
+	// TODO: fix
+	result.RawSetString("kind", lua.LNumber(1))
 
 	return result
 }

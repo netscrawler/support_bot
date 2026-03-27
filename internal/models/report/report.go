@@ -3,8 +3,8 @@ package models
 import "encoding/json"
 
 type Card struct {
-	CardUUID string
-	Title    string
+	CardUUID string `json:"card_uuid"`
+	Title    string `json:"title"`
 }
 
 type Report struct {

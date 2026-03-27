@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/app/bot"
 	"support_bot/internal/app/httpapp"
 	"support_bot/internal/app/report"
@@ -10,6 +11,7 @@ import (
 	"support_bot/internal/core"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	"support_bot/internal/sheduler"
 
 	"gopkg.in/telebot.v4"
 )
@@ -27,6 +29,8 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 	connCtx, cancel := context.WithTimeout(ctx, cfg.Database.DatabaseConnect)
 	defer cancel()
 
+	log := slog.Default()
+
 	connCtx = logger.AppendCtx(connCtx, slog.Any("function", "connecting to database"))
 
 	rdb, err := postgres.New(ctx, cfg.Database, log)
@@ -36,7 +40,12 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 		return nil, err
 	}
 
-	tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Bot.BotPoll)
+	tgBot, err := bot.NewTgBot(
+		cfg.Bot.TelegramToken,
+		cfg.Bot.ApiProxy,
+		cfg.Bot.Proxy,
+		cfg.Bot.BotPoll,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +77,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger) (*App, error
 func (a *App) Start(ctx context.Context) error {
 	go a.bot.Start()
 	go a.tgBot.Start()
-	go a.http.Start()
 
-	//return nil
 	return a.report.Start(ctx)
 }
 

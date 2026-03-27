@@ -12,12 +12,12 @@ const (
 	PseudoStartNodeID = "start"
 	PseudoEndNodeID   = "end"
 
-	PseudoStartActionType = "std@pseudo_start"
-	PseudoEndActionType   = "std@pseudo_end"
+	PseudoStartActionType = "std@start"
+	PseudoEndActionType   = "std@end"
 )
 
 // WorkflowDef is the JSON representation of a workflow.
-// Stored in Report.Workflow as json.RawMessage.
+// Stored in report.Report.Workflow as json.RawMessage.
 type WorkflowDef struct {
 	ID       string            `json:"id"`
 	Version  string            `json:"version,omitempty"`

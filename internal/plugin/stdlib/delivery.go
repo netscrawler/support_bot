@@ -1,7 +1,6 @@
 package stdlib
 
 import (
-	"bytes"
 	"context"
 	"support_bot/internal/delivery/smtp"
 	"time"
@@ -12,11 +11,11 @@ import (
 )
 
 type TelegramChatSender interface {
-	Send(ctx context.Context, chat models.TargetTelegramChat, data ...models.ReportData) error
+	Send(ctx context.Context, chat models.TargetTelegramChat, data ...models.ExportedReport) error
 }
 
 type FileUploader interface {
-	Upload(ctx context.Context, remote string, fileData ...models.ReportData) error
+	Upload(ctx context.Context, remote string, fileData ...models.ExportedReport) error
 }
 
 type SMTPSender interface {
@@ -27,7 +26,7 @@ type Sender interface {
 	Send(
 		ctx context.Context,
 		metas []models.Targeted,
-		data []models.ReportData,
+		data []models.ExportedReport,
 	) error
 }
 
@@ -153,32 +152,32 @@ func targetsFromLua(t *lua.LTable) ([]models.Targeted, error) {
 	return targets, nil
 }
 
-func reportDataFromLua(t *lua.LTable) ([]models.ReportData, error) {
-	var data []models.ReportData
+func reportDataFromLua(t *lua.LTable) ([]models.ExportedReport, error) {
+	var data []models.ExportedReport
 
-	t.ForEach(func(_, v lua.LValue) {
-		tbl, ok := v.(*lua.LTable)
-		if !ok {
-			return
-		}
-
-		kind := tbl.RawGetString("kind")
-		switch int(lua.LVAsNumber(kind)) {
-		case int(models.SendTextKind):
-			msg := tbl.RawGetString("msg")
-			parse := tbl.RawGetString("parse")
-
-			textData := &models.TextData{
-				Msg: msg.String(),
-			}
-
-			if parse.Type() == lua.LTString {
-				textData.Parse = parse.String()
-			}
-
-			data = append(data, textData)
-		}
-	})
+	//t.ForEach(func(_, v lua.LValue) {
+	//	tbl, ok := v.(*lua.LTable)
+	//	if !ok {
+	//		return
+	//	}
+	//
+	//	kind := tbl.RawGetString("kind")
+	//	switch int(lua.LVAsNumber(kind)) {
+	//	case int(models.SendTextKind):
+	//		msg := tbl.RawGetString("msg")
+	//		parse := tbl.RawGetString("parse")
+	//
+	//		textData := &models.TextData{
+	//			Msg: msg.String(),
+	//		}
+	//
+	//		if parse.Type() == lua.LTString {
+	//			textData.Parse = parse.String()
+	//		}
+	//
+	//		data = append(data, textData)
+	//	}
+	//})
 
 	return data, nil
 }
@@ -276,7 +275,7 @@ func mailFromLua(t *lua.LTable) (smtp.Mail, error) {
 	copyTbl := t.RawGetString("copy")
 	subject := t.RawGetString("subject")
 	body := t.RawGetString("body")
-	attachmentsTbl := t.RawGetString("attachments")
+	// attachmentsTbl := t.RawGetString("attachments")
 
 	var recipients, copy []string
 
@@ -292,26 +291,26 @@ func mailFromLua(t *lua.LTable) (smtp.Mail, error) {
 		})
 	}
 
-	fileData := models.NewEmptyFileData()
-
-	if arr, ok := attachmentsTbl.(*lua.LTable); ok {
-		arr.ForEach(func(_, val lua.LValue) {
-			if attTbl, ok := val.(*lua.LTable); ok {
-				name := attTbl.RawGetString("name")
-				content := attTbl.RawGetString("content")
-				fileData.ExtendWithoutTemplate(
-					bytes.NewBufferString(content.String()),
-					name.String(),
-				)
-			}
-		})
-	}
+	//fileData := models.NewEmptyFileData()
+	//
+	//if arr, ok := attachmentsTbl.(*lua.LTable); ok {
+	//	arr.ForEach(func(_, val lua.LValue) {
+	//		if attTbl, ok := val.(*lua.LTable); ok {
+	//			name := attTbl.RawGetString("name")
+	//			content := attTbl.RawGetString("content")
+	//			fileData.ExtendWithoutTemplate(
+	//				bytes.NewBufferString(content.String()),
+	//				name.String(),
+	//			)
+	//		}
+	//	})
+	//}
 
 	return smtp.Mail{
-		Recipients:  recipients,
-		Copy:        copy,
-		Subject:     subject.String(),
-		Body:        body.String(),
-		Attachments: *fileData,
+		Recipients: recipients,
+		Copy:       copy,
+		Subject:    subject.String(),
+		Body:       body.String(),
+		// Attachments: *fileData,
 	}, nil
 }

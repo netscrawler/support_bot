@@ -1,7 +1,12 @@
 package bot
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
 	"support_bot/internal/core"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
@@ -14,6 +19,8 @@ import (
 	"gopkg.in/telebot.v4"
 
 	bot "support_bot/internal/tg_bot"
+
+	"golang.org/x/net/proxy"
 )
 
 type Bot struct {
@@ -23,10 +30,66 @@ type Bot struct {
 	shed *core.SheduleAPI
 }
 
-func NewTgBot(token string, poll time.Duration) (*telebot.Bot, error) {
+func buildHTTPClient(proxyStr string) (*http.Client, error) {
+	if proxyStr == "" {
+		return &http.Client{}, nil
+	}
+
+	u, err := url.Parse(proxyStr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch u.Scheme {
+
+	case "http", "https":
+		return &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(u),
+			},
+			Timeout: 120 * time.Second,
+		}, nil
+
+	case "socks5", "socks5h":
+		dialer, err := proxy.SOCKS5("udp", u.Host, nil, proxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+
+		return &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialer.Dial(network, addr)
+				},
+			},
+			Timeout: 120 * time.Second,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme: %s", u.Scheme)
+	}
+}
+
+func NewTgBot(
+	token string,
+	urlProxy string,
+	proxy string,
+	poll time.Duration,
+) (*telebot.Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: poll},
+	}
+	if proxy != "" {
+		client, err := buildHTTPClient(proxy)
+		if err != nil {
+			return nil, err
+		}
+		pref.Client = client
+	}
+
+	if urlProxy != "" {
+		pref.URL = urlProxy
 	}
 
 	b, err := telebot.NewBot(pref)

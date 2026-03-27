@@ -10,8 +10,6 @@ import (
 	"support_bot/internal/core/workflow/registry"
 	"support_bot/internal/delivery"
 
-	workflow "support_bot/internal/core/workflow"
-
 	models "support_bot/internal/models/report"
 )
 
@@ -64,32 +62,32 @@ func RegisterBuiltins(reg *registry.Registry, deps BuiltinDeps) error {
 	}
 
 	err := errors.Join(
-		reg.Register(workflow.ActionTypeCollect, NewCollectAction(deps.Collector)),
-		reg.Register(workflow.ActionTypeEvaluate, NewEvaluateAction(deps.Evaluator)),
-		reg.Register(workflow.ActionTypeExport, NewExportAction()),
-		reg.Register(workflow.ActionTypeSend, NewSendAction(deps.Sender)),
-		reg.Register(workflow.ActionTypeQuery, NewQueryAction()),
-		reg.Register(workflow.ActionTypeSave, NewSaveAction(deps.Saver)),
-		reg.Register(workflow.ActionTypeStart, startAction{}),
-		reg.Register(workflow.ActionTypeEnd, endAction{}),
+		reg.Register(ActionTypeCollect, NewCollectAction(deps.Collector)),
+		reg.Register(ActionTypeEvaluate, NewEvaluateAction(deps.Evaluator)),
+		reg.Register(ActionTypeExport, NewExportAction()),
+		reg.Register(ActionTypeSend, NewSendAction(deps.Sender)),
+		reg.Register(ActionTypeQuery, NewQueryAction()),
+		reg.Register(ActionTypeSave, NewSaveAction(deps.Saver)),
+		reg.Register(ActionTypeStart, StartAction{}),
+		reg.Register(ActionTypeEnd, EndAction{}),
 	)
 
 	return err
 }
 
-type startAction struct{}
+type StartAction struct{}
 
-func (startAction) Execute(_ context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
+func (StartAction) Execute(_ context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
 	return registry.ActionOutput{Data: map[string]any{"started": true}}, nil
 }
 
-type endAction struct{}
+type EndAction struct{}
 
 type pseudoEndConfig struct {
 	TerminalNodeIDs []string `json:"terminal_node_ids,omitempty"`
 }
 
-func (endAction) Execute(_ context.Context, input registry.ActionInput) (registry.ActionOutput, error) {
+func (EndAction) Execute(_ context.Context, input registry.ActionInput) (registry.ActionOutput, error) {
 	var cfg pseudoEndConfig
 	if len(input.Config) > 0 {
 		if err := json.Unmarshal(input.Config, &cfg); err != nil {
@@ -239,15 +237,15 @@ func (a *SendAction) Execute(ctx context.Context, input registry.ActionInput) (r
 
 	targets, err := delivery.GetTarget(cfg.Recipients...)
 	if err != nil && len(targets) == 0 {
-		return registry.ActionOutput{}, fmt.Errorf("send action: resolve targets: %w", err)
+		return registry.ActionOutput{Data: map[string]any{"sent": false, "error": err.Error()}}, fmt.Errorf("send action: resolve targets: %w", err)
 	}
 
 	if len(targets) == 0 {
-		return registry.ActionOutput{}, errors.New("send action: no targets")
+		return registry.ActionOutput{Data: map[string]any{"sent": false, "error": fmt.Errorf("no targets")}}, errors.New("send action: no targets")
 	}
 
 	if err := a.sender.Send(ctx, targets, cfg.Reports); err != nil {
-		return registry.ActionOutput{}, fmt.Errorf("send action: send: %w", err)
+		return registry.ActionOutput{Data: map[string]any{"sent": false, "error": err.Error()}}, fmt.Errorf("send action: send: %w", err)
 	}
 
 	return registry.ActionOutput{Data: map[string]any{"sent": true, "targets": len(targets), "reports": len(cfg.Reports)}}, nil
@@ -337,5 +335,5 @@ func NewSaveAction(s Saver) *SaveAction {
 }
 
 func (a *SaveAction) Execute(ctx context.Context, input registry.ActionInput) (registry.ActionOutput, error) {
-	return registry.ActionOutput{}, errors.New("not implemented")
+	return registry.ActionOutput{}, nil
 }

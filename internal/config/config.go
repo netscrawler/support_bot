@@ -21,7 +21,7 @@ type Config struct {
 	Log            logger.LogConfig        `yaml:"log"             comment:"Настройки логгирования"`
 	MetabaseDomain string                  `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
 	Database       postgres.PostgresConfig `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	Bot            bot                     `yaml:"bot"             comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	Bot            Bot                     `yaml:"Bot"             comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout                 `yaml:"timeout"         comment:"Настройка таймаутов"`
 	SMB            smb.SMBConfig           `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
 	SMTP           smtp.SMTPConfig         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
@@ -30,10 +30,12 @@ type Config struct {
 	HTTP http.HTTPConfig `yaml:"http"`
 }
 
-type bot struct {
+type Bot struct {
 	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token" comment:"Телеграмм токен бота полученый от @BotFather\nОбязателен для запуска бота."`
 	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  comment:"CleanUpTime — интервал очистки временных данных бота\n(кэш, состояния диалогов, временные сообщения и т.п.)." env-default:"10m"`
 	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       comment:"BotPoll — интервал long-polling запросов к Telegram API."                                                     env-default:"30s"`
+	Proxy         string        `env:"PROXY"                     yaml:"proxy"`
+	ApiProxy      string        `env:"API_PROXY"                 yaml:"api_proxy"`
 }
 
 type timeout struct {

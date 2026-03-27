@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     pkg-config
 
-WORKDIR /bot
+WORKDIR /Bot
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -18,7 +18,7 @@ RUN CGO_ENABLED=1 go build \
     -X main.Version=$(git describe --tags --dirty --always) \
     -X main.Commit=$(git rev-parse --short HEAD) \
     -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o sbot ./cmd/bot
+    -o sbot ./cmd/Bot
 
 
 FROM debian:12-slim
@@ -29,10 +29,10 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /bot
+WORKDIR /Bot
 
-COPY --from=builder /bot/sbot .
-COPY --from=builder /bot/config ./config
+COPY --from=builder /Bot/sbot .
+COPY --from=builder /Bot/config ./config
 
 CMD ["./sbot"]
 

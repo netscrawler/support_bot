@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"support_bot/internal/core/actions"
 	"support_bot/internal/core/workflow/definition"
 	"support_bot/internal/core/workflow/execution"
 	"support_bot/internal/core/workflow/executor"
@@ -126,11 +127,11 @@ func (e *Engine) Run(ctx context.Context, raw json.RawMessage, meta ...map[strin
 	}
 
 	nReg := e.reg.Clone()
-	if err := nReg.RegisterOrReplace(ActionTypeStart, actions.pseudoStartAction{}); err != nil {
+	if err := nReg.RegisterOrReplace(ActionTypeStart, actions.StartAction{}); err != nil {
 		return nil, fmt.Errorf("workflow: register pseudo actions: %w", err)
 	}
 
-	if err := nReg.RegisterOrReplace(ActionTypeEnd, actions.pseudoEndAction{}); err != nil {
+	if err := nReg.RegisterOrReplace(ActionTypeEnd, actions.EndAction{}); err != nil {
 		return nil, fmt.Errorf("workflow: register pseudo actions: %w", err)
 	}
 

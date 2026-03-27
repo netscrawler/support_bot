@@ -82,7 +82,7 @@ database:
 timeout:
   shutdown: 5s             # Таймаут graceful shutdown
 
-bot:
+Bot:
   telegram_token: your_telegram_bot_token
   CleanUpTime: 5m
   bot_poll: 10s
@@ -148,8 +148,8 @@ docker build -t support_bot .
 # Запуск контейнера
 docker run -d \
   --name support_bot \
-  -e CONFIG_PATH=/bot/config/local.yaml \
-  -v $(pwd)/config:/bot/config:ro \
+  -e CONFIG_PATH=/Bot/config/local.yaml \
+  -v $(pwd)/config:/Bot/config:ro \
   support_bot
 ```
 
@@ -157,13 +157,13 @@ docker run -d \
 
 ```
 support_bot/
-├── cmd/bot/              # Точка входа приложения
+├── cmd/Bot/              # Точка входа приложения
 ├── internal/
 │   ├── app/              # Логика приложения
 │   ├── config/           # Загрузка конфигурации
 │   ├── models/           # Модели данных
 │   ├── postgres/         # Работа с БД
-│   ├── tg_bot/           # Telegram bot handlers
+│   ├── tg_bot/           # Telegram Bot handlers
 │   ├── collector/        # Сбор данных
 │   ├── evaluator/        # Обработка выражений
 │   ├── exporter/         # Экспорт отчетов

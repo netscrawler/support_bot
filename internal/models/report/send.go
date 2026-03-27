@@ -3,7 +3,7 @@ package models
 import (
 	"bytes"
 	"encoding/base64"
-
+	"fmt"
 	"support_bot/internal/pkg/text"
 )
 
@@ -104,7 +104,50 @@ type ExportedReport struct {
 	Config ReportConfig `json:"config,omitempty"`
 }
 
-func (e *ExportedReport) ToReady() {
+const (
+	TextType  = "text"
+	FileType  = "file"
+	ImageType = "image"
+)
+
+func (er *ExportedReport) ToTextData() (*TextData, error) {
+	if er.Type != TextType {
+		return nil, fmt.Errorf("expected text, got %s", er.Type)
+	}
+
+	txt, err := base64.StdEncoding.DecodeString(er.Raw)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewTextData(string(txt)), nil
+}
+
+func (er *ExportedReport) ToFileData() (*FileData, error) {
+	if er.Type != FileType {
+		return nil, fmt.Errorf("expected file, got %s", er.Type)
+	}
+
+	buf, err := base64.StdEncoding.DecodeString(er.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to base64 decode exported report: %w", err)
+	}
+
+	if er.Config.FileName == nil {
+		return nil, fmt.Errorf("empty file name")
+	}
+
+	switch er.Config.SendKind {
+	case new(FileType):
+		return NewFileData(bytes.NewBuffer(buf), *er.Config.FileName)
+	case new(SendImageKind):
+		return NewImageData(bytes.NewBuffer(buf), *er.Config.FileName)
+	case nil:
+		fallthrough
+	default:
+		return nil, fmt.Errorf("unexpected send kind")
+
+	}
 }
 
 type ReportConfig struct {
@@ -138,7 +181,7 @@ func (t TextData) Export() (*ExportedReport, error) {
 
 	return &ExportedReport{
 		Raw:  buf.String(),
-		Type: "text",
+		Type: TextType,
 		Config: ReportConfig{
 			ParseMode: &t.Parse,
 		},
@@ -147,7 +190,7 @@ func (t TextData) Export() (*ExportedReport, error) {
 
 type FileData struct {
 	File *bytes.Buffer
-	name string
+	Name string
 	kind SendKind
 }
 
@@ -159,7 +202,7 @@ func NewFileData(file *bytes.Buffer, name string) (*FileData, error) {
 
 	return &FileData{
 		File: file,
-		name: nm,
+		Name: nm,
 		kind: SendFileKind,
 	}, nil
 }
@@ -172,7 +215,7 @@ func NewImageData(file *bytes.Buffer, name string) (*FileData, error) {
 
 	return &FileData{
 		File: file,
-		name: nm,
+		Name: nm,
 		kind: SendImageKind,
 	}, nil
 }
@@ -187,7 +230,7 @@ func (f FileData) Export() (*ExportedReport, error) {
 
 	return &ExportedReport{
 		Raw:    buf.String(),
-		Type:   "File",
-		Config: ReportConfig{SendKind: new(f.kind.String()), FileName: &f.name},
+		Type:   FileType,
+		Config: ReportConfig{SendKind: new(f.kind.String()), FileName: &f.Name},
 	}, nil
 }
