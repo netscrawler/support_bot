@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
+
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
@@ -14,7 +16,6 @@ import (
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
-	"time"
 
 	"gopkg.in/telebot.v4"
 
@@ -47,11 +48,11 @@ func buildHTTPClient(proxyStr string) (*http.Client, error) {
 			Transport: &http.Transport{
 				Proxy: http.ProxyURL(u),
 			},
-			Timeout: 30 * time.Second,
+			Timeout: 120 * time.Second,
 		}, nil
 
 	case "socks5", "socks5h":
-		dialer, err := proxy.SOCKS5("tcp", u.Host, nil, proxy.Direct)
+		dialer, err := proxy.SOCKS5("udp", u.Host, nil, proxy.Direct)
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +63,7 @@ func buildHTTPClient(proxyStr string) (*http.Client, error) {
 					return dialer.Dial(network, addr)
 				},
 			},
-			Timeout: 30 * time.Second,
+			Timeout: 120 * time.Second,
 		}, nil
 
 	default:
@@ -70,15 +71,26 @@ func buildHTTPClient(proxyStr string) (*http.Client, error) {
 	}
 }
 
-func NewTgBot(token string, proxy string, poll time.Duration) (*telebot.Bot, error) {
-	client, err := buildHTTPClient(proxy)
-	if err != nil {
-		return nil, err
-	}
+func NewTgBot(
+	token string,
+	urlProxy string,
+	proxy string,
+	poll time.Duration,
+) (*telebot.Bot, error) {
 	pref := telebot.Settings{
 		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: poll},
-		Client: client,
+	}
+	if proxy != "" {
+		client, err := buildHTTPClient(proxy)
+		if err != nil {
+			return nil, err
+		}
+		pref.Client = client
+	}
+
+	if urlProxy != "" {
+		pref.URL = urlProxy
 	}
 
 	b, err := telebot.NewBot(pref)

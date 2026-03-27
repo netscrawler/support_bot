@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/app/bot"
 	"support_bot/internal/app/report"
 	"support_bot/internal/config"
@@ -36,7 +37,12 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	tgBot, err := bot.NewTgBot(cfg.Bot.TelegramToken, cfg.Bot.Proxy, cfg.Bot.BotPoll)
+	tgBot, err := bot.NewTgBot(
+		cfg.Bot.TelegramToken,
+		cfg.Bot.ApiProxy,
+		cfg.Bot.Proxy,
+		cfg.Bot.BotPoll,
+	)
 	if err != nil {
 		return nil, err
 	}
