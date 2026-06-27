@@ -143,7 +143,7 @@ func (s *SMTPSender) buildMessage(mail Mail) []byte {
 	fmt.Fprintf(&buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(
 		&buf,
-		"Message-ID: <%d.%s@%s>\r\n",
+		"Message-MessageID: <%d.%s@%s>\r\n",
 		time.Now().UnixNano(),
 		randomBoundary(),
 		s.cfg.Host,
@@ -152,7 +152,7 @@ func (s *SMTPSender) buildMessage(mail Mail) []byte {
 
 	boundary := "boundary-" + randomBoundary()
 
-	if mail.Attachments.Len() > 0 {
+	if len(mail.Attachments) > 0 {
 		fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary)
 
 		fmt.Fprintf(&buf, "--%s\r\n", boundary)
@@ -161,7 +161,8 @@ func (s *SMTPSender) buildMessage(mail Mail) []byte {
 		buf.WriteString(mail.Body)
 		buf.WriteString("\r\n\r\n")
 
-		for file, name := range mail.Attachments.Data() {
+		for _, f := range mail.Attachments {
+			file, name := f.File, f.Name
 			s.writeAttachment(&buf, boundary, file, name)
 		}
 

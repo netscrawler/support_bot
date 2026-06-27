@@ -13,25 +13,25 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-type Exporter[T models.FileData] struct {
+type Exporter struct {
 	buf   map[string][]map[string]any
 	order map[string][]string
 	name  string
 }
 
-func New[T models.FileData](
+func New(
 	data map[string][]map[string]any,
 	name string,
 	order map[string][]string,
-) *Exporter[T] {
-	return &Exporter[T]{
+) *Exporter {
+	return &Exporter{
 		buf:   data,
 		order: order,
 		name:  name,
 	}
 }
 
-func (e *Exporter[T]) Export() (*T, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	buf, err := e.createXlsxBook(e.buf)
 	if err != nil {
 		return nil, err
@@ -42,10 +42,10 @@ func (e *Exporter[T]) Export() (*T, error) {
 		return nil, err
 	}
 
-	return any(fd).(*T), nil
+	return &fd, nil
 }
 
-func (e *Exporter[T]) createXlsxBook(
+func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
