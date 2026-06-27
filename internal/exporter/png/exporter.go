@@ -18,28 +18,28 @@ import (
 	"golang.org/x/image/font"
 )
 
-type Exporter[T models.ImageData] struct {
+type Exporter struct {
 	data  map[string][]map[string]any
 	order map[string][]string
 	name  string
 }
 
-func New[T models.ImageData](
+func New(
 	data map[string][]map[string]any,
 	name string,
 	order map[string][]string,
-) *Exporter[T] {
-	return &Exporter[T]{
+) *Exporter {
+	return &Exporter{
 		data:  data,
 		order: order,
 		name:  name,
 	}
 }
 
-func (e *Exporter[T]) Export() (*T, error) {
+func (e *Exporter) Export() ([]models.Data, error) {
 	var err error
 
-	id := models.NewEmptyImageData()
+	id := []models.Data{}
 
 	for k, v := range e.data {
 		var order []string
@@ -58,13 +58,14 @@ func (e *Exporter[T]) Export() (*T, error) {
 			continue
 		}
 
-		eErr := id.Extend(img, e.name+"_"+k+".png")
+		dt, eErr := models.NewImageData(img, e.name+"_"+k+".png")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
 		}
+		id = append(id, dt)
 	}
 
-	return any(id).(*T), nil
+	return id, nil
 }
 
 const (

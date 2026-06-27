@@ -12,6 +12,9 @@ CREATE TABLE reports (
     CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate(id) ON DELETE RESTRICT
 );
 
+alter table reports
+add column access_from_lk boolean not null default true;
+
 create table email_templates(
     id serial PRIMARY KEY,
     dest text[] NOT NULL,
@@ -63,6 +66,25 @@ CREATE TABLE crons(
     description TEXT,
     is_active bool NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE crons
+    ADD COLUMN event_type INT NOT NULL DEFAULT 0;
+
+alter table recipients
+    add column need_delete_after_end_of_day bool default false;
+
+
+create table sent_messages(
+    id serial primary key,
+    chat_id bigint not null,
+    thread_id int not null default 0,
+    message_id bigint not null,
+    title text not null,
+    sent_at timestamptz not null default now(),
+    deleted bool not null default false,
+    report_name text not null
+);
+
 
 CREATE TABLE report_crons(
     report_id INT NOT NULL,

@@ -24,7 +24,7 @@ func NewSheduleRepo(db *sqlx.DB, log *slog.Logger) *SheduleRepo {
 }
 
 func (s *SheduleRepo) Load(ctx context.Context) ([]models.SheduleUnit, error) {
-	const query string = `select cron, name from crons where is_active = true`
+	const query string = `select cron, name, event_type from crons where is_active = true`
 
 	s.log.DebugContext(ctx, "start loading shedules")
 
