@@ -11,21 +11,21 @@ import (
 	"github.com/Masterminds/sprig/v3"
 )
 
-type Exporter[T models.FileData] struct {
+type Exporter struct {
 	data     any
 	template string
 	name     string
 }
 
-func New[T models.FileData](data any, template string, name string) *Exporter[T] {
-	return &Exporter[T]{
+func New(data any, template string, name string) *Exporter {
+	return &Exporter{
 		data:     data,
 		template: template,
 		name:     name,
 	}
 }
 
-func (e *Exporter[T]) Export() (*T, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	allFuncs := sprig.FuncMap()
 	maps.Copy(allFuncs, text.FuncMap)
 
@@ -46,5 +46,5 @@ func (e *Exporter[T]) Export() (*T, error) {
 		return nil, err
 	}
 
-	return any(fd).(*T), nil
+	return &fd, nil
 }

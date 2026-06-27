@@ -11,13 +11,15 @@ import (
 
 type ReportLoader interface {
 	Load(ctx context.Context) ([]models.Report, error)
-	LoadByEvent(ctx context.Context, event string) (*models.Report, error)
+	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
 }
 
 type Orchestrator struct {
-	EventC chan string
+	EventC        chan models.Event
+	SpecialEventC chan models.SpecialEventForLK
 
 	ReportC chan models.Report
+	DeleteC chan models.Event
 
 	rL ReportLoader
 
@@ -28,8 +30,10 @@ type Orchestrator struct {
 }
 
 func New(
-	evC chan string,
+	evC chan models.Event,
+	specialEventC chan models.SpecialEventForLK,
 	reportC chan models.Report,
+	delC chan models.Event,
 	rl ReportLoader,
 	log *slog.Logger,
 ) *Orchestrator {
@@ -37,11 +41,13 @@ func New(
 	cache := make(map[string][]models.Report)
 
 	return &Orchestrator{
-		EventC:  evC,
-		ReportC: reportC,
-		rL:      rl,
-		cache:   cache,
-		log:     l,
+		EventC:        evC,
+		SpecialEventC: specialEventC,
+		ReportC:       reportC,
+		DeleteC:       delC,
+		rL:            rl,
+		cache:         cache,
+		log:           l,
 	}
 }
 
@@ -73,28 +79,89 @@ func (o *Orchestrator) run(ctx context.Context) {
 				return
 			}
 
-			reports, err := o.getReportByEvent(ctx, event)
-			if err != nil {
-				o.log.ErrorContext(ctx, "error loading report", slog.Any("error", err))
+			switch event.Type {
+			case models.EventTypeDeleteSentReport:
+				o.processDelReportEvent(ctx, event.Name)
 
-				continue
+			default:
+				o.processGenReportEvent(ctx, event.Name)
+
+			}
+		case event, ok := <-o.SpecialEventC:
+			if !ok {
+				o.log.WarnContext(ctx, "event chan closed")
+
+				return
 			}
 
-			for _, report := range reports {
-				select {
-				case <-ctx.Done():
-					o.log.InfoContext(ctx, "context cancelled. stopping")
+			switch event.Event.Type {
+			case models.EventTypeGenReportForTG:
+				o.processGenReportSpecialEvent(ctx, event)
 
-					return
-				case o.ReportC <- report:
-					o.log.DebugContext(
-						ctx,
-						"sending report to generator",
-						slog.Any("report", report.Name),
-					)
-				}
+			default:
+
 			}
+
 		}
+	}
+}
+
+func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) {
+	reports, err := o.getReportByEvent(ctx, event, true)
+	if err != nil {
+		o.log.ErrorContext(ctx, "error loading report", slog.Any("error", err))
+
+		return
+	}
+
+	for _, report := range reports {
+		select {
+		case <-ctx.Done():
+			o.log.InfoContext(ctx, "context cancelled. stopping")
+
+			return
+		case o.ReportC <- report:
+			o.log.DebugContext(
+				ctx,
+				"sending report to generator",
+				slog.Any("report", report.Name),
+			)
+		}
+	}
+}
+
+func (o *Orchestrator) processGenReportSpecialEvent(ctx context.Context, event models.SpecialEventForLK) {
+	reports, err := o.getReportByEvent(ctx, event.Event.Name, false)
+	if err != nil {
+		o.log.ErrorContext(ctx, "error loading report", slog.Any("error", err))
+
+		return
+	}
+
+	for _, report := range reports {
+		report.Recipients = []models.Recipient{event.Recipient}
+		select {
+		case <-ctx.Done():
+			o.log.InfoContext(ctx, "context cancelled. stopping")
+
+			return
+		case o.ReportC <- report:
+			o.log.DebugContext(
+				ctx,
+				"sending report to generator",
+				slog.Any("report", report.Name),
+			)
+		}
+	}
+}
+
+func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) {
+	select {
+	case <-ctx.Done():
+		o.log.InfoContext(ctx, "context cancelled. stopping")
+		return
+	case o.DeleteC <- models.Event{Name: event, Type: models.EventTypeDeleteSentReport}:
+		o.log.InfoContext(ctx, "sending delete event to deleter")
 	}
 }
 
@@ -119,6 +186,7 @@ func (o *Orchestrator) cleaner(ctx context.Context) {
 func (o *Orchestrator) getReportByEvent(
 	ctx context.Context,
 	event string,
+	active bool,
 ) ([]models.Report, error) {
 	l := o.log.With(slog.Any("event", event))
 	l.DebugContext(ctx, "getting report by event")
@@ -137,11 +205,15 @@ func (o *Orchestrator) getReportByEvent(
 
 	l.DebugContext(ctx, "cache miss, loading report")
 
-	reports, err := o.rL.LoadByEvent(ctx, event)
+	reports, err := o.rL.LoadByEvent(ctx, event, active)
 	if err != nil {
 		l.ErrorContext(ctx, "error while loading report", slog.Any("error", err))
 
 		return nil, err
+	}
+
+	if !active {
+		return []models.Report{*reports}, nil
 	}
 
 	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", 1))

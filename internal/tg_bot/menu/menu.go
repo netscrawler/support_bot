@@ -11,6 +11,8 @@ var (
 var (
 	SendNotifyAdmin = AdminMenu.Text("📝 Начать рассылку")
 	SendNotifyUser  = UserMenu.Text("📝 Сделать рассылку")
+
+	LoadAndShowReportUser = UserMenu.Text("Отчеты")
 )
 
 var (
@@ -41,3 +43,5 @@ var (
 	AddActiveChat   = "/sub"
 	RegisterCommand = "/register"
 )
+
+var MsgHelloReport = `Выберите нужный отчет и он придет в данный чат`

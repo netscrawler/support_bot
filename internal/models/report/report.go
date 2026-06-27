@@ -33,6 +33,8 @@ type Recipient struct {
 	ThreadID   *int
 	Email      *EmailTemplate
 	Type       RecipientType
+
+	NeedDeleteAfterEndOfDay bool
 }
 
 type EmailTemplate struct {

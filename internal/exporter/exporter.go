@@ -12,25 +12,10 @@ import (
 	models "support_bot/internal/models/report"
 )
 
-var (
-	_ Exporter[*models.TextData]  = (*text.Exporter[models.TextData])(nil)
-	_ Exporter[*models.FileData]  = (*xlsx.Exporter[models.FileData])(nil)
-	_ Exporter[*models.FileData]  = (*csv.Exporter[models.FileData])(nil)
-	_ Exporter[*models.FileData]  = (*html.Exporter[models.FileData])(nil)
-	_ Exporter[*models.FileData]  = (*pdf.Exporter[models.FileData])(nil)
-	_ Exporter[*models.ImageData] = (*png.Exporter[models.ImageData])(nil)
-)
-
-type Exporter[T models.ReportData] interface {
-	Export() (T, error)
-}
-
-type ExportStrategy struct{}
-
 func Export(
 	data map[string][]map[string]any,
 	exp models.Export,
-) (models.ReportData, error) {
+) ([]models.Data, error) {
 	switch exp.Format {
 	case models.ReportFormatCsv:
 		r, err := csv.New(data, *exp.FileName, exp.Order).Export()
@@ -45,7 +30,7 @@ func Export(
 			return nil, err
 		}
 
-		return r, nil
+		return []models.Data{*r}, nil
 	case models.ReportFormatPng:
 		r, err := png.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
@@ -59,7 +44,7 @@ func Export(
 			return nil, err
 		}
 
-		return r, nil
+		return []models.Data{*r}, nil
 
 	case models.ReportFormatPdf:
 		rh, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
@@ -67,19 +52,19 @@ func Export(
 			return nil, err
 		}
 
-		r, err := pdf.New(rh, *exp.FileName).Export()
+		r, err := pdf.New(*exp.FileName, []models.Data{*rh}...).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return r, nil
+		return []models.Data{*r}, nil
 	case models.ReportFormatText:
 		r, err := text.New(data, exp.Template.TemplateText).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return r, nil
+		return []models.Data{*r}, nil
 	default:
 		return nil, fmt.Errorf("undefined format: %s", exp.Format)
 	}

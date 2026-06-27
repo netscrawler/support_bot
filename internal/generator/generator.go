@@ -6,21 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"support_bot/internal/collector"
-	"support_bot/internal/delivery"
 	"support_bot/internal/exporter"
 	"support_bot/internal/pkg/logger"
 	"time"
 
 	models "support_bot/internal/models/report"
 )
-
-type Sender interface {
-	Send(
-		ctx context.Context,
-		meta []models.Targeted,
-		data []models.ReportData,
-	) error
-}
 
 type Collector interface {
 	Collect(ctx context.Context, cards ...models.Card) (map[string][]map[string]any, error)
@@ -41,9 +32,11 @@ type Generator struct {
 
 	eval Evaluator
 
-	snd Sender
+	snd models.SenderProvider
 
 	numWorkers uint8
+
+	sentMsgRepo SentMsgRepository
 
 	log *slog.Logger
 }
@@ -51,7 +44,8 @@ type Generator struct {
 func New(
 	c chan models.Report,
 	clct Collector,
-	snd Sender,
+	snd models.SenderProvider,
+	sendRepo SentMsgRepository,
 	eval Evaluator,
 	workers uint8,
 	log *slog.Logger,
@@ -63,12 +57,13 @@ func New(
 	}
 
 	return &Generator{
-		c:          c,
-		clct:       clct,
-		eval:       eval,
-		snd:        snd,
-		log:        l,
-		numWorkers: workers,
+		c:           c,
+		clct:        clct,
+		eval:        eval,
+		snd:         snd,
+		log:         l,
+		numWorkers:  workers,
+		sentMsgRepo: sendRepo,
 	}
 }
 
@@ -131,7 +126,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		return nil
 	}
 
-	res := make([]models.ReportData, 0, len(report.Exports))
+	res := make([]models.Data, 0, len(report.Exports))
 
 	for _, e := range report.Exports {
 		r, err := exporter.Export(data, e)
@@ -146,30 +141,31 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 			continue
 		}
 
-		res = append(res, r)
+		res = append(res, r...)
 	}
 
-	targets, err := delivery.GetTarget(report.Recipients...)
+	if len(report.Recipients) == 0 {
+		l.ErrorContext(ctx, "empty targets list")
+
+		return fmt.Errorf("empty targets list")
+	}
+
+	msg := models.NewMessage(report.Name, res, report.Recipients...)
+
+	resMsg, err := msg.Send(ctx, g.snd)
 	if err != nil {
-		l.ErrorContext(ctx, "error while resolving targets", slog.Any("error", err))
+		l.ErrorContext(ctx, "error while send message", slog.Any("error", err))
 	}
 
-	if len(targets) == 0 {
-		l.ErrorContext(ctx, "emty targets list")
-
-		return fmt.Errorf("emty targets list")
+	if len(resMsg) == 0 {
+		l.InfoContext(ctx, "report generated")
+		return nil
 	}
 
-	l.DebugContext(ctx, "sending report", slog.Any("targets", targets), slog.Any("report", res))
-
-	err = g.snd.Send(ctx, targets, res)
+	err = g.sentMsgRepo.SaveTgMsg(ctx, msg.ReportName, resMsg)
 	if err != nil {
-		l.ErrorContext(ctx, "error while send report", slog.Any("error", err))
-
-		return err
+		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
 	}
-
-	l.InfoContext(ctx, "report generated")
 
 	return nil
 }

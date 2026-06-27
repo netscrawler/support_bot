@@ -18,7 +18,7 @@ type Sheduler struct {
 	log    *slog.Logger
 	loader SheduleLoader
 
-	EventChan chan string
+	EventChan chan models.Event
 
 	api chan SheduleAPIEvent
 }
@@ -26,7 +26,7 @@ type Sheduler struct {
 func NewSheduler(
 	shLoader SheduleLoader,
 	log *slog.Logger,
-	events chan string,
+	events chan models.Event,
 	apiChan chan SheduleAPIEvent,
 ) *Sheduler {
 	l := log.With(slog.Any("module", "sheduler"))
@@ -57,7 +57,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 			go func() {
 				s.log.Debug("cron job executed", slog.Any("job_name", u.Name))
 
-				s.EventChan <- u.Name
+				s.EventChan <- models.NewEvent(u.Name, u.EventType)
 			}()
 		})
 		if err != nil {

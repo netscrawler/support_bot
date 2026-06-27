@@ -8,26 +8,26 @@ import (
 	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 )
 
-type Exporter[T models.FileData] struct {
-	data models.FileData
+type Exporter struct {
+	data []models.Data
 	name string
 }
 
-func New[T models.FileData](data *models.FileData, name string) *Exporter[T] {
-	return &Exporter[T]{
-		data: *data,
+func New(name string, data ...models.Data) *Exporter {
+	return &Exporter{
+		data: data,
 		name: name,
 	}
 }
 
-func (e *Exporter[T]) Export() (*T, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	pdfg, err := wkhtmltopdf.NewPDFGenerator()
 	if err != nil {
 		return nil, err
 	}
 
-	for b := range e.data.Data() {
-		page := wkhtmltopdf.NewPageReader(strings.NewReader(b.String()))
+	for _, b := range e.data {
+		page := wkhtmltopdf.NewPageReader(strings.NewReader(b.Data.String()))
 		pdfg.AddPage(page)
 	}
 
@@ -40,5 +40,5 @@ func (e *Exporter[T]) Export() (*T, error) {
 		return nil, err
 	}
 
-	return any(fd).(*T), nil
+	return &fd, nil
 }

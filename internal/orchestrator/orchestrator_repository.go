@@ -69,6 +69,7 @@ func (o *OrchestratorRepository) Load(ctx context.Context) ([]models.Report, err
 func (o *OrchestratorRepository) LoadByEvent(
 	ctx context.Context,
 	event string,
+	active bool,
 ) (*models.Report, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load card: %w", ctx.Err())
@@ -90,11 +91,22 @@ func (o *OrchestratorRepository) LoadByEvent(
 
 	o.log.DebugContext(ctx, "start loading reports")
 
-	rpt, err := o.loadReportByName(ctx, event, tx)
-	if err != nil {
-		o.log.ErrorContext(ctx, "error loading reports", slog.Any("error", err))
+	var rpt report
 
-		return nil, err
+	if active {
+		rpt, err = o.loadActiveReportByName(ctx, event, tx)
+		if err != nil {
+			o.log.ErrorContext(ctx, "error loading reports", slog.Any("error", err))
+
+			return nil, err
+		}
+	} else {
+		rpt, err = o.loadAnyReportByName(ctx, event, tx)
+		if err != nil {
+			o.log.ErrorContext(ctx, "error loading reports", slog.Any("error", err))
+
+			return nil, err
+		}
 	}
 
 	r, err := o.getReportByID(ctx, rpt, tx)
@@ -128,7 +140,7 @@ where r.active = true
 	return rp, nil
 }
 
-func (o *OrchestratorRepository) loadReportByName(
+func (o *OrchestratorRepository) loadActiveReportByName(
 	ctx context.Context,
 	name string, tx *sqlx.Tx,
 ) (report, error) {
@@ -140,6 +152,32 @@ func (o *OrchestratorRepository) loadReportByName(
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
+;
+
+`
+
+	var rp report
+
+	err := tx.GetContext(ctx, &rp, query, name)
+	if err != nil {
+		return report{}, err
+	}
+
+	return rp, nil
+}
+
+func (o *OrchestratorRepository) loadAnyReportByName(
+	ctx context.Context,
+	name string, tx *sqlx.Tx,
+) (report, error) {
+	if err := ctx.Err(); err != nil {
+		return report{}, fmt.Errorf("orchestrator load report by name: %w", ctx.Err())
+	}
+
+	const query = `select r.id, r.name, r.title, e.expr as evaluation
+from reports r
+left join evaluate e on e.id = r.eval_id
+where r.name = $1
 ;
 
 `
@@ -192,6 +230,7 @@ select
     r.thread_id,
     r.email_id,
     r.type,
+    r.need_delete_after_end_of_day,
 
 	e.dest,
 	e.copy,

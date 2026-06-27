@@ -1,6 +1,8 @@
 package smtp
 
-import models "support_bot/internal/models/report"
+import (
+	"bytes"
+)
 
 type Mail struct {
 	Recipients []string `json:"recipients"`
@@ -10,5 +12,10 @@ type Mail struct {
 
 	Body string `json:"body"`
 
-	Attachments models.FileData
+	Attachments []Attachment
+}
+
+type Attachment struct {
+	File *bytes.Buffer
+	Name string
 }

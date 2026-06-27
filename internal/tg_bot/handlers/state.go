@@ -16,6 +16,8 @@ const (
 	ConfirmNotificationState = "confirm_notification"
 	CancelNotificationState  = "cancel_notification"
 	MenuState                = "menu"
+
+	LoadReportState = "load_report"
 )
 
 type State struct {
