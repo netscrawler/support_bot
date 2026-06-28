@@ -11,12 +11,12 @@ const (
 	slogFields ctxKey = "slog_fields"
 )
 
-type ContextHandler struct {
+type contextHandler struct {
 	slog.Handler
 }
 
 // Handle ....
-func (h ContextHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h contextHandler) Handle(ctx context.Context, r slog.Record) error {
 	if attrs, ok := ctx.Value(slogFields).([]slog.Attr); ok {
 		for _, v := range attrs {
 			r.AddAttrs(v)
@@ -38,7 +38,8 @@ func AppendCtx(parent context.Context, attr ...slog.Attr) context.Context {
 		return context.WithValue(parent, slogFields, v)
 	}
 
-	v := []slog.Attr{}
+	var v []slog.Attr
+
 	v = append(v, attr...)
 
 	return context.WithValue(parent, slogFields, v)

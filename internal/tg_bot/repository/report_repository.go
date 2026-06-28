@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 	"log/slog"
-	models "support_bot/internal/models/report"
 
 	"github.com/jmoiron/sqlx"
+	"support_bot/internal/models"
 )
 
 type ReportRepository struct {
@@ -25,9 +25,14 @@ type report struct {
 	Title string `db:"title"`
 }
 
-func (r *ReportRepository) LoadReports(ctx context.Context, page int) ([]models.ReportForTgLK, error) {
-	const query = `select id, name, title from reports where access_from_lk = true order by id limit $1 offset $2`
-	const limit = 5
+func (r *ReportRepository) LoadReports(
+	ctx context.Context,
+	page int,
+) ([]models.ReportForTgLK, error) {
+	const (
+		query = `select id, name, title from reports where access_from_lk = true order by id limit $1 offset $2`
+		limit = 5
+	)
 
 	if page <= 0 {
 		page = 1
@@ -57,7 +62,9 @@ func (r *ReportRepository) LoadReports(ctx context.Context, page int) ([]models.
 
 func (r *ReportRepository) GetReportsCount(ctx context.Context) (int, error) {
 	const query = `select count(*) from reports where access_from_lk = true`
+
 	var count int
+
 	err := r.db.GetContext(ctx, &count, query)
 	if err != nil {
 		return 0, err

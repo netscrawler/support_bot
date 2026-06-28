@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	reportModels "support_bot/internal/models/report"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/service"
 	"time"
 
 	tele "gopkg.in/telebot.v4"
-
-	models "support_bot/internal/models/notify"
+	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/service"
 )
 
 type UserHandler struct {
@@ -40,12 +38,12 @@ func NewUserHandler(
 	}
 }
 
-func (h *UserHandler) ProcessUserInput(c tele.Context) error {
+func (h *UserHandler) processUserInput(c tele.Context) error {
 	userID := c.Sender().ID
-	state := h.state.Get(userID)
+	state := h.state.get(userID)
 
 	switch state {
-	case MenuState:
+	case menuState:
 		return h.LoadReports(c)
 	// case SendNotificationState:
 	//	return h.ProcessSendNotification(c)
@@ -68,7 +66,7 @@ func (h *UserHandler) StartUser(c tele.Context) error {
 	)
 	//nolint:errcheck
 	c.Delete()
-	h.state.Set(c.Sender().ID, MenuState)
+	h.state.set(c.Sender().ID, menuState)
 
 	return c.Send("Добро пожаловать!", menu.UserMenu)
 }
@@ -90,12 +88,12 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 		false,
 	)
 	err := h.userService.AddUserComplete(ctx, &snd)
-	//formatedString := fmt.Sprintf(
+	// formatedString := fmt.Sprintf(
 	//	"Пользователь с ником @%s успешно прошел регистрацию",
 	//	c.Sender().Username,
 	//)
 	//nolint:errcheck
-	//h.notify.SendAdminNotify(ctx, formatedString)
+	// h.notify.SendAdminNotify(ctx, formatedString)
 
 	if err == nil {
 		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
@@ -105,9 +103,9 @@ func (h *UserHandler) RegisterUser(c tele.Context) error {
 }
 
 func (h *UserHandler) LoadReports(c tele.Context) error {
-	h.state.Set(c.Sender().ID, LoadReportState)
+	h.state.set(c.Sender().ID, loadReportState)
 	//nolint:errcheck
-	//c.Delete()
+	// c.Delete()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -124,7 +122,7 @@ func (h *UserHandler) LoadReports(c tele.Context) error {
 
 func (h *UserHandler) LoadReportsPage(c tele.Context) error {
 	userID := c.Sender().ID
-	if h.state.Get(userID) != LoadReportState {
+	if h.state.get(userID) != loadReportState {
 		return c.Edit("Время на выбор отчета истекло, начните заново")
 	}
 
@@ -146,7 +144,8 @@ func (h *UserHandler) LoadReportsPage(c tele.Context) error {
 	}
 
 	mark := mapReportRPLToMarkup(rpl)
-	h.state.Set(userID, LoadReportState)
+
+	h.state.set(userID, loadReportState)
 
 	if err := c.Edit(menu.MsgHelloReport, &mark); err != nil {
 		if isMessageNotModified(err) {
@@ -165,7 +164,7 @@ func (h *UserHandler) IgnoreReportPage(c tele.Context) error {
 
 func (h *UserHandler) GenerateSelectedReport(c tele.Context) error {
 	userID := c.Sender().ID
-	if h.state.Get(userID) != LoadReportState {
+	if h.state.get(userID) != loadReportState {
 		return c.Edit("Время на выбор отчета истекло, начните заново")
 	}
 
@@ -181,7 +180,7 @@ func (h *UserHandler) GenerateSelectedReport(c tele.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	chat := &reportModels.Chat{
+	chat := &models.Chat{
 		ChatID:   c.Chat().ID,
 		Title:    &c.Chat().FirstName,
 		Type:     string(c.Chat().Type),
@@ -192,10 +191,10 @@ func (h *UserHandler) GenerateSelectedReport(c tele.Context) error {
 		return c.Edit("Не удалось запустить отчет: " + err.Error())
 	}
 
-	h.state.Set(userID, MenuState)
+	h.state.set(userID, menuState)
 
 	if err := c.Edit("Отчет запущен. Результат придет в этот чат."); err != nil {
-		if errors.Is(tele.ErrMessageNotModified, err) {
+		if errors.Is(err, tele.ErrMessageNotModified) {
 			return nil
 		}
 
@@ -209,17 +208,17 @@ func isMessageNotModified(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "message is not modified")
 }
 
-func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
-	if h.state.Get(c.Sender().ID) != SendNotificationState {
+func (h *UserHandler) processSendNotification(c tele.Context) error {
+	if h.state.get(c.Sender().ID) != sendNotificationState {
 		return c.Edit("Время на отправку истекло, начните заново")
 	}
 
 	msg := c.Text()
 	if msg == "" {
-		return c.Send(PleaseSendMessage)
+		return c.Send(pleaseSendMessage)
 	}
 
-	h.state.SetMsgData(c.Sender().ID, msg)
+	h.state.setMsgData(c.Sender().ID, msg)
 
 	confirmBtn := menu.Selector.Data(
 		"✅ Отправить",
@@ -230,7 +229,7 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 		menu.Selector.Row(cancelBtn, confirmBtn),
 	)
 
-	h.state.Set(c.Sender().ID, ConfirmNotificationState)
+	h.state.set(c.Sender().ID, confirmNotificationState)
 
 	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
 	formated := fmt.Sprintf("%s```\n%s```", conf, msg)
@@ -243,7 +242,7 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 	)
 }
 
-//func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
+// func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
 //	ctx := context.Background()
 //
 //	msg, ok := h.state.GetMsgData(c.Sender().MessageID)
@@ -277,13 +276,13 @@ func (h *UserHandler) ProcessSendNotification(c tele.Context) error {
 //	return c.Edit(resp, tele.ModeMarkdownV2)
 //}
 //
-//func (h *UserHandler) CancelSendNotification(c tele.Context) error {
+// func (h *UserHandler) CancelSendNotification(c tele.Context) error {
 //	h.state.Set(c.Sender().MessageID, MenuState)
 //
 //	return c.Edit("❌ Отправка уведомления отменена.")
 //}
 
-func (h *UserHandler) UserAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
+func (h *UserHandler) userAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
 	return func(c tele.Context) error {
 		ctx := context.Background()
 		// Получаем username пользователя

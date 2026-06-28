@@ -3,12 +3,12 @@ package bot
 import (
 	"log/slog"
 	"runtime/debug"
-	"support_bot/internal/tg_bot/handlers"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/middlewares"
 
 	"gopkg.in/telebot.v4"
 	telemw "gopkg.in/telebot.v4/middleware"
+	"support_bot/internal/tg_bot/handlers"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/middlewares"
 )
 
 type Router struct {
@@ -38,7 +38,11 @@ func NewRouter(
 func (r *Router) Setup() {
 	r.bot.Use(telemw.Recover(func(err error, c telebot.Context) {
 		l := slog.Default()
-		l.Error("recovered from panic", slog.Any("error", err), slog.String("stack", string(debug.Stack())))
+		l.Error(
+			"recovered from panic",
+			slog.Any("error", err),
+			slog.String("stack", string(debug.Stack())),
+		)
 	}))
 	register := r.bot.Group()
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)

@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"support_bot/internal/pkg"
 	"time"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/xuri/excelize/v2"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct {
@@ -49,6 +48,7 @@ func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
+	defer f.Close()
 
 	for unit, records := range dataMap {
 		if len(records) == 0 {

@@ -1,11 +1,12 @@
 package config
 
 import (
+	"time"
+
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
-	"time"
 )
 
 func Default() *Config {
@@ -17,7 +18,7 @@ func Default() *Config {
 			Format: "text",
 		},
 		MetabaseDomain: "https://metabase.domain",
-		Database: postgres.PostgresConfig{
+		Database: postgres.Config{
 			Port:            5432,
 			Host:            "localhost",
 			User:            "postgres",
@@ -38,7 +39,7 @@ func Default() *Config {
 		Timeout: timeout{
 			Shutdown: 5 * time.Second,
 		},
-		SMB: smb.SMBConfig{
+		SMB: smb.Config{
 			Address:  "localhost:542",
 			User:     "user",
 			Password: "password",
@@ -46,7 +47,7 @@ func Default() *Config {
 			Share:    "public",
 			Active:   true,
 		},
-		SMTP: smtp.SMTPConfig{
+		SMTP: smtp.Config{
 			Host:     "smtp.example.com",
 			Port:     "465",
 			Email:    "example@example.com",

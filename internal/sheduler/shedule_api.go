@@ -3,9 +3,8 @@ package sheduler
 type SheduleAPIEvent string
 
 const (
-	EventStart   SheduleAPIEvent = "start"
-	EventStop    SheduleAPIEvent = "stop"
-	EventRestart SheduleAPIEvent = "restart"
+	eventStart SheduleAPIEvent = "start"
+	eventStop  SheduleAPIEvent = "stop"
 )
 
 type SheduleAPI struct {
@@ -19,22 +18,22 @@ func NewSheduleAPI(c chan SheduleAPIEvent) *SheduleAPI {
 func (sha *SheduleAPI) Start() {
 	defer func() { recover() }()
 
-	sha.c <- EventStart
+	sha.c <- eventStart
 }
 
 func (sha *SheduleAPI) Stop() {
 	defer func() { recover() }()
 
-	sha.c <- EventStop
+	sha.c <- eventStop
 }
 
-func (sha *SheduleAPI) Restart() {
+func (sha *SheduleAPI) restart() {
 	defer func() { recover() }()
 
 	sha.Stop()
 	sha.Start()
 }
 
-func (sha *SheduleAPI) StopAPI() {
+func (sha *SheduleAPI) stopAPI() {
 	close(sha.c)
 }

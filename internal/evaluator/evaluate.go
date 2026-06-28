@@ -10,12 +10,12 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-type Evaluator struct {
+type evaluator struct {
 	env   *cel.Env
 	cache *lru.Cache[string, cel.Program]
 }
 
-func NewEvaluator() (*Evaluator, error) {
+func NewEvaluator() (*evaluator, error) {
 	lT1, err := lru.New[string, cel.Program](3)
 	if err != nil {
 		return nil, fmt.Errorf("unable create cache: (%w)", err)
@@ -39,13 +39,13 @@ func NewEvaluator() (*Evaluator, error) {
 		return nil, fmt.Errorf("unable create env T1: (%w)", err)
 	}
 
-	return &Evaluator{
+	return &evaluator{
 		env:   envT1,
 		cache: lT1,
 	}, nil
 }
 
-func (e *Evaluator) Evaluate(
+func (e *evaluator) Evaluate(
 	ctx context.Context,
 	data map[string][]map[string]any,
 	expr string,
@@ -62,7 +62,7 @@ func (e *Evaluator) Evaluate(
 	}
 }
 
-func (e *Evaluator) eval(
+func (e *evaluator) eval(
 	ctx context.Context,
 	expr string,
 	vars map[string]any,
@@ -90,7 +90,7 @@ func (e *Evaluator) eval(
 	return ans.(bool), nil
 }
 
-func (e *Evaluator) getProgram(
+func (e *evaluator) getProgram(
 	expr string,
 ) (cel.Program, error) {
 	if prg, ok := e.cache.Get(expr); ok {

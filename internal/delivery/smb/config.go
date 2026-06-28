@@ -1,6 +1,6 @@
 package smb
 
-type SMBConfig struct {
+type Config struct {
 	Address  string `env:"SMB_ADDRESS"  yaml:"address"  comment:"Адрес SMB-сервера в формате: host:port\nПример:192.168.1.10:445"`
 	User     string `env:"SMB_USER"     yaml:"user"     comment:"Имя пользователя для аутентификации на SMB-сервере."`
 	Password string `env:"SMB_PASSWORD" yaml:"password" comment:"Пароль пользователя для подключения к SMB-серверу."`

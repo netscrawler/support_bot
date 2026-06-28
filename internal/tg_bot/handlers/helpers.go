@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"fmt"
-	models "support_bot/internal/models/report"
 
 	tele "gopkg.in/telebot.v4"
+	"support_bot/internal/models"
 )
 
 func mapReportRPLToMarkup(rp models.LoadReportRPL) tele.ReplyMarkup {
@@ -44,13 +44,17 @@ func mapReportRPLToMarkup(rp models.LoadReportRPL) tele.ReplyMarkup {
 	}
 
 	navRow := make([]tele.InlineButton, 0, 3)
+
 	if back.Unique != "" {
 		navRow = append(navRow, back)
 	}
+
 	navRow = append(navRow, curr)
+
 	if next.Unique != "" {
 		navRow = append(navRow, next)
 	}
+
 	rows = append(rows, navRow)
 
 	return tele.ReplyMarkup{InlineKeyboard: rows}
