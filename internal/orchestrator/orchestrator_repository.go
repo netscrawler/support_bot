@@ -6,27 +6,26 @@ import (
 	"fmt"
 	"log/slog"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/jmoiron/sqlx"
+	"support_bot/internal/models"
 )
 
-type OrchestratorRepository struct {
+type Repository struct {
 	db *sqlx.DB
 
 	log *slog.Logger
 }
 
-func NewRepository(db *sqlx.DB, log *slog.Logger) *OrchestratorRepository {
+func NewRepository(db *sqlx.DB, log *slog.Logger) *Repository {
 	l := log.With("module", "orchestrator_repository")
 
-	return &OrchestratorRepository{
+	return &Repository{
 		db:  db,
 		log: l,
 	}
 }
 
-func (o *OrchestratorRepository) Load(ctx context.Context) ([]models.Report, error) {
+func (o *Repository) Load(ctx context.Context) ([]models.Report, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load card: %w", ctx.Err())
 	}
@@ -66,7 +65,7 @@ func (o *OrchestratorRepository) Load(ctx context.Context) ([]models.Report, err
 	return reports, nil
 }
 
-func (o *OrchestratorRepository) LoadByEvent(
+func (o *Repository) LoadByEvent(
 	ctx context.Context,
 	event string,
 	active bool,
@@ -117,7 +116,7 @@ func (o *OrchestratorRepository) LoadByEvent(
 	return r, nil
 }
 
-func (o *OrchestratorRepository) loadReports(ctx context.Context, tx *sqlx.Tx) ([]report, error) {
+func (o *Repository) loadReports(ctx context.Context, tx *sqlx.Tx) ([]report, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("orchestrator load reports: %w", ctx.Err())
 	}
@@ -140,7 +139,7 @@ where r.active = true
 	return rp, nil
 }
 
-func (o *OrchestratorRepository) loadActiveReportByName(
+func (o *Repository) loadActiveReportByName(
 	ctx context.Context,
 	name string, tx *sqlx.Tx,
 ) (report, error) {
@@ -166,7 +165,7 @@ where r.name = $1 and r.active = true
 	return rp, nil
 }
 
-func (o *OrchestratorRepository) loadAnyReportByName(
+func (o *Repository) loadAnyReportByName(
 	ctx context.Context,
 	name string, tx *sqlx.Tx,
 ) (report, error) {
@@ -192,7 +191,7 @@ where r.name = $1
 	return rp, nil
 }
 
-func (o *OrchestratorRepository) loadQueriesByReportID(
+func (o *Repository) loadQueriesByReportID(
 	ctx context.Context,
 	reportID int, tx *sqlx.Tx,
 ) ([]card, error) {
@@ -218,7 +217,7 @@ where rq.report_id = $1
 	return crds, nil
 }
 
-func (o *OrchestratorRepository) loadRecipients(
+func (o *Repository) loadRecipients(
 	ctx context.Context,
 	reportID int, tx *sqlx.Tx,
 ) ([]recipient, error) {
@@ -261,7 +260,7 @@ where rr.report_id = $1
 	return rcpt, nil
 }
 
-func (o *OrchestratorRepository) loadExports(
+func (o *Repository) loadExports(
 	ctx context.Context,
 	reportID int,
 	tx *sqlx.Tx,
@@ -287,7 +286,7 @@ where re.report_id = $1
 	return exprt, nil
 }
 
-func (o *OrchestratorRepository) getReportByID(
+func (o *Repository) getReportByID(
 	ctx context.Context,
 	r report,
 	tx *sqlx.Tx,

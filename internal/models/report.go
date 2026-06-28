@@ -20,9 +20,9 @@ type Card struct {
 type RecipientType string
 
 const (
-	EmailRecipient    = "email"
+	emailRecipient    = "email"
 	TelegramRecipient = "tg"
-	SambaRecipient    = "smb"
+	sambaRecipient    = "smb"
 )
 
 type Recipient struct {
@@ -58,7 +58,7 @@ type Template struct {
 	TemplateText string
 }
 type Export struct {
-	Format   ReportFormat
+	Format   reportFormat
 	Template *Template
 	FileName *string
 	Order    map[string][]string

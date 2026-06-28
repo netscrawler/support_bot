@@ -4,30 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/text"
 )
 
-var ErrEmptyRecipient = errors.New("empty recipient")
+var errEmptyRecipient = errors.New("empty recipient")
 
-type tgSender interface {
+type TgSender interface {
 	SendText(ctx context.Context, rcpt TgChat, s string) (*TgMessage, error)
 	SendDocument(ctx context.Context, rcpt TgChat, model []Data) ([]TgMessage, error)
 	SendMedia(ctx context.Context, rcpt TgChat, model []Data) ([]TgMessage, error)
 }
 
-type smbSender interface {
+type SmbSender interface {
 	Upload(ctx context.Context, remote string, data Data) error
 }
 
-type smtpSender interface {
+type SmtpSender interface {
 	Send(ctx context.Context, mail smtp.Mail) error
 }
 
 type senderProvider interface {
-	Tg() tgSender
-	SMB() smbSender
-	SMTP() smtpSender
+	Tg() TgSender
+	SMB() SmbSender
+	SMTP() SmtpSender
 }
 
 type Message struct {
@@ -42,13 +43,14 @@ type Message struct {
 
 func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
 	var txt, fl, imgs []Data
+
 	for _, d := range data {
 		switch d.Type {
-		case SendTextKind:
+		case sendTextKind:
 			txt = append(txt, d)
-		case SendFileKind:
+		case sendFileKind:
 			fl = append(fl, d)
-		case SendImageKind:
+		case sendImageKind:
 			imgs = append(imgs, d)
 		default:
 		}
@@ -64,29 +66,36 @@ func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
 }
 
 func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, error) {
-	var sendErr error
-	var tgMsg []TgMessage
+	var (
+		sendErr error
+		tgMsg   []TgMessage
+	)
+
 	for _, r := range m.Recipients {
 		switch r.Type {
 		case TelegramRecipient:
-			msg, err := m.SendTg(ctx, sp.Tg(), r)
+			msg, err := m.sendTg(ctx, sp.Tg(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
+
 				continue
 			}
+
 			if r.NeedDeleteAfterEndOfDay {
 				tgMsg = append(tgMsg, msg...)
 			}
-		case EmailRecipient:
-			err := m.SendSMTP(ctx, sp.SMTP(), r)
+		case emailRecipient:
+			err := m.sendSMTP(ctx, sp.SMTP(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
+
 				continue
 			}
-		case SambaRecipient:
-			err := m.SendSMB(ctx, sp.SMB(), r)
+		case sambaRecipient:
+			err := m.sendSMB(ctx, sp.SMB(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
+
 				continue
 			}
 
@@ -99,9 +108,9 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, err
 	return tgMsg, sendErr
 }
 
-func (m *Message) SendTg(ctx context.Context, sender tgSender, r Recipient) ([]TgMessage, error) {
+func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]TgMessage, error) {
 	if r.Chat == nil {
-		return nil, ErrEmptyRecipient
+		return nil, errEmptyRecipient
 	}
 
 	rcpt := TgChat{ChatID: r.Chat.ChatID, ThreadID: deRef(r.ThreadID, 0)}
@@ -161,16 +170,16 @@ func (m *Message) SendTg(ctx context.Context, sender tgSender, r Recipient) ([]T
 	return retMsg, sendErr
 }
 
-func (m *Message) SendSMB(ctx context.Context, sender smbSender, r Recipient) error {
+func (m *Message) sendSMB(ctx context.Context, sender SmbSender, r Recipient) error {
 	var sendErr error
 
 	rcpt := r.RemotePath
 	if rcpt == nil {
-		return ErrEmptyRecipient
+		return errEmptyRecipient
 	}
 
 	if *rcpt == "" {
-		return ErrEmptyRecipient
+		return errEmptyRecipient
 	}
 
 	for _, f := range append(m.Files, m.Images...) {
@@ -183,10 +192,10 @@ func (m *Message) SendSMB(ctx context.Context, sender smbSender, r Recipient) er
 	return sendErr
 }
 
-func (m *Message) SendSMTP(ctx context.Context, sender smtpSender, r Recipient) error {
+func (m *Message) sendSMTP(ctx context.Context, sender SmtpSender, r Recipient) error {
 	rcpt := r.Email
 	if rcpt == nil {
-		return ErrEmptyRecipient
+		return errEmptyRecipient
 	}
 
 	subj, err := text.ExecuteTemplate(rcpt.Subject, nil)

@@ -17,21 +17,21 @@ import (
 	"time"
 )
 
-type SMTPSender struct {
-	cfg SMTPConfig
+type Sender struct {
+	cfg Config
 	log *slog.Logger
 }
 
-func New(cfg SMTPConfig, log *slog.Logger) *SMTPSender {
+func New(cfg Config, log *slog.Logger) *Sender {
 	l := log.With(slog.Any("module", "smtp_sender"))
 
-	return &SMTPSender{
+	return &Sender{
 		cfg: cfg,
 		log: l,
 	}
 }
 
-func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
+func (s *Sender) Send(ctx context.Context, mail Mail) error {
 	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
 
 	message := s.buildMessage(mail)
@@ -126,7 +126,7 @@ func (s *SMTPSender) Send(ctx context.Context, mail Mail) error {
 	return nil
 }
 
-func (s *SMTPSender) buildMessage(mail Mail) []byte {
+func (s *Sender) buildMessage(mail Mail) []byte {
 	var buf bytes.Buffer
 
 	fmt.Fprintf(&buf, "From: %s <%s>\r\n", s.cfg.Email, s.cfg.Email)
@@ -177,7 +177,7 @@ func (s *SMTPSender) buildMessage(mail Mail) []byte {
 	return buf.Bytes()
 }
 
-func (s *SMTPSender) writeAttachment(
+func (s *Sender) writeAttachment(
 	buf *bytes.Buffer,
 	boundary string,
 	file *bytes.Buffer,

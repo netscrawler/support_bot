@@ -6,13 +6,13 @@ import (
 	"log/slog"
 	"net"
 	"path/filepath"
-	models "support_bot/internal/models/report"
 
 	"github.com/hirochachacha/go-smb2"
+	"support_bot/internal/models"
 )
 
 type SMB struct {
-	cfg SMBConfig
+	cfg Config
 
 	conn    net.Conn
 	session *smb2.Session
@@ -25,7 +25,7 @@ type SMB struct {
 
 func New(
 	ctx context.Context,
-	cfg SMBConfig,
+	cfg Config,
 	log *slog.Logger,
 ) (*SMB, error) {
 	l := log.With(slog.Any("module", "samba_sender"))
@@ -56,6 +56,7 @@ func (smb *SMB) Close() error {
 	if !smb.cfg.Active {
 		return nil
 	}
+
 	smb.log.Info("start closing connection")
 	smb.cancel()
 
@@ -106,8 +107,8 @@ func (smb *SMB) Upload(
 			slog.Any("file", data.Name),
 			slog.Any("error", err),
 		)
-		return fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
 
+		return fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
 	}
 
 	_, err = f.Write(data.Data.Bytes())
@@ -128,7 +129,6 @@ func (smb *SMB) Upload(
 		)
 
 		return fmt.Errorf("failed to write to remote file %s: %w", remotePath, err)
-
 	}
 
 	return nil

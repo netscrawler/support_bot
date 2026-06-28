@@ -10,12 +10,11 @@ import (
 	"image/png"
 	"math"
 	"strings"
-	"support_bot/internal/pkg"
-
-	models "support_bot/internal/models/report"
 
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct {
@@ -39,7 +38,7 @@ func New(
 func (e *Exporter) Export() ([]models.Data, error) {
 	var err error
 
-	id := []models.Data{}
+	var id []models.Data
 
 	for k, v := range e.data {
 		var order []string
@@ -62,6 +61,7 @@ func (e *Exporter) Export() ([]models.Data, error) {
 		if eErr != nil {
 			err = errors.Join(err, eErr)
 		}
+
 		id = append(id, dt)
 	}
 
@@ -74,12 +74,12 @@ const (
 )
 
 func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
-	font, err := pkg.GetFontFaceNormal(18)
+	faceNormal, err := pkg.GetFontFaceNormal(18)
 	if err != nil {
 		return nil, err
 	}
 
-	image := generateTableImageFromMatrix(data, font, 18.0, 6, 1)
+	imageFromMatrix := generateTableImageFromMatrix(data, faceNormal, 18.0, 6, 1)
 
 	titleFont, err := pkg.GetFontFaceBold(24)
 	if err != nil {
@@ -87,7 +87,7 @@ func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 	}
 
 	if title != nil {
-		image, err = addTitleAboveImage(image, *title, titleFont, 24, 10)
+		imageFromMatrix, err = addTitleAboveImage(imageFromMatrix, *title, titleFont, 10)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +95,7 @@ func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 
 	buf := new(bytes.Buffer)
 
-	err = png.Encode(buf, image)
+	err = png.Encode(buf, imageFromMatrix)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,6 @@ func addTitleAboveImage(
 	img image.Image,
 	title string,
 	face font.Face,
-	fontSize float64,
 	padding float64,
 ) (image.Image, error) {
 	// Ширина и высота оригинального изображения

@@ -1,20 +1,20 @@
 package models
 
-type EventType int
+type eventType int
 
 const (
-	EventTypeGenReport EventType = iota
+	EventTypeGenReport eventType = iota
 	EventTypeDeleteSentReport
 	EventTypeGenReportForTG
 )
 
 type Event struct {
 	Name string
-	Type EventType
+	Type eventType
 }
 
 func NewEvent(name string, t int) Event {
-	var et EventType
+	var et eventType
 
 	switch t {
 	case int(EventTypeDeleteSentReport):

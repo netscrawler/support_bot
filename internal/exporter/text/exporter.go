@@ -3,12 +3,11 @@ package text
 import (
 	"bytes"
 	"maps"
-	"support_bot/internal/pkg/text"
 	"text/template"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/Masterminds/sprig/v3"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/text"
 )
 
 type Exporter struct {
@@ -40,5 +39,6 @@ func (e *Exporter) Export() (*models.Data, error) {
 	}
 
 	dt := models.NewTextData(&buf)
+
 	return &dt, nil
 }

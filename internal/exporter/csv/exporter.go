@@ -5,9 +5,9 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"support_bot/internal/pkg"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct {
@@ -29,7 +29,7 @@ func New(
 }
 
 func (e *Exporter) Export() ([]models.Data, error) {
-	fd := []models.Data{}
+	var fd []models.Data
 
 	var err error
 
@@ -47,8 +47,10 @@ func (e *Exporter) Export() ([]models.Data, error) {
 		dt, eErr := models.NewFileData(buf, e.name+"_"+k+".csv")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
+
 			continue
 		}
+
 		fd = append(fd, dt)
 	}
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	models "support_bot/internal/models/notify"
+	"support_bot/internal/models"
 )
 
 type UserProvider interface {
@@ -56,7 +56,7 @@ func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
 	return user.Role, nil
 }
 
-func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
+func (u *User) getAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	users, err := u.repo.GetAll(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -77,7 +77,7 @@ func (u *User) GetAllUserIds(ctx context.Context) ([]int64, []int64, error) {
 	return userIds, adminIds, nil
 }
 
-func (u *User) Create(ctx context.Context, user *models.User) error {
+func (u *User) create(ctx context.Context, user *models.User) error {
 	err := u.repo.Create(ctx, user)
 	if err != nil {
 		u.log.ErrorContext(ctx, "create user", slog.Any("error", err))
@@ -101,7 +101,7 @@ func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) e
 	return nil
 }
 
-func (u *User) Update(ctx context.Context, usr *models.User) error {
+func (u *User) update(ctx context.Context, usr *models.User) error {
 	err := u.repo.Update(ctx, usr)
 	if err != nil {
 		u.log.ErrorContext(ctx, "updating user", slog.Any("error", err))
@@ -113,7 +113,7 @@ func (u *User) Update(ctx context.Context, usr *models.User) error {
 }
 
 func (u *User) AddUserComplete(ctx context.Context, user *models.User) error {
-	return u.Update(ctx, user)
+	return u.update(ctx, user)
 }
 
 func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {

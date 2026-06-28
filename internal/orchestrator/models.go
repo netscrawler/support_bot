@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 )
 
 type report struct {
@@ -105,6 +105,7 @@ func mapRecipientToModel(r recipient) models.Recipient {
 	}
 
 	needDeleteAfterEndOfDay := false
+
 	if r.NeedDeleteAfterEndOfDay != nil {
 		needDeleteAfterEndOfDay = *r.NeedDeleteAfterEndOfDay
 	}

@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
@@ -17,28 +19,27 @@ import (
 	"support_bot/internal/evaluator"
 	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
-	models "support_bot/internal/models/report"
+	models2 "support_bot/internal/models"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
-	bot2 "support_bot/internal/tg_bot"
+	bot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
-	"time"
 
 	"golang.org/x/net/proxy"
 	"gopkg.in/telebot.v4"
 )
 
 const (
-	parralell         uint8 = 30
+	parallel          uint8 = 30
 	channelBufferSize uint8 = 15
 )
 
-type App struct {
+type app struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -52,26 +53,26 @@ type App struct {
 }
 
 type reportApp struct {
-	SheduleC  chan models.Event
-	EventC    chan models.Event
-	Sheduler  *sheduler.Sheduler
-	Event     *eventcreator.EventCreator
-	Orch      *orchestrator.Orchestrator
-	Generator *generator.Generator
-	Deleter   *generator.Deleter
+	ScheduleC    chan models2.Event
+	EventC       chan models2.Event
+	Scheduler    *sheduler.Sheduler
+	Event        *eventcreator.EventCreator
+	Orchestrator *orchestrator.Orchestrator
+	Generator    *generator.Generator
+	Deleter      *generator.Deleter
 }
 
 type telegramBot struct {
 	Bot    *telebot.Bot
-	Router *bot2.Router
+	Router *bot.Router
 	Shed   *sheduler.SheduleAPI
 }
 
-func New(ctx context.Context, cfg *config.Config) (*App, error) {
+func New(ctx context.Context, cfg *config.Config) (*app, error) {
 	appCtx, cancelApp := context.WithCancel(ctx)
 	log := slog.Default()
 
-	app := &App{
+	app := &app{
 		ctx:    appCtx,
 		cancel: cancelApp,
 		log:    log,
@@ -81,7 +82,10 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if err := app.init(appCtx); err != nil {
 		cancelApp()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Database.DatabaseConnect)
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			cfg.Database.DatabaseConnect,
+		)
 		defer cancel()
 
 		return nil, errors.Join(err, app.close(shutdownCtx))
@@ -90,7 +94,84 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	return app, nil
 }
 
-func (a *App) init(ctx context.Context) error {
+func (a *app) Start(_ context.Context) error {
+	a.tgBot.start()
+
+	return a.report.start(a.ctx)
+}
+
+func (a *app) GracefulShutdown(ctx context.Context) {
+	log := a.log
+	log.InfoContext(ctx, "start")
+
+	if err := a.close(ctx); err != nil {
+		log.ErrorContext(ctx, "unable to stop app correctly", slog.Any("error", err))
+
+		return
+	}
+
+	log.InfoContext(ctx, "successfully stop")
+}
+
+func (a *app) close(ctx context.Context) error {
+	a.cancel()
+
+	if a.tgBot != nil {
+		a.tgBot.stop()
+	}
+
+	if a.report != nil {
+		a.report.stop(ctx)
+	}
+
+	var err error
+
+	if a.smb != nil {
+		err = errors.Join(err, a.smb.Close())
+	}
+
+	if a.storage != nil {
+		err = errors.Join(err, a.storage.Stop(ctx))
+	}
+
+	return err
+}
+
+func (r *reportApp) start(ctx context.Context) error {
+	err := r.Scheduler.Start(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = r.Event.Start(ctx)
+	if err != nil {
+		return err
+	}
+
+	r.Generator.Start(ctx)
+	r.Deleter.Start(ctx)
+	r.Orchestrator.Start(ctx)
+
+	return nil
+}
+
+func (r *reportApp) stop(_ context.Context) {
+	r.Scheduler.Stop()
+}
+
+func (b *telegramBot) start() {
+	slog.Info("starting bot polling")
+
+	go b.Bot.Start()
+}
+
+func (b *telegramBot) stop() {
+	slog.Info("stop bot polling")
+
+	b.Bot.Stop()
+}
+
+func (a *app) init(ctx context.Context) error {
 	log := a.log
 	cfg := a.cfg
 
@@ -98,12 +179,14 @@ func (a *App) init(ctx context.Context) error {
 	defer cancel()
 
 	connCtx = logger.AppendCtx(connCtx, slog.Any("function", "connecting to database"))
+
 	rdb, err := postgres.New(connCtx, cfg.Database, log)
 	if err != nil {
 		log.ErrorContext(connCtx, "unable to create connection", slog.Any("error", err))
 
 		return err
 	}
+
 	a.storage = rdb
 
 	tgBot, err := newTelegramClient(cfg.Bot.TelegramToken, cfg.Bot.Proxy, cfg.Bot.BotPoll)
@@ -114,7 +197,7 @@ func (a *App) init(ctx context.Context) error {
 	shdAPI := make(chan sheduler.SheduleAPIEvent, 5)
 
 	mb := metabase.New(cfg.MetabaseDomain)
-	clct := collector.NewCollector(parralell, mb, log)
+	clct := collector.NewCollector(parallel, mb, log)
 
 	tg := telegram.NewChatAdaptor(tgBot, log)
 	smtpS := smtp.New(cfg.SMTP, log)
@@ -129,13 +212,14 @@ func (a *App) init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	a.smb = smbS
 
-	sheduleEvents := make(chan models.Event, channelBufferSize)
-	eventChan := make(chan models.Event, channelBufferSize)
-	delChan := make(chan models.Event, channelBufferSize)
-	reportChan := make(chan models.Report, channelBufferSize)
-	specialEventChan := make(chan models.SpecialEventForLK, channelBufferSize)
+	sheduleEvents := make(chan models2.Event, channelBufferSize)
+	eventChan := make(chan models2.Event, channelBufferSize)
+	delChan := make(chan models2.Event, channelBufferSize)
+	reportChan := make(chan models2.Report, channelBufferSize)
+	specialEventChan := make(chan models2.SpecialEventForLK, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
 	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
@@ -149,7 +233,7 @@ func (a *App) init(ctx context.Context) error {
 		return err
 	}
 
-	snd := models.NewSenderProvider(tg, smbS, smtpS)
+	snd := models2.NewSenderProvider(tg, smbS, smtpS)
 
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
@@ -159,13 +243,13 @@ func (a *App) init(ctx context.Context) error {
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)
 	report := &reportApp{
-		SheduleC:  sheduleEvents,
-		EventC:    eventChan,
-		Sheduler:  shd,
-		Event:     evC,
-		Orch:      orch,
-		Generator: gen,
-		Deleter:   deleter,
+		ScheduleC:    sheduleEvents,
+		EventC:       eventChan,
+		Scheduler:    shd,
+		Event:        evC,
+		Orchestrator: orch,
+		Generator:    gen,
+		Deleter:      deleter,
 	}
 
 	state := handlers.NewState(cfg.Bot.CleanUpTime)
@@ -174,7 +258,9 @@ func (a *App) init(ctx context.Context) error {
 	userRepo := repository.NewUserRepository(rdb.GetConn(), log)
 	reportRepo := repository.NewReportRepository(rdb.GetConn(), log)
 
-	chatService := service.NewChat(chatRepo, log)
+	notify := service.NewNotify(tg, userRepo, log)
+
+	chatService := service.NewChat(chatRepo, notify, log)
 	userService := service.NewUser(userRepo, log)
 
 	shed := sheduler.NewSheduleAPI(shdAPI)
@@ -200,7 +286,7 @@ func (a *App) init(ctx context.Context) error {
 
 	mw := middlewares.NewMw(userService)
 
-	router := bot2.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
+	router := bot.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
 
 	router.Setup()
 	tgBotUser := &telegramBot{
@@ -213,82 +299,6 @@ func (a *App) init(ctx context.Context) error {
 	a.tgBot = tgBotUser
 
 	return nil
-}
-
-func (a *App) Start(_ context.Context) error {
-	a.tgBot.Start()
-
-	return a.report.Start(a.ctx)
-}
-
-func (a *App) GracefulShutdown(ctx context.Context) {
-	log := a.log
-	log.InfoContext(ctx, "start")
-
-	if err := a.close(ctx); err != nil {
-		log.ErrorContext(ctx, "unable to stop app correctly", slog.Any("error", err))
-
-		return
-	}
-
-	log.InfoContext(ctx, "successfully stop")
-}
-
-func (a *App) close(ctx context.Context) error {
-	a.cancel()
-
-	if a.tgBot != nil {
-		a.tgBot.Stop()
-	}
-
-	if a.report != nil {
-		a.report.Stop(ctx)
-	}
-
-	var err error
-	if a.smb != nil {
-		err = errors.Join(err, a.smb.Close())
-	}
-
-	if a.storage != nil {
-		err = errors.Join(err, a.storage.Stop(ctx))
-	}
-
-	return err
-}
-
-func (r *reportApp) Start(ctx context.Context) error {
-	err := r.Sheduler.Start(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = r.Event.Start(ctx)
-	if err != nil {
-		return err
-	}
-
-	r.Generator.Start(ctx)
-	r.Deleter.Start(ctx)
-	r.Orch.Start(ctx)
-
-	return nil
-}
-
-func (r *reportApp) Stop(_ context.Context) {
-	r.Sheduler.Stop()
-}
-
-func (b *telegramBot) Start() {
-	slog.Info("starting bot polling")
-
-	go b.Bot.Start()
-}
-
-func (b *telegramBot) Stop() {
-	slog.Info("stop bot polling")
-
-	b.Bot.Stop()
 }
 
 func buildHTTPClient(proxyStr string) (*http.Client, error) {

@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-type retraibleRoundTripper struct {
+type readableRoundTripper struct {
 	t http.RoundTripper
 }
 
-func newRetraibleRoundTripper(tr http.RoundTripper) retraibleRoundTripper {
-	return retraibleRoundTripper{t: tr}
+func newRetractileRoundTripper(tr http.RoundTripper) readableRoundTripper {
+	return readableRoundTripper{t: tr}
 }
 
-func (x retraibleRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+func (x readableRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 
 	retry := 3

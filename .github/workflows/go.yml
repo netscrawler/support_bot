@@ -17,18 +17,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.25.3'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.3'
 
-    - name: Build
-      run: CGO_ENABLED=1 go build -ldflags "-s -w -X main.Version=$(shell git describe --tags --dirty --always) -X main.Commit=$(shell git rev-parse --short HEAD) -X main.BuildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/bot/main.go
+      - name: Build
+        run: CGO_ENABLED=1 go build -ldflags "-s -w -X main.Version=$(shell git describe --tags --dirty --always) -X main.Commit=$(shell git rev-parse --short HEAD) -X main.BuildTime=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" ./cmd/bot/main.go
 
-    - name: Test
-      run: go test -v ./...
+      - name: Test
+        run: go test -v ./...
 
   golangci:
     name: lint
