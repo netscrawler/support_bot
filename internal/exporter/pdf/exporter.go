@@ -3,9 +3,8 @@ package pdf
 import (
 	"strings"
 
-	models "support_bot/internal/models/report"
-
 	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
+	"support_bot/internal/models"
 )
 
 type Exporter struct {

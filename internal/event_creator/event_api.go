@@ -2,29 +2,35 @@ package eventcreator
 
 import (
 	"context"
-	models "support_bot/internal/models/report"
+
+	models2 "support_bot/internal/models"
 )
 
 type EventAPI struct {
-	OutC   chan models.Event
-	OutSpC chan models.SpecialEventForLK
+	OutC   chan models2.Event
+	OutSpC chan models2.SpecialEventForLK
 }
 
-func NewEventAPI(outC chan models.Event, outSpC chan models.SpecialEventForLK) *EventAPI {
+func NewEventAPI(outC chan models2.Event, outSpC chan models2.SpecialEventForLK) *EventAPI {
 	return &EventAPI{
 		OutC:   outC,
 		OutSpC: outSpC,
 	}
 }
 
-func (api *EventAPI) ProduceScepialEvent(ctx context.Context, name string, recipient models.Recipient) {
-	ev := models.SpecialEventForLK{
-		Event: models.Event{
+func (api *EventAPI) ProduceSpecialEvent(
+	ctx context.Context,
+	name string,
+	recipient models2.Recipient,
+) {
+	ev := models2.SpecialEventForLK{
+		Event: models2.Event{
 			Name: name,
-			Type: models.EventTypeGenReportForTG,
+			Type: models2.EventTypeGenReportForTG,
 		},
 		Recipient: recipient,
 	}
+
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -34,11 +40,12 @@ func (api *EventAPI) ProduceScepialEvent(ctx context.Context, name string, recip
 	}()
 }
 
-func (api *EventAPI) ProduceGenEvent(ctx context.Context, name string) {
-	ev := models.Event{
+func (api *EventAPI) produceGenEvent(ctx context.Context, name string) {
+	ev := models2.Event{
 		Name: name,
-		Type: models.EventTypeGenReport,
+		Type: models2.EventTypeGenReport,
 	}
+
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -48,11 +55,12 @@ func (api *EventAPI) ProduceGenEvent(ctx context.Context, name string) {
 	}()
 }
 
-func (api *EventAPI) ProduceDelEvent(ctx context.Context, name string) {
-	ev := models.Event{
+func (api *EventAPI) produceDelEvent(ctx context.Context, name string) {
+	ev := models2.Event{
 		Name: name,
-		Type: models.EventTypeDeleteSentReport,
+		Type: models2.EventTypeDeleteSentReport,
 	}
+
 	go func() {
 		select {
 		case <-ctx.Done():

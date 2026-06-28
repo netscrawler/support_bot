@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	eventcreator "support_bot/internal/event_creator"
-	models "support_bot/internal/models/report"
+	models2 "support_bot/internal/models"
 	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/repository"
 )
@@ -21,7 +22,12 @@ type Report struct {
 
 const reportsPageSize = 5
 
-func NewReportService(shd *sheduler.SheduleAPI, eventAPI *eventcreator.EventAPI, repo *repository.ReportRepository, log *slog.Logger) *Report {
+func NewReportService(
+	shd *sheduler.SheduleAPI,
+	eventAPI *eventcreator.EventAPI,
+	repo *repository.ReportRepository,
+	log *slog.Logger,
+) *Report {
 	l := log.With(slog.Any("module", "tg_bot.service.report"))
 
 	return &Report{
@@ -32,34 +38,36 @@ func NewReportService(shd *sheduler.SheduleAPI, eventAPI *eventcreator.EventAPI,
 	}
 }
 
-func (r *Report) LoadReportsWithPagination(ctx context.Context) (models.LoadReportRPL, error) {
+func (r *Report) LoadReportsWithPagination(ctx context.Context) (models2.LoadReportRPL, error) {
 	return r.LoadReportByPage(ctx, 1)
 }
 
-func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadReportRPL, error) {
+func (r *Report) LoadReportByPage(ctx context.Context, page int) (models2.LoadReportRPL, error) {
 	rCount, err := r.repo.GetReportsCount(ctx)
 	if err != nil {
-		return models.LoadReportRPL{}, err
+		return models2.LoadReportRPL{}, err
 	}
 
 	if rCount <= 0 {
-		return models.LoadReportRPL{}, fmt.Errorf("Reports Not Found")
+		return models2.LoadReportRPL{}, fmt.Errorf("reports not found")
 	}
 
 	pageCount := (rCount + reportsPageSize - 1) / reportsPageSize
+
 	if page <= 0 {
 		page = 1
 	}
+
 	if page > pageCount {
 		page = pageCount
 	}
 
 	reports, err := r.repo.LoadReports(ctx, page)
 	if err != nil {
-		return models.LoadReportRPL{}, err
+		return models2.LoadReportRPL{}, err
 	}
 
-	rpl := models.LoadReportRPL{
+	rpl := models2.LoadReportRPL{
 		ReportsTotal: rCount,
 		PageCount:    pageCount,
 		CurrentPage:  page,
@@ -69,14 +77,18 @@ func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadRep
 	return rpl, nil
 }
 
-func (r *Report) GenerateReportByName(ctx context.Context, reportName string, chat *models.Chat) error {
-	rcpt := models.Recipient{
+func (r *Report) GenerateReportByName(
+	ctx context.Context,
+	reportName string,
+	chat *models2.Chat,
+) error {
+	rcpt := models2.Recipient{
 		Name:                    "SpetialTGRcpt",
 		Chat:                    chat,
-		Type:                    models.TelegramRecipient,
+		Type:                    models2.TelegramRecipient,
 		NeedDeleteAfterEndOfDay: false,
 	}
-	r.EventAPI.ProduceScepialEvent(ctx, reportName, rcpt)
+	r.ProduceSpecialEvent(ctx, reportName, rcpt)
 
 	return nil
 }

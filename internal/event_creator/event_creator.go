@@ -4,19 +4,20 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	models "support_bot/internal/models/report"
 	"sync"
 	"time"
+
+	"support_bot/internal/models"
 )
 
-type Event struct {
+type event struct {
 	Name     string `db:"report_name"`
 	CronName string `db:"cron_name"`
 }
 
 type EventProvider interface {
-	Load(ctx context.Context) ([]Event, error)
-	LoadByName(ctx context.Context, name string) ([]Event, error)
+	Load(ctx context.Context) ([]event, error)
+	LoadByName(ctx context.Context, name string) ([]event, error)
 }
 
 type EventCreator struct {
@@ -70,6 +71,7 @@ func (e *EventCreator) Start(ctx context.Context) error {
 				}
 
 				gCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+
 				switch ev.Type {
 				case models.EventTypeGenReport:
 					e.createGenReportEvent(gCtx, ev)
@@ -79,8 +81,8 @@ func (e *EventCreator) Start(ctx context.Context) error {
 				default:
 					e.createGenReportEvent(gCtx, ev)
 				}
-				cancel()
 
+				cancel()
 			}
 		}
 	}()
@@ -88,7 +90,7 @@ func (e *EventCreator) Start(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventCreator) ReLoad() {
+func (e *EventCreator) reLoad() {
 	e.mu.Lock()
 	clear(e.cache)
 	e.mu.Unlock()
@@ -98,8 +100,8 @@ func (e *EventCreator) createGenReportEvent(ctx context.Context, ev models.Event
 	events, err := e.getByCronName(ctx, ev.Name)
 	if err != nil {
 		e.log.ErrorContext(ctx, "error load events", slog.Any("error", err))
-		return
 
+		return
 	}
 
 	for _, en := range events {
@@ -159,7 +161,10 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]models
 			continue
 		}
 
-		e.cache[ev.CronName] = append(events, models.Event{Name: name, Type: models.EventTypeGenReport})
+		e.cache[ev.CronName] = append(
+			events,
+			models.Event{Name: name, Type: models.EventTypeGenReport},
+		)
 	}
 
 	return names, nil
@@ -176,7 +181,7 @@ func (e *EventCreator) cleaner(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
-				e.ReLoad()
+				e.reLoad()
 				e.log.DebugContext(ctx, "cache cleaned")
 			}
 		}
@@ -209,7 +214,10 @@ func (e *EventCreator) heat(ctx context.Context) error {
 			continue
 		}
 
-		e.cache[ev.CronName] = append(events, models.Event{Name: ev.Name, Type: models.EventTypeGenReport})
+		e.cache[ev.CronName] = append(
+			events,
+			models.Event{Name: ev.Name, Type: models.EventTypeGenReport},
+		)
 	}
 
 	e.mu.Unlock()

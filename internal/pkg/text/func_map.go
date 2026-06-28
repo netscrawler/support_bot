@@ -94,6 +94,7 @@ var FuncMap = template.FuncMap{
 	// Результат: "1234567.89"
 	"money": func(val any) string {
 		var f float64
+
 		switch v := val.(type) {
 		case float64:
 			f = v
@@ -116,6 +117,7 @@ var FuncMap = template.FuncMap{
 	// Результат: "1 234 567.89"
 	"formatMoney": func(val any) string {
 		var f float64
+
 		switch v := val.(type) {
 		case float64:
 			f = v
@@ -135,10 +137,12 @@ var FuncMap = template.FuncMap{
 		decPart := parts[1]
 
 		var result strings.Builder
+
 		for i, c := range intPart {
 			if i > 0 && (len(intPart)-i)%3 == 0 {
 				result.WriteString(" ")
 			}
+
 			result.WriteRune(c)
 		}
 
@@ -151,6 +155,7 @@ var FuncMap = template.FuncMap{
 	// Результат: "1 234 567"
 	"formatNumber": func(val any) string {
 		var n int64
+
 		switch v := val.(type) {
 		case int:
 			n = int64(v)
@@ -167,11 +172,14 @@ var FuncMap = template.FuncMap{
 		}
 
 		s := fmt.Sprintf("%d", n)
+
 		var result strings.Builder
+
 		for i, c := range s {
 			if i > 0 && (len(s)-i)%3 == 0 {
 				result.WriteString(" ")
 			}
+
 			result.WriteRune(c)
 		}
 
@@ -464,6 +472,7 @@ var FuncMap = template.FuncMap{
 		if m == nil {
 			return def
 		}
+
 		val, ok := m[key]
 		if !ok || val == nil {
 			return def
@@ -480,6 +489,7 @@ var FuncMap = template.FuncMap{
 		if m == nil {
 			return false
 		}
+
 		_, ok := m[key]
 
 		return ok
@@ -493,6 +503,7 @@ var FuncMap = template.FuncMap{
 		if m == nil {
 			return []string{}
 		}
+
 		keys := make([]string, 0, len(m))
 		for k := range m {
 			keys = append(keys, k)
@@ -509,6 +520,7 @@ var FuncMap = template.FuncMap{
 		if m == nil {
 			return []any{}
 		}
+
 		vals := make([]any, 0, len(m))
 		for _, v := range m {
 			vals = append(vals, v)
@@ -614,6 +626,7 @@ var FuncMap = template.FuncMap{
 	// Результат: "John"
 	"parseJson": func(s string) (any, error) {
 		var result any
+
 		err := json.Unmarshal([]byte(s), &result)
 
 		return result, err
@@ -625,9 +638,11 @@ var FuncMap = template.FuncMap{
 	// Результат: "promo1: 5 promo2: 10 "
 	"parseJsonMap": func(s string) (map[string]any, error) {
 		var result map[string]any
+
 		if s == "" || s == "null" {
 			return nil, nil
 		}
+
 		err := json.Unmarshal([]byte(s), &result)
 
 		return result, err

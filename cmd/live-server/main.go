@@ -17,15 +17,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"support_bot/internal/collector"
-	"support_bot/internal/collector/metabase"
-	"support_bot/internal/pkg/text"
 	"sync"
 	"syscall"
 	tmplTXT "text/template"
 	"time"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/collector"
+	"support_bot/internal/collector/metabase"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/text"
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/fsnotify/fsnotify"
@@ -34,41 +34,41 @@ import (
 
 var (
 	Version   = "v0.0.0"
-	Commit    = "unknown"
-	BuildTime = "unknown"
+	commit    = "unknown"
+	buildTime = "unknown"
 )
 
 var (
-	SetModeVer          = false
-	SetModeHelp         = false
-	SetModeCreateConfig = false
-	SetModeCreateEnv    = false
-	ConfigPath          = ""
-	TemplatesPath       = ""
+	setModeVer          = false
+	setModeHelp         = false
+	setModeCreateConfig = false
+
+	configPath    = ""
+	templatesPath = ""
 )
 
 func modeStart() {
-	flag.BoolVar(&SetModeVer, "v", false, "Версия приложения")
-	flag.BoolVar(&SetModeHelp, "h", false, "Помощь")
-	flag.StringVar(&ConfigPath, "config", "", "Путь к файлу конфигурации")
-	flag.StringVar(&TemplatesPath, "templates", "", "Путь к директории с шаблонами")
+	flag.BoolVar(&setModeVer, "v", false, "Версия приложения")
+	flag.BoolVar(&setModeHelp, "h", false, "Помощь")
+	flag.StringVar(&configPath, "config", "", "Путь к файлу конфигурации")
+	flag.StringVar(&templatesPath, "templates", "", "Путь к директории с шаблонами")
 	flag.BoolVar(
-		&SetModeCreateConfig,
+		&setModeCreateConfig,
 		"example-config",
 		false,
 		"Сгенерировать пример файла конфигурации",
 	)
 	flag.Parse()
 
-	if SetModeVer {
+	if setModeVer {
 		version()
 	}
 
-	if SetModeHelp {
+	if setModeHelp {
 		help()
 	}
 
-	if SetModeCreateConfig {
+	if setModeCreateConfig {
 		configDef()
 	}
 }
@@ -77,8 +77,8 @@ func version() {
 	fmt.Printf(
 		"Version: %s\nCommit: %s\nBuildTime: %s\nRuntime: %s",
 		Version,
-		Commit,
-		BuildTime,
+		commit,
+		buildTime,
 		runtime.Version(),
 	)
 	os.Exit(0)
@@ -128,7 +128,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfgPath := ConfigPath
+	cfgPath := configPath
 	if cfgPath == "" {
 		cfgPath = filepath.Join(cwd, "config.json")
 	}
@@ -141,7 +141,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := UnmarshalFor[config](rawCfg)
+	cfg, err := unmarshalFor[config](rawCfg)
 	if err != nil {
 		log.Error("error unmarshall config", slog.Any("error", err))
 		os.Exit(1)
@@ -149,8 +149,8 @@ func main() {
 
 	var fsCwd fs.FS
 
-	if TemplatesPath != "" {
-		fsCwd = os.DirFS(TemplatesPath)
+	if templatesPath != "" {
+		fsCwd = os.DirFS(templatesPath)
 	} else {
 		fsCwd = os.DirFS(cwd)
 	}
@@ -204,11 +204,11 @@ func main() {
 
 	http.Handle(
 		"/html/{template}",
-		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.HandleHTML)))),
+		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.handleHTML)))),
 	)
 	http.Handle(
 		"/text/{template}",
-		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.HandleTXT)))),
+		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.handleTXT)))),
 	)
 
 	http.Handle("/ws/{template}", h.existMiddleware(http.HandlerFunc(wsH.wsHandle)))
@@ -224,7 +224,7 @@ func main() {
 	go func() {
 		slog.Info(fmt.Sprintf("server started http://%s", srv.Addr))
 
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -265,7 +265,7 @@ type handler struct {
 	data map[string][]map[string]any
 }
 
-func (h *handler) HandleHTML(w http.ResponseWriter, r *http.Request) {
+func (h *handler) handleHTML(w http.ResponseWriter, r *http.Request) {
 	templ := r.PathValue("template")
 
 	allFuncs := sprig.HtmlFuncMap()
@@ -303,7 +303,7 @@ const textWrap = `<!doctype html>
 </html>
 `
 
-func (h *handler) HandleTXT(w http.ResponseWriter, r *http.Request) {
+func (h *handler) handleTXT(w http.ResponseWriter, r *http.Request) {
 	templ := r.PathValue("template")
 
 	allFuncs := sprig.TxtFuncMap()
@@ -609,7 +609,7 @@ func loadHTMLTemplates(f fs.FS, log *slog.Logger) []string {
 	return templates
 }
 
-func UnmarshalFor[V any](data []byte) (V, error) {
+func unmarshalFor[V any](data []byte) (V, error) {
 	var v V
 
 	err := json.Unmarshal(data, &v)

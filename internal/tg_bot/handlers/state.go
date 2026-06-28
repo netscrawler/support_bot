@@ -6,18 +6,17 @@ import (
 )
 
 const (
-	AddUserState             = "add_user"
-	AddChatState             = "add_chat"
-	RemoveUserState          = "remove_user"
-	RemoveChatState          = "remove_chat"
-	ListUsersState           = "list_users"
-	ListChatsState           = "list_chats"
-	SendNotificationState    = "send_message"
-	ConfirmNotificationState = "confirm_notification"
-	CancelNotificationState  = "cancel_notification"
-	MenuState                = "menu"
+	addUserState    = "add_user"
+	addChatState    = "add_chat"
+	removeUserState = "remove_user"
+	removeChatState = "remove_chat"
 
-	LoadReportState = "load_report"
+	sendNotificationState    = "send_message"
+	confirmNotificationState = "confirm_notification"
+
+	menuState = "menu"
+
+	loadReportState = "load_report"
 )
 
 type State struct {
@@ -38,28 +37,28 @@ func NewState(cleanUpTime time.Duration) *State {
 	}
 }
 
-func (s *State) Set(chatID int64, state string) {
+func (s *State) set(chatID int64, state string) {
 	s.mu.Lock()
 	s.s[chatID] = state
 	s.mu.Unlock()
 	s.cleanUpAfter(chatID, s.cleanUpTime)
 }
 
-func (s *State) Get(chatID int64) string {
+func (s *State) get(chatID int64) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	return s.s[chatID]
 }
 
-func (s *State) SetMsgData(chatID int64, msg string) {
+func (s *State) setMsgData(chatID int64, msg string) {
 	s.mu.Lock()
 	s.msg[chatID] = msg
 	s.mu.Unlock()
 	s.cleanUpAfter(chatID, s.cleanUpTime)
 }
 
-func (s *State) GetMsgData(chatID int64) (string, bool) {
+func (s *State) getMsgData(chatID int64) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -68,7 +67,7 @@ func (s *State) GetMsgData(chatID int64) (string, bool) {
 	return data, ok
 }
 
-func (s *State) Delete(chatID int64) {
+func (s *State) delete(chatID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

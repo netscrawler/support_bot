@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
-	models "support_bot/internal/models/report"
 
 	"gopkg.in/telebot.v4"
+	models2 "support_bot/internal/models"
 )
 
 type ChatAdaptor struct {
@@ -28,9 +28,9 @@ func NewChatAdaptor(bot *telebot.Bot, log *slog.Logger) *ChatAdaptor {
 
 func (ca *ChatAdaptor) SendText(
 	ctx context.Context,
-	chat models.TgChat,
+	chat models2.TgChat,
 	msg string,
-) (*models.TgMessage, error) {
+) (*models2.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -38,6 +38,7 @@ func (ca *ChatAdaptor) SendText(
 		))
 
 	l.InfoContext(ctx, "Start sending text message")
+
 	p := telebot.ModeHTML
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{
@@ -50,14 +51,14 @@ func (ca *ChatAdaptor) SendText(
 		return nil, fmt.Errorf("error send text message: %w", err)
 	}
 
-	return models.NewFromTelebot(tgMsg), nil
+	return models2.NewFromTelebot(tgMsg), nil
 }
 
 func (ca *ChatAdaptor) SendMedia(
 	ctx context.Context,
-	chat models.TgChat,
-	imgs []models.Data,
-) ([]models.TgMessage, error) {
+	chat models2.TgChat,
+	imgs []models2.Data,
+) ([]models2.TgMessage, error) {
 	var album telebot.Album
 
 	l := ca.log.With(
@@ -89,14 +90,14 @@ func (ca *ChatAdaptor) SendMedia(
 
 	l.InfoContext(ctx, "Successfully send media")
 
-	return models.NewMsgFromTelebotMany(tgMsg), nil
+	return models2.NewMsgFromTelebotMany(tgMsg), nil
 }
 
 func (ca *ChatAdaptor) SendDocument(
 	ctx context.Context,
-	chat models.TgChat,
-	doc []models.Data,
-) ([]models.TgMessage, error) {
+	chat models2.TgChat,
+	doc []models2.Data,
+) ([]models2.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -110,7 +111,7 @@ func (ca *ChatAdaptor) SendDocument(
 
 	var retErr error
 
-	var retMsg []models.TgMessage
+	var retMsg []models2.TgMessage
 
 	for _, f := range doc {
 		doc, name := f.Data, f.Name
@@ -131,7 +132,8 @@ func (ca *ChatAdaptor) SendDocument(
 
 			continue
 		}
-		retMsg = append(retMsg, *models.NewFromTelebot(tgMsg))
+
+		retMsg = append(retMsg, *models2.NewFromTelebot(tgMsg))
 
 		l.InfoContext(ctx, "Successfully send document", slog.Any("document_name", tgDoc.FileName))
 	}
@@ -139,7 +141,7 @@ func (ca *ChatAdaptor) SendDocument(
 	return retMsg, retErr
 }
 
-func (ca *ChatAdaptor) DeleteMsg(message models.TgMessage) error {
+func (ca *ChatAdaptor) DeleteMsg(message models2.TgMessage) error {
 	return ca.bot.Delete(telebot.StoredMessage{
 		MessageID: strconv.Itoa(message.MessageID),
 		ChatID:    message.ChatID,

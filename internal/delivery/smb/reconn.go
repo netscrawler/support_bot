@@ -90,7 +90,6 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 	const (
 		initialDelay = time.Second
 		maxDelay     = time.Minute
-		timeoutEach  = 10 * time.Second
 	)
 
 	log.Debug("start reconnect loop")

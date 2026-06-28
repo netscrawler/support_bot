@@ -2,28 +2,29 @@ package models
 
 import (
 	"bytes"
+
 	"support_bot/internal/pkg/text"
 )
 
-type SendKind int
+type sendKind int
 
 const (
-	SendTextKind SendKind = iota
-	SendImageKind
-	SendFileKind
+	sendTextKind sendKind = iota
+	sendImageKind
+	sendFileKind
 )
 
 type Data struct {
 	Data *bytes.Buffer
 	Name string
 
-	Type SendKind
+	Type sendKind
 }
 
 func NewTextData(text *bytes.Buffer) Data {
 	return Data{
 		Data: text,
-		Type: SendTextKind,
+		Type: sendTextKind,
 	}
 }
 
@@ -36,7 +37,7 @@ func NewImageData(image *bytes.Buffer, name string) (Data, error) {
 	return Data{
 		Data: image,
 		Name: n,
-		Type: SendImageKind,
+		Type: sendImageKind,
 	}, nil
 }
 
@@ -49,8 +50,8 @@ func NewFileData(file *bytes.Buffer, name string) (Data, error) {
 	return Data{
 		Data: file,
 		Name: n,
-		Type: SendFileKind,
+		Type: sendFileKind,
 	}, nil
 }
 
-func (d Data) Kind() SendKind { return d.Type }
+func (d Data) kind() sendKind { return d.Type }

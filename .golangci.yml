@@ -276,6 +276,8 @@ formatters:
     - gofumpt
     - goimports
     - swaggo
+    - gci
+    - golines
   exclusions:
     generated: lax
     paths:

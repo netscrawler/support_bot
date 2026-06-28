@@ -5,16 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/collector"
-	"support_bot/internal/exporter"
-	"support_bot/internal/pkg/logger"
 	"time"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/collector"
+	"support_bot/internal/exporter"
+	models2 "support_bot/internal/models"
+	"support_bot/internal/pkg/logger"
 )
 
 type Collector interface {
-	Collect(ctx context.Context, cards ...models.Card) (map[string][]map[string]any, error)
+	Collect(ctx context.Context, cards ...models2.Card) (map[string][]map[string]any, error)
 }
 
 type Evaluator interface {
@@ -26,13 +26,13 @@ type Evaluator interface {
 }
 
 type Generator struct {
-	c chan models.Report
+	c chan models2.Report
 
 	clct Collector
 
 	eval Evaluator
 
-	snd models.SenderProvider
+	snd models2.SenderProvider
 
 	numWorkers uint8
 
@@ -42,9 +42,9 @@ type Generator struct {
 }
 
 func New(
-	c chan models.Report,
+	c chan models2.Report,
 	clct Collector,
-	snd models.SenderProvider,
+	snd models2.SenderProvider,
 	sendRepo SentMsgRepository,
 	eval Evaluator,
 	workers uint8,
@@ -73,7 +73,7 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id uint8) {
+func (g *Generator) worker(ctx context.Context, jobs <-chan models2.Report, id uint8) {
 	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
 
 	for {
@@ -102,7 +102,7 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 	}
 }
 
-func (g *Generator) createReport(ctx context.Context, report models.Report) error {
+func (g *Generator) createReport(ctx context.Context, report models2.Report) error {
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
@@ -126,7 +126,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		return nil
 	}
 
-	res := make([]models.Data, 0, len(report.Exports))
+	res := make([]models2.Data, 0, len(report.Exports))
 
 	for _, e := range report.Exports {
 		r, err := exporter.Export(data, e)
@@ -150,7 +150,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		return fmt.Errorf("empty targets list")
 	}
 
-	msg := models.NewMessage(report.Name, res, report.Recipients...)
+	msg := models2.NewMessage(report.Name, res, report.Recipients...)
 
 	resMsg, err := msg.Send(ctx, g.snd)
 	if err != nil {
@@ -159,10 +159,11 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 
 	if len(resMsg) == 0 {
 		l.InfoContext(ctx, "report generated")
+
 		return nil
 	}
 
-	err = g.sentMsgRepo.SaveTgMsg(ctx, msg.ReportName, resMsg)
+	err = g.sentMsgRepo.saveTgMsg(ctx, msg.ReportName, resMsg)
 	if err != nil {
 		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
 	}
