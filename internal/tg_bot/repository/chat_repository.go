@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	models "support_bot/internal/models/notify"
-
 	"github.com/jmoiron/sqlx"
+	"support_bot/internal/models"
 )
 
 type ChatRepository struct {
@@ -21,7 +20,7 @@ func NewChatRepository(db *sqlx.DB, log *slog.Logger) *ChatRepository {
 	return &ChatRepository{db: db, log: l}
 }
 
-func (c *ChatRepository) Create(ctx context.Context, chat *models.Chat) error {
+func (c *ChatRepository) Create(ctx context.Context, chat *models.TgChatDTO) error {
 	const query = `INSERT INTO chats (chat_id, title, type, description, is_active) 
 	VALUES ( $1,$2,$3,$4,$5 );`
 
@@ -45,7 +44,7 @@ func (c *ChatRepository) Create(ctx context.Context, chat *models.Chat) error {
 	return nil
 }
 
-func (c *ChatRepository) GetByTitle(ctx context.Context, title string) (*models.Chat, error) {
+func (c *ChatRepository) GetByTitle(ctx context.Context, title string) (*models.TgChatDTO, error) {
 	const query = `SELECT * FROM chats
 WHERE title =$1
 lIMIT 1;`
@@ -54,7 +53,7 @@ lIMIT 1;`
 		return nil, fmt.Errorf("chat repository get by title: %w", err)
 	}
 
-	var chat *models.Chat
+	var chat *models.TgChatDTO
 
 	err := c.db.GetContext(ctx, chat, query, title)
 	if err != nil {
@@ -64,7 +63,7 @@ lIMIT 1;`
 	return chat, nil
 }
 
-func (c *ChatRepository) GetAll(ctx context.Context) ([]models.Chat, error) {
+func (c *ChatRepository) GetAll(ctx context.Context) ([]models.TgChatDTO, error) {
 	const query = "SELECT * FROM chats;"
 
 	err := ctx.Err()
@@ -72,7 +71,7 @@ func (c *ChatRepository) GetAll(ctx context.Context) ([]models.Chat, error) {
 		return nil, fmt.Errorf("chat repository get all: %w", err)
 	}
 
-	var chats []models.Chat
+	var chats []models.TgChatDTO
 
 	err = c.db.SelectContext(ctx, &chats, query)
 	if err != nil {
@@ -82,7 +81,7 @@ func (c *ChatRepository) GetAll(ctx context.Context) ([]models.Chat, error) {
 	return chats, nil
 }
 
-func (c *ChatRepository) GetAllActive(ctx context.Context) ([]models.Chat, error) {
+func (c *ChatRepository) getAllActive(ctx context.Context) ([]models.TgChatDTO, error) {
 	const query = "SELECT * FROM chats where is_active=true;"
 
 	err := ctx.Err()
@@ -90,7 +89,7 @@ func (c *ChatRepository) GetAllActive(ctx context.Context) ([]models.Chat, error
 		return nil, fmt.Errorf("chat repository get all active: %w", err)
 	}
 
-	var chats []models.Chat
+	var chats []models.TgChatDTO
 
 	err = c.db.SelectContext(ctx, &chats, query)
 	if err != nil {

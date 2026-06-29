@@ -4,11 +4,12 @@ package telegram
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
-
-	models "support_bot/internal/models/report"
+	"strconv"
 
 	"gopkg.in/telebot.v4"
+	models2 "support_bot/internal/models"
 )
 
 type ChatAdaptor struct {
@@ -25,103 +26,39 @@ func NewChatAdaptor(bot *telebot.Bot, log *slog.Logger) *ChatAdaptor {
 	}
 }
 
-func (ca *ChatAdaptor) Send(
+func (ca *ChatAdaptor) SendText(
 	ctx context.Context,
-	chat models.TargetTelegramChat,
-	datas ...models.ReportData,
-) error {
-	if len(datas) == 0 {
-		return errors.New("NOTHING TO SEND")
-	}
-
-	for _, data := range datas {
-		if data == nil {
-			ca.log.ErrorContext(ctx, "empty send data", slog.Any("data", data))
-		}
-
-		switch data.Kind() {
-		case models.SendTextKind:
-			dt, ok := data.(*models.TextData)
-			if !ok {
-				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ca.sendText(ctx, chat, *dt)
-			if err != nil {
-				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
-			}
-		case models.SendFileKind:
-			dt, ok := data.(*models.FileData)
-			if !ok {
-				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ca.sendDocument(ctx, chat, *dt)
-			if err != nil {
-				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
-			}
-		case models.SendImageKind:
-			dt, ok := data.(*models.ImageData)
-			if !ok {
-				ca.log.ErrorContext(ctx, "invalid telegram send data", slog.Any("data", data))
-
-				continue
-			}
-
-			err := ca.sendMedia(ctx, chat, *dt)
-			if err != nil {
-				ca.log.ErrorContext(ctx, "sending error", slog.Any("error", err))
-			}
-		default:
-			ca.log.ErrorContext(ctx, "not supported telegram data", slog.Any("data", data))
-
-			continue
-		}
-	}
-
-	return nil
-}
-
-func (ca *ChatAdaptor) sendText(
-	ctx context.Context,
-	chat models.TargetTelegramChat,
-	msg models.TextData,
-) error {
+	chat models2.TgChat,
+	msg string,
+) (*models2.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
 			slog.Any("chat", chat.ChatID), slog.Any("thread id", chat.ThreadID),
 		))
 
-	l.InfoContext(ctx, "Start sending text message", slog.Any("parse_mode", msg.Parse))
-	p := msg.Parse
+	l.InfoContext(ctx, "Start sending text message")
+
+	p := telebot.ModeHTML
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{
 		ParseMode: p,
 		ThreadID:  chat.ThreadID,
 	}
 
-	_, err := ca.bot.Send(c, msg.Msg, o)
+	tgMsg, err := ca.bot.Send(c, msg, o)
 	if err != nil {
-		l.ErrorContext(ctx, "Error send text message", slog.Any("error", err))
-
-		return err
+		return nil, fmt.Errorf("error send text message: %w", err)
 	}
 
-	l.InfoContext(ctx, "Successfully send text message")
-
-	return nil
+	return models2.NewFromTelebot(tgMsg), nil
 }
 
-func (ca *ChatAdaptor) sendMedia(
+func (ca *ChatAdaptor) SendMedia(
 	ctx context.Context,
-	chat models.TargetTelegramChat,
-	imgs models.ImageData,
-) error {
+	chat models2.TgChat,
+	imgs []models2.Data,
+) ([]models2.TgMessage, error) {
 	var album telebot.Album
 
 	l := ca.log.With(
@@ -135,31 +72,32 @@ func (ca *ChatAdaptor) sendMedia(
 	c := &telebot.Chat{ID: chat.ChatID}
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 
-	for img := range imgs.Data() {
+	for _, i := range imgs {
 		photo := &telebot.Photo{
-			File: telebot.FromReader(img),
+			File:    telebot.FromReader(i.Data),
+			Caption: i.Name,
 		}
 
 		album = append(album, photo)
 	}
 
-	_, err := ca.bot.SendAlbum(c, album, o)
+	tgMsg, err := ca.bot.SendAlbum(c, album, o)
 	if err != nil {
 		l.ErrorContext(ctx, "Error send media", slog.Any("error", err))
 
-		return err
+		return nil, err
 	}
 
 	l.InfoContext(ctx, "Successfully send media")
 
-	return nil
+	return models2.NewMsgFromTelebotMany(tgMsg), nil
 }
 
-func (ca *ChatAdaptor) sendDocument(
+func (ca *ChatAdaptor) SendDocument(
 	ctx context.Context,
-	chat models.TargetTelegramChat,
-	doc models.FileData,
-) error {
+	chat models2.TgChat,
+	doc []models2.Data,
+) ([]models2.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -171,15 +109,18 @@ func (ca *ChatAdaptor) sendDocument(
 	o := &telebot.SendOptions{ThreadID: chat.ThreadID}
 	c := &telebot.Chat{ID: chat.ChatID}
 
-	var rerr error
+	var retErr error
 
-	for doc, name := range doc.Data() {
+	var retMsg []models2.TgMessage
+
+	for _, f := range doc {
+		doc, name := f.Data, f.Name
 		tgDoc := &telebot.Document{
 			File:     telebot.FromReader(doc),
 			FileName: name,
 		}
 
-		_, err := ca.bot.Send(c, tgDoc, o)
+		tgMsg, err := ca.bot.Send(c, tgDoc, o)
 		if err != nil {
 			l.ErrorContext(
 				ctx,
@@ -187,13 +128,22 @@ func (ca *ChatAdaptor) sendDocument(
 				slog.Any("error", err),
 				slog.Any("document_name", tgDoc.FileName),
 			)
-			rerr = errors.Join(rerr, err)
+			retErr = errors.Join(retErr, err)
 
 			continue
 		}
 
+		retMsg = append(retMsg, *models2.NewFromTelebot(tgMsg))
+
 		l.InfoContext(ctx, "Successfully send document", slog.Any("document_name", tgDoc.FileName))
 	}
 
-	return rerr
+	return retMsg, retErr
+}
+
+func (ca *ChatAdaptor) DeleteMsg(message models2.TgMessage) error {
+	return ca.bot.Delete(telebot.StoredMessage{
+		MessageID: strconv.Itoa(message.MessageID),
+		ChatID:    message.ChatID,
+	})
 }

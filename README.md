@@ -1,199 +1,271 @@
 # Support Bot
 
-Система создания отчетов по данным из Metabase и рассылки по адресатам + Тг Бот для рассылки уведомлений
+<!-- TOC -->
+* [Support Bot](#support-bot)
+  * [Что умеет сервис](#что-умеет-сервис)
+  * [Основной пайплайн](#основной-пайплайн)
+  * [Требования](#требования)
+  * [Конфигурация](#конфигурация)
+  * [Запуск локально](#запуск-локально)
+  * [Запуск через Docker Compose](#запуск-через-docker-compose)
+  * [База данных](#база-данных)
+  * [Telegram-бот](#telegram-бот)
+  * [Отчеты](#отчеты)
+  * [Live preview шаблонов](#live-preview-шаблонов)
+  * [Структура проекта](#структура-проекта)
+  * [Разработка](#разработка)
+  * [Примечания](#примечания)
+<!-- TOC -->
 
-## Описание
+Support Bot — сервис для автоматической генерации отчетов по данным Metabase и доставки результатов в Telegram, email и SMB-шару.
 
-Support Bot - это телеграм-бот на Go с использованием библиотеки [telebot v4](https://github.com/tucnak/telebot), предоставляющий позволяющий:
-- Управления пользователями и чатами
-- Отправки уведомлений и рассылок
-- Автоматической генерации и отправки отчетов
-- Интеграции с Metabase, SMB и SMTP
+Приложение состоит из двух CLI:
 
-## Функциональность
+- `cmd/bot` — основной Telegram-бот и фоновый пайплайн отчетов.
+- `cmd/live-server` — dev-сервер для предпросмотра HTML/text-шаблонов отчетов на данных из Metabase.
 
-### Основные возможности
-- **Управление пользователями**: добавление, удаление, просмотр списка пользователей
-- **Управление чатами**: добавление, удаление, просмотр списка чатов
-- **Система уведомлений**: отправка уведомлений пользователям и в чаты
-- **Генерация отчетов**: автоматическое создание отчетов из Metabase с расписанием (cron)
-- **Интеграция с файловыми хранилищами**: поддержка SMB для работы с файлами
-- **Email рассылка**: отправка отчетов через SMTP
+## Что умеет сервис
 
-### Команды бота
-- `/start` - Начало работы с ботом
-- `/admin` - Административная панель (только для администраторов)
-- `/register` - Регистрация пользователя
-- `/subscribe` - Подписка чата на уведомления
+- Загружает расписания из PostgreSQL и запускает задачи через cron.
+- Получает данные из Metabase по UUID карточек.
+- Проверяет условия отправки через CEL-выражения.
+- Формирует отчеты в форматах `text`, `html`, `png`, `pdf`, `csv`, `xlsx`.
+- Отправляет результаты в Telegram-чаты, на email через SMTP и в SMB-шару.
+- Позволяет администраторам управлять пользователями, чатами и расписаниями из Telegram.
+- Позволяет пользователям запускать доступные отчеты вручную из Telegram.
+- Сохраняет отправленные Telegram-сообщения и может удалять их по событию.
+
+## Основной пайплайн
+
+1. Scheduler читает активные записи из таблицы `crons`.
+2. По cron-событию EventCreator находит связанные отчеты.
+3. Orchestrator загружает описание отчета, получателей, шаблоны и форматы экспорта.
+4. Generator собирает данные из Metabase, проверяет `evaluate.expr`, генерирует файлы и отправляет сообщение.
+5. Результаты отправки Telegram сохраняются в `sent_messages`.
 
 ## Требования
 
-- Go 1.25.6+
-- PostgreSQL 9+
-- Docker и Docker Compose (опционально)
+- Go `1.25.6`.
+- PostgreSQL. В `docker-compose.yaml` используется `postgres:9.6`.
+- Telegram bot token от `@BotFather`.
+- Доступ к Metabase.
+- `wkhtmltopdf` для PDF-экспорта.
+- Docker и Docker Compose, если запуск идет в контейнерах.
 
-## Быстрый старт
+## Конфигурация
 
-### Клонирование репозитория
+Конфиг загружается в таком порядке:
 
-```bash
-git clone https://github.com/netscrawler/support_bot.git
-cd support_bot
-```
+1. флаг `--config`;
+2. переменная окружения `CONFIG_PATH`;
+3. файл `./config.yaml`;
+4. переменные окружения и `.env`, если файл конфигурации не найден.
 
-### Настройка базы данных
-
-1. Создайте базу данных PostgreSQL
-2. Примените миграции из директории `migrations/init.sql/` в следующем порядке:
-   ```bash
-   psql -U your_user -d notification_bot -f migrations/init.sql/001_create_tables.sql
-   psql -U your_user -d notification_bot -f migrations/init.sql/002_create_report_tables.sql
-   psql -U your_user -d notification_bot -f migrations/init.sql/003_add_admin.sql
-   psql -U your_user -d notification_bot -f migrations/init.sql/004_insert_settings.sql
-   ```
-
-### Конфигурация
-
-Создайте конфигурационный файл на основе примера:
+Пример YAML находится в `config/config.example.yaml`, пример env-файла — в `config/example.env`.
 
 ```bash
 cp config/config.example.yaml config/local.yaml
 ```
 
-Отредактируйте `config/local.yaml`, указав необходимые параметры:
+Минимально нужны:
 
-```yaml
-log:
-  level: info              # Уровень логирования: debug, info, test
-  file: ./log.log          # Путь к файлу логов
-  output: [stdout, file]   # Куда выводить логи
+- `metabase_domain` — адрес Metabase;
+- `database` — подключение к PostgreSQL;
+- `bot.telegram_token` — токен Telegram-бота;
+- `smtp` — SMTP-доступ, если используются email-получатели;
+- `smb` — SMB-доступ, если используются SMB-получатели.
 
-metabase_domain: https://your-metabase-instance.com  # URL Metabase
+SMB можно отключить через `smb.active: false`.
 
-database:
-  port: 5432
-  host: localhost
-  user: postgres
-  password: postgres
-  name: bottst
-  sslmode: disable
-  database_connect: 10s
-
-timeout:
-  shutdown: 5s             # Таймаут graceful shutdown
-
-bot:
-  telegram_token: your_telegram_bot_token
-  CleanUpTime: 5m
-  bot_poll: 10s
-
-smb:                       # Настройки SMB (опционально)
-  adress: //server/share
-  user: username
-  password: password
-  domain: DOMAIN
-
-smtp:
-  host: smtp.yandex.ru
-  port: 465
-  email: email
-  password: password
-```
-
-**Альтернативный способ**: Укажите путь к конфигу через переменную окружения:
+## Запуск локально
 
 ```bash
-export CONFIG_PATH=./config/local.yaml
-```
-
-## Запуск
-
-### Локальный запуск
-
-```bash
-# Сборка
 make build
-
-# Запуск (автоматически соберет и запустит)
 make run
 ```
 
-**Примечание**: В `Makefile` можно изменить параметр `CONFIG_NAME` для указания нужного конфигурационного файла.
+`make run` запускает `cmd/bot` с конфигом `config/local.yaml`. Имя файла можно поменять в `Makefile` через `CONFIG_NAME`.
 
-### Запуск через Docker Compose
-
-```bash
-# Запуск всех сервисов (бот, PostgreSQL, Samba)
-docker-compose up -d
-
-# Просмотр логов
-docker-compose logs -f bottst
-
-# Остановка
-docker-compose down
-```
-
-Docker Compose автоматически:
-- Создаст и инициализирует базу данных PostgreSQL
-- Применит миграции из `migrations/init.sql/`
-- Запустит бота с конфигурацией из `config/local_docker.yaml`
-- Настроит Samba сервер для тестирования (опционально)
-
-### Запуск через Docker (standalone)
+Можно запустить напрямую:
 
 ```bash
-# Сборка образа
-docker build -t support_bot .
-
-# Запуск контейнера
-docker run -d \
-  --name support_bot \
-  -e CONFIG_PATH=/bot/config/local.yaml \
-  -v $(pwd)/config:/bot/config:ro \
-  support_bot
+go run ./cmd/bot --config=./config/local.yaml
 ```
+
+Полезные флаги основного приложения:
+
+```bash
+go run ./cmd/bot -h
+go run ./cmd/bot -v
+go run ./cmd/bot -example-config
+go run ./cmd/bot -example-env
+```
+
+## Запуск через Docker Compose
+
+```bash
+docker compose up -d
+docker compose logs -f bottst
+docker compose down
+```
+
+Compose поднимает:
+
+- `bottst` — основной сервис;
+- `db` — PostgreSQL с инициализацией из `migrations/init.sql`;
+- `samba` — тестовая SMB-шара.
+
+Контейнер бота использует `CONFIG_PATH=/sbot/config/local_docker.yaml`, поэтому перед запуском проверьте `config/local_docker.yaml`.
+
+## База данных
+
+Схема и начальные данные лежат в `migrations/init.sql`.
+
+Ключевые сущности:
+
+- `users` — Telegram-пользователи и роли `primary`, `admin`, `user`;
+- `chats` — Telegram-чаты для доставки;
+- `crons` — расписания;
+- `reports` — отчеты;
+- `queries` — Metabase-карточки;
+- `evaluate` — CEL-условия отправки;
+- `templates` — text/html-шаблоны;
+- `export_formats` и `reports_export` — форматы и файлы экспорта;
+- `recipients` и `reports_recipients` — получатели;
+- `report_crons` — связь отчетов с расписаниями;
+- `sent_messages` — сохраненные Telegram-сообщения.
+
+Для локальной БД миграции можно применить вручную:
+
+```bash
+psql -U postgres -d bottst -f migrations/init.sql/001_create_tables.sql
+psql -U postgres -d bottst -f migrations/init.sql/002_create_report_tables.sql
+```
+
+Остальные SQL-файлы в `migrations/init.sql` добавляют стартовые настройки, cron-задачи, шаблоны, получателей и конкретные отчеты.
+
+## Telegram-бот
+
+Поддерживаемые команды:
+
+- `/register` — регистрация пользователя в личном чате с ботом.
+- `/start` — пользовательское меню с ручным запуском отчетов.
+- `/admin` — административное меню для пользователей с ролью администратора.
+- `/info` — информация о групповом чате: title, chat id, thread id.
+- `/add` — добавить текущий групповой чат в базу.
+- `/sub` — добавить текущий групповой чат и сразу сделать его активным.
+
+Админское меню позволяет:
+
+- добавлять и удалять пользователей;
+- выдавать роль `admin` или `user`;
+- смотреть список пользователей;
+- смотреть и удалять чаты;
+- перезапускать и останавливать cron-рассылки;
+- запускать отчеты вручную.
+
+Команды `/info`, `/add` и `/sub` работают только в групповых чатах. `/start`, `/admin` и `/register` рассчитаны на личный чат с ботом.
+
+## Отчеты
+
+Отчет собирается из:
+
+- одной или нескольких Metabase-карточек из `queries`;
+- условия отправки из `evaluate`;
+- одного или нескольких экспортов;
+- списка получателей.
+
+Поддерживаемые форматы:
+
+- `text` — текст по Go `text/template`;
+- `html` — HTML по Go `html/template`;
+- `pdf` — PDF из HTML через `wkhtmltopdf`;
+- `csv` — CSV-файлы по листам данных;
+- `xlsx` — Excel-файл;
+- `png` — PNG-рендер таблиц.
+
+В шаблонах доступны функции Sprig и функции из `internal/pkg/text`: форматирование чисел, дат, строк, работа с map/list и вспомогательные функции для отчетов.
+
+Условия отправки пишутся на CEL. Доступная переменная — `report`, где ключи верхнего уровня соответствуют `queries.title`.
+
+Специальные условия:
+
+- `[*]` — всегда отправлять;
+- `[!*]` — никогда не отправлять.
+
+Пример CEL:
+
+```cel
+size(report["sheet1"]) > 0
+```
+
+## Live preview шаблонов
+
+`cmd/live-server` нужен для разработки шаблонов без запуска всего бота. Он собирает данные из Metabase, рендерит локальные `.html`, `.tmpl` и `.gotmpl` файлы и обновляет страницу при изменении шаблонов.
+
+Сгенерировать пример конфига:
+
+```bash
+go run ./cmd/live-server -example-config > config.json
+```
+
+Запустить:
+
+```bash
+go run ./cmd/live-server \
+  --config=./config.json \
+  --templates=./reports
+```
+
+Сервер слушает `http://localhost:8080`.
+
+Маршруты:
+
+- `http://localhost:8080/html/<template>` — HTML-шаблон;
+- `http://localhost:8080/text/<template>` — text-шаблон, обернутый в HTML для просмотра.
 
 ## Структура проекта
 
-```
-support_bot/
-├── cmd/bot/              # Точка входа приложения
-├── internal/
-│   ├── app/              # Логика приложения
-│   ├── config/           # Загрузка конфигурации
-│   ├── models/           # Модели данных
-│   ├── postgres/         # Работа с БД
-│   ├── tg_bot/           # Telegram bot handlers
-│   ├── collector/        # Сбор данных
-│   ├── evaluator/        # Обработка выражений
-│   ├── exporter/         # Экспорт отчетов
-│   ├── generator/        # Генерация отчетов
-│   ├── orchestrator/     # Оркестрация процессов
-│   └── sheduler/         # Планировщик задач
-├── config/               # Конфигурационные файлы
-├── migrations/           # SQL миграции
-└── docker-compose.yaml   # Docker Compose конфигурация
+```text
+cmd/bot/                 основной сервис
+cmd/live-server/         предпросмотр шаблонов
+internal/app/            сборка зависимостей приложения
+internal/collector/      загрузка данных из Metabase
+internal/evaluator/      CEL-условия отправки
+internal/exporter/       экспортеры text/html/pdf/png/csv/xlsx
+internal/generator/      генерация и отправка отчетов
+internal/orchestrator/   маршрутизация событий к отчетам
+internal/sheduler/       cron-планировщик
+internal/tg_bot/         Telegram-роутер, меню, handlers, services
+internal/delivery/       Telegram, SMTP и SMB-доставка
+internal/postgres/       подключение к PostgreSQL
+config/                  примеры и локальные конфиги
+migrations/init.sql/     SQL-схема и стартовые данные
+reports/                 локальные шаблоны для разработки
 ```
 
 ## Разработка
 
-### Сборка
+Сборка основного бота:
 
 ```bash
 make build
 ```
 
-Параметры сборки включают:
-- Версию из Git тега
-- Commit hash
-- Время сборки
+Запуск тестов:
 
-### Очистка
+```bash
+go test ./...
+```
+
+Очистка бинарника:
 
 ```bash
 make clean
 ```
 
-## Лицензия
+## Примечания
 
-Проект распространяется "как есть" без каких-либо гарантий.
+- В репозитории есть локальные файлы `config/local.yaml`, `config/local_docker.yaml`, `.env`, `reports/` и тестовые SQL-данные. Перед запуском проверьте, что секреты и адреса соответствуют вашему окружению.
+- Основной бинарник называется `sbot`.
+- PDF-экспорт в контейнере уже получает `wkhtmltopdf` из Dockerfile.

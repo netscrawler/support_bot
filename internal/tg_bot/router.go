@@ -2,12 +2,13 @@ package bot
 
 import (
 	"log/slog"
-	"support_bot/internal/tg_bot/handlers"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/middlewares"
+	"runtime/debug"
 
 	"gopkg.in/telebot.v4"
 	telemw "gopkg.in/telebot.v4/middleware"
+	"support_bot/internal/tg_bot/handlers"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/middlewares"
 )
 
 type Router struct {
@@ -37,7 +38,11 @@ func NewRouter(
 func (r *Router) Setup() {
 	r.bot.Use(telemw.Recover(func(err error, c telebot.Context) {
 		l := slog.Default()
-		l.Error("recovered from panic", slog.Any("error", err))
+		l.Error(
+			"recovered from panic",
+			slog.Any("error", err),
+			slog.String("stack", string(debug.Stack())),
+		)
 	}))
 	register := r.bot.Group()
 	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
@@ -50,16 +55,11 @@ func (r *Router) Setup() {
 	userOnly.Use(r.mw.UserAuthMiddleware)
 
 	userOnly.Handle(menu.UserStart, r.userHl.StartUser)
-	userOnly.Handle(&menu.SendNotifyUser, r.userHl.SendNotification)
-
-	userOnly.Handle(
-		&telebot.InlineButton{Unique: "confirm_user_notification"},
-		r.userHl.ConfirmSendNotification,
-	)
-	userOnly.Handle(
-		&telebot.InlineButton{Unique: "cancel_user_notification"},
-		r.userHl.CancelSendNotification,
-	)
+	userOnly.Handle(&menu.LoadAndShowReportUser, r.userHl.LoadReports)
+	userOnly.Handle(&telebot.InlineButton{Unique: "back_report_list"}, r.userHl.LoadReportsPage)
+	userOnly.Handle(&telebot.InlineButton{Unique: "next_report_list"}, r.userHl.LoadReportsPage)
+	userOnly.Handle(&telebot.InlineButton{Unique: "_"}, r.userHl.IgnoreReportPage)
+	userOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.userHl.GenerateSelectedReport)
 
 	adminOnly := r.bot.Group()
 
@@ -76,18 +76,9 @@ func (r *Router) Setup() {
 	adminOnly.Handle(menu.AddActiveChat, r.adminHl.ProcessAddActiveChat)
 	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
 	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
-	adminOnly.Handle(&menu.SendNotifyAdmin, r.adminHl.SendNotification)
 	adminOnly.Handle(&menu.StartCron, r.adminHl.StartCronJobs)
 	adminOnly.Handle(&menu.ManageCron, r.adminHl.ManageCron)
 	adminOnly.Handle(&menu.StopCron, r.adminHl.StopCronJobs)
-	adminOnly.Handle(
-		&telebot.InlineButton{Unique: "confirm_notification"},
-		r.adminHl.ConfirmSendNotification,
-	)
-	adminOnly.Handle(
-		&telebot.InlineButton{Unique: "cancel_notification"},
-		r.adminHl.CancelSendNotification,
-	)
 	adminOnly.Handle(
 		&telebot.InlineButton{Unique: "add_admin"},
 		r.adminHl.AddUserWithAdminRole,
@@ -96,4 +87,8 @@ func (r *Router) Setup() {
 		&telebot.InlineButton{Unique: "add_user"},
 		r.adminHl.AddUserWithUserRole,
 	)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "back_report_list"}, r.adminHl.LoadReportsPage)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "next_report_list"}, r.adminHl.LoadReportsPage)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "_"}, r.adminHl.IgnoreReportPage)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.adminHl.GenerateSelectedReport)
 }

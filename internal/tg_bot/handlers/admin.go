@@ -4,22 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
+
 	"support_bot/internal/errorz"
+	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
 
 	tele "gopkg.in/telebot.v4"
-
-	models "support_bot/internal/models/notify"
 )
 
 type AdminHandler struct {
 	bot         *tele.Bot
 	userService *service.User
 	chatService *service.Chat
-	notify      *service.TelegramNotify
 	report      *service.Report
 	state       *State
 }
@@ -28,7 +29,6 @@ func NewAdminHandler(
 	bot *tele.Bot,
 	userService *service.User,
 	chatService *service.Chat,
-	notifier *service.TelegramNotify,
 	report *service.Report,
 	state *State,
 ) *AdminHandler {
@@ -38,7 +38,6 @@ func NewAdminHandler(
 		chatService: chatService,
 		state:       state,
 		report:      report,
-		notify:      notifier,
 	}
 }
 
@@ -50,100 +49,115 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
-		menu.AdminMenu.Row(menu.SendNotifyAdmin, menu.ManageCron),
+		menu.AdminMenu.Row(menu.LoadAndShowReportUser, menu.ManageCron),
 	)
-	h.state.Set(c.Sender().ID, MenuState)
+	h.state.set(c.Sender().ID, menuState)
 	//nolint:errcheck
 	c.Delete()
 
-	return c.Send(HelloAdminRegistration, menu.AdminMenu)
+	return c.Send(helloAdminRegistration, menu.AdminMenu)
 }
 
-func (h *AdminHandler) SendNotification(c tele.Context) error {
-	h.state.Set(c.Sender().ID, SendNotificationState)
-
+func (h *AdminHandler) loadReports(c tele.Context) error {
+	h.state.set(c.Sender().ID, loadReportState)
 	//nolint:errcheck
-	c.Delete()
+	// c.Delete()
 
-	return c.Send(PleaseSendMessage)
-}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
-func (h *AdminHandler) ProcessSendNotification(c tele.Context) error {
-	if h.state.Get(c.Sender().ID) != SendNotificationState {
-		return c.Edit(SendTimeExpired)
-	}
-
-	msg := c.Text()
-	if msg == "" {
-		return c.Send(PleaseSendMessage)
-	}
-
-	h.state.SetMsgData(c.Sender().ID, msg)
-	// Создаем inline-клавиатуру с кнопками "Confirm" и "Cancel"
-	confirmBtn := menu.Selector.Data(
-		"✅ Отправить",
-		"confirm_notification",
-	)
-	cancelBtn := menu.Selector.Data(
-		"❌ Отменить",
-		"cancel_notification",
-	)
-
-	menu.Selector.Inline(
-		menu.Selector.Row(cancelBtn, confirmBtn),
-	)
-
-	// Сохраняем состояние ожидания подтверждения
-	h.state.Set(c.Sender().ID, ConfirmNotificationState)
-
-	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
-	formated := fmt.Sprintf("%s```\n%s```", conf, msg)
-
-	// Отправляем сообщение с клавиатурой
-	return c.Send(
-		formated,
-		menu.Selector,
-		tele.ModeMarkdownV2,
-	)
-}
-
-func (h *AdminHandler) ConfirmSendNotification(c tele.Context) error {
-	ctx := context.Background()
-
-	msg, ok := h.state.GetMsgData(c.Sender().ID)
-	if h.state.Get(c.Sender().ID) != ConfirmNotificationState || !ok {
-		return c.Edit(SendTimeExpired)
-	}
-
-	resp, err := h.notify.BroadcastToChats(ctx, msg)
+	rpl, err := h.report.LoadReportsWithPagination(ctx)
 	if err != nil {
-		if errors.Is(err, errorz.ErrNotFound) {
-			return c.Edit(UnableCauseNotFound)
-		}
-
-		if errors.Is(err, errorz.ErrInternal) {
-			return c.Edit(UnableCauseInternal)
-		}
-
-		return c.Edit(UnableSendMessages + err.Error())
+		return c.Send("Ошибка получения отчетов: " + err.Error())
 	}
 
-	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
-	formString := fmt.Sprintf(
-		"%s\n<pre><code>%s</code></pre>",
-		userString, msg,
-	)
-	//nolint:errcheck
-	h.notify.SendAdminNotify(ctx, formString)
-	h.state.Set(c.Sender().ID, MenuState)
+	mark := mapReportRPLToMarkup(rpl)
 
-	return c.Edit(resp, tele.ModeMarkdownV2)
+	return c.Send(menu.MsgHelloReport, &mark)
 }
 
-func (h *AdminHandler) CancelSendNotification(c tele.Context) error {
-	h.state.Set(c.Sender().ID, MenuState)
+func (h *AdminHandler) LoadReportsPage(c tele.Context) error {
+	userID := c.Sender().ID
+	if h.state.get(userID) != loadReportState {
+		return c.Edit("Время на выбор отчета истекло, начните заново")
+	}
 
-	return c.Edit(SendNotifyAborted)
+	page, err := strconv.Atoi(c.Data())
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить страницу"})
+	}
+
+	if err := c.Respond(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	rpl, err := h.report.LoadReportByPage(ctx, page)
+	if err != nil {
+		return c.Edit("Ошибка получения отчетов: " + err.Error())
+	}
+
+	mark := mapReportRPLToMarkup(rpl)
+
+	h.state.set(userID, loadReportState)
+
+	if err := c.Edit(menu.MsgHelloReport, &mark); err != nil {
+		if isMessageNotModified(err) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (h *AdminHandler) IgnoreReportPage(c tele.Context) error {
+	return c.Respond()
+}
+
+func (h *AdminHandler) GenerateSelectedReport(c tele.Context) error {
+	userID := c.Sender().ID
+	if h.state.get(userID) != loadReportState {
+		return c.Edit("Время на выбор отчета истекло, начните заново")
+	}
+
+	_, reportName, ok := strings.Cut(c.Data(), ";")
+	if !ok || reportName == "" {
+		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
+	}
+
+	if err := c.Respond(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	chat := &models.Chat{
+		ChatID:   c.Chat().ID,
+		Title:    &c.Chat().FirstName,
+		Type:     string(c.Chat().Type),
+		IsActive: true,
+	}
+
+	if err := h.report.GenerateReportByName(ctx, reportName, chat); err != nil {
+		return c.Edit("Не удалось запустить отчет: " + err.Error())
+	}
+
+	h.state.set(userID, menuState)
+
+	if err := c.Edit("Отчет запущен. Результат придет в этот чат."); err != nil {
+		if errors.Is(err, tele.ErrMessageNotModified) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 // ManageUsers handles the user management menu.
@@ -151,52 +165,50 @@ func (h *AdminHandler) ManageUsers(c tele.Context) error {
 	menu.AdminMenu.Reply(
 		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
 		menu.AdminMenu.Row(menu.ListUser, menu.Back))
-	h.state.Set(c.Sender().ID, MenuState)
+	h.state.set(c.Sender().ID, menuState)
 
 	c.Delete()
 
 	return c.Send(ManageUsers, menu.AdminMenu)
 }
 
-func (h *AdminHandler) ProcessAdminInput(c tele.Context) error {
+func (h *AdminHandler) processAdminInput(c tele.Context) error {
 	userID := c.Sender().ID
 
-	if h.state.Get(userID) == MenuState {
+	if h.state.get(userID) == menuState {
 		return nil
 	}
 
-	state := h.state.Get(userID)
+	state := h.state.get(userID)
 
 	switch state {
-	case AddUserState:
-		return h.ProcessAddUser(c) // Вызываем обработку добавления пользователя
-	case RemoveUserState:
+	case addUserState:
+		return h.processAddUser(c) // Вызываем обработку добавления пользователя
+	case removeUserState:
 		return h.ProcessRemoveUser(c)
-	case AddChatState:
+	case addChatState:
 		return h.ProcessAddChat(c)
-	case RemoveChatState:
+	case removeChatState:
 		return h.ProcessRemoveChat(c)
-	case SendNotificationState:
-		return h.ProcessSendNotification(c)
 	default:
 		return nil // Если нет активного состояния — игнорируем
 	}
 }
 
 func (h *AdminHandler) AddUser(c tele.Context) error {
-	h.state.Set(c.Sender().ID, AddUserState)
+	h.state.set(c.Sender().ID, addUserState)
 
 	c.Delete()
 
 	return c.Send(
-		UserAddRemove,
+		userAddRemove,
 	)
 }
 
-// ProcessAddUser processes the username input for adding a user.
-func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
+// processAddUser processes the username input for adding a user.
+func (h *AdminHandler) processAddUser(c tele.Context) error {
 	userID := c.Sender().ID
-	if h.state.Get(userID) != AddUserState {
+	if h.state.get(userID) != addUserState {
 		return nil
 	}
 
@@ -204,7 +216,7 @@ func (h *AdminHandler) ProcessAddUser(c tele.Context) error {
 
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
-		return c.Send(PleaseSendCorrectUsername)
+		return c.Send(pleaseSendCorrectUsername)
 	}
 
 	username = username[1:]
@@ -228,7 +240,7 @@ func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
 	ctx := context.Background()
 
 	userID := c.Sender().ID
-	if h.state.Get(userID) != AddUserState {
+	if h.state.get(userID) != addUserState {
 		return nil
 	}
 
@@ -239,7 +251,7 @@ func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
 		return c.Send("Не удалось добавить пользователя: " + err.Error())
 	}
 
-	h.state.Set(userID, MenuState) // Сбрасываем состояние
+	h.state.set(userID, menuState) // Сбрасываем состояние
 
 	return c.Edit("Пользователь @" + username + " добавлен.")
 }
@@ -248,7 +260,7 @@ func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
 	ctx := context.Background()
 
 	userID := c.Sender().ID
-	if h.state.Get(userID) != AddUserState {
+	if h.state.get(userID) != addUserState {
 		return nil
 	}
 
@@ -259,19 +271,19 @@ func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
 		return c.Edit("Не удалось добавить пользователя: " + err.Error())
 	}
 
-	h.state.Set(userID, MenuState) // Сбрасываем состояние
+	h.state.set(userID, menuState) // Сбрасываем состояние
 
 	return c.Edit("Администратор @" + username + " добавлен.")
 }
 
 // RemoveUser handles removing a user.
 func (h *AdminHandler) RemoveUser(c tele.Context) error {
-	h.state.Set(c.Sender().ID, RemoveUserState)
+	h.state.set(c.Sender().ID, removeUserState)
 	//nolint:errcheck
 	c.Delete()
 
 	return c.Send(
-		UserAddRemove,
+		userAddRemove,
 	)
 }
 
@@ -282,13 +294,13 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 
 	username := c.Text()
 	if !strings.HasPrefix(username, "@") {
-		return c.Send(PleaseSendCorrectUsername)
+		return c.Send(pleaseSendCorrectUsername)
 	}
 
 	// Remove @ and extract the username
 	username = username[1:]
 	if username == c.Sender().Username {
-		return c.Send(ErrDeleteUserCauseSuicide)
+		return c.Send(errDeleteUserCauseSuicide)
 	}
 
 	role, err := h.userService.IsAllowed(ctx, c.Sender().ID)
@@ -297,16 +309,16 @@ func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
 	}
 
 	if err != nil {
-		return c.Send(ErrDeleteUser + err.Error())
+		return c.Send(errDeleteUser + err.Error())
 	}
 
 	// Call service to remove user
 	err = h.userService.Delete(ctx, username, isPrimeReq)
 	if err != nil {
-		return c.Send(ErrDeleteUser + err.Error())
+		return c.Send(errDeleteUser + err.Error())
 	}
 
-	h.state.Set(c.Sender().ID, MenuState)
+	h.state.set(c.Sender().ID, menuState)
 
 	return c.Send("Пользователь @" + username + " успешно удален!")
 }
@@ -361,7 +373,7 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 
 	c.Delete()
 
-	chatToAdd := models.NewChat(
+	chatToAdd := models.NewTgChatDTO(
 		c.Chat().ID,
 		c.Chat().Title,
 		string(c.Chat().Type),
@@ -369,21 +381,7 @@ func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
 	)
 	chatToAdd.Activate()
 
-	err := h.chatService.AddActive(ctx, chatToAdd)
-	if err != nil {
-		h.notify.SendNotify(
-			ctx,
-			c.Sender().ID,
-			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
-		)
-
-		return nil
-	}
-
-	h.notify.BroadcastToUsers(
-		ctx,
-		"Добавлен новый чат в рассылку: "+c.Chat().Title,
-	)
+	h.chatService.AddActive(ctx, chatToAdd)
 
 	return nil
 }
@@ -398,28 +396,14 @@ func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
 
 	c.Delete()
 
-	chatToSave := models.NewChat(
+	chatToSave := models.NewTgChatDTO(
 		c.Chat().ID,
 		c.Chat().Title,
 		string(c.Chat().Type),
 		c.Chat().Description,
 	)
 
-	err := h.chatService.Add(ctx, chatToSave)
-	if err != nil {
-		h.notify.SendNotify(
-			ctx,
-			c.Sender().ID,
-			fmt.Sprintf("Ошибка добавления чата: %s : %v", c.Chat().Title, err.Error()),
-		)
-
-		return nil
-	}
-
-	h.notify.BroadcastToUsers(
-		ctx,
-		"Добавлен новый чат: "+c.Chat().Title,
-	)
+	_ = h.chatService.Add(ctx, chatToSave)
 
 	return nil
 }
@@ -433,7 +417,7 @@ func (h *AdminHandler) ProcessInfoCommand(c tele.Context) error {
 	c.Delete()
 
 	ans := fmt.Sprintf(
-		"*Информация о чате:*\n Title: `%s`\n ID: `%d`\n Thread: `%d`",
+		"*Информация о чате:*\n Title: `%s`\n MessageID: `%d`\n Thread: `%d`",
 		c.Chat().Title,
 		c.Chat().ID,
 		c.ThreadID(),
@@ -444,7 +428,7 @@ func (h *AdminHandler) ProcessInfoCommand(c tele.Context) error {
 
 // RemoveChat handles removing a chat.
 func (h *AdminHandler) RemoveChat(c tele.Context) error {
-	h.state.Set(c.Sender().ID, RemoveChatState)
+	h.state.set(c.Sender().ID, removeChatState)
 	c.Delete()
 
 	return c.Send("Пожалуйста пришлите имя чата который вы хотите удалить.")
@@ -461,7 +445,7 @@ func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
 		return c.Send("Ошибка удаления чата: " + err.Error())
 	}
 
-	h.state.Set(c.Sender().ID, MenuState)
+	h.state.set(c.Sender().ID, menuState)
 
 	return c.Send("Чат " + chatName + " успешно удален!")
 }
@@ -508,9 +492,7 @@ func (h *AdminHandler) ManageCron(c tele.Context) error {
 
 // StartCronJobs перезапускает крон-задачи для уведомлений.
 func (h *AdminHandler) StartCronJobs(c tele.Context) error {
-	ctx := context.Background()
-
-	ans := h.startJobs(ctx)
+	ans := h.startJobs()
 
 	return c.Send(ans)
 }
@@ -522,7 +504,7 @@ func (h *AdminHandler) StopCronJobs(c tele.Context) error {
 	return c.Send("Задачи успешно остановлены")
 }
 
-func (h *AdminHandler) startJobs(ctx context.Context) string {
+func (h *AdminHandler) startJobs() string {
 	h.report.Start()
 
 	return "Задачи запущены"

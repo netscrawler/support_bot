@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 )
 
 type report struct {
@@ -51,12 +51,13 @@ type recipient struct {
 	Body    *string `db:"body"`
 	Type    string  `db:"type"`
 
-	ChatID      *int64  `db:"chat_id"`
-	ThreadID    *int    `db:"thread_id"`
-	ChatTitle   *string `db:"title"`
-	ChatType    *string `db:"chat_type"`
-	Description *string `db:"description"`
-	IsActive    *bool   `db:"is_active"`
+	ChatID                  *int64  `db:"chat_id"`
+	ThreadID                *int    `db:"thread_id"`
+	ChatTitle               *string `db:"title"`
+	ChatType                *string `db:"chat_type"`
+	Description             *string `db:"description"`
+	IsActive                *bool   `db:"is_active"`
+	NeedDeleteAfterEndOfDay *bool   `db:"need_delete_after_end_of_day"`
 }
 
 func deref[T any](t *T) T {
@@ -103,14 +104,21 @@ func mapRecipientToModel(r recipient) models.Recipient {
 		}
 	}
 
+	needDeleteAfterEndOfDay := false
+
+	if r.NeedDeleteAfterEndOfDay != nil {
+		needDeleteAfterEndOfDay = *r.NeedDeleteAfterEndOfDay
+	}
+
 	return models.Recipient{
-		Name:       r.Name,
-		Config:     r.Config,
-		RemotePath: r.RemotePath,
-		Chat:       c,
-		ThreadID:   r.ThreadID,
-		Email:      e,
-		Type:       models.RecipientType(r.Type),
+		Name:                    r.Name,
+		Config:                  r.Config,
+		RemotePath:              r.RemotePath,
+		Chat:                    c,
+		ThreadID:                r.ThreadID,
+		Email:                   e,
+		Type:                    models.RecipientType(r.Type),
+		NeedDeleteAfterEndOfDay: needDeleteAfterEndOfDay,
 	}
 }
 
