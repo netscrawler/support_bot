@@ -19,7 +19,7 @@ import (
 	"support_bot/internal/evaluator"
 	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
-	models2 "support_bot/internal/models"
+	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
@@ -53,8 +53,8 @@ type app struct {
 }
 
 type reportApp struct {
-	ScheduleC    chan models2.Event
-	EventC       chan models2.Event
+	ScheduleC    chan models.Event
+	EventC       chan models.Event
 	Scheduler    *sheduler.Sheduler
 	Event        *eventcreator.EventCreator
 	Orchestrator *orchestrator.Orchestrator
@@ -215,11 +215,11 @@ func (a *app) init(ctx context.Context) error {
 
 	a.smb = smbS
 
-	sheduleEvents := make(chan models2.Event, channelBufferSize)
-	eventChan := make(chan models2.Event, channelBufferSize)
-	delChan := make(chan models2.Event, channelBufferSize)
-	reportChan := make(chan models2.Report, channelBufferSize)
-	specialEventChan := make(chan models2.SpecialEventForLK, channelBufferSize)
+	sheduleEvents := make(chan models.Event, channelBufferSize)
+	eventChan := make(chan models.Event, channelBufferSize)
+	delChan := make(chan models.Event, channelBufferSize)
+	reportChan := make(chan models.Report, channelBufferSize)
+	specialEventChan := make(chan models.SpecialEventForLK, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
 	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
@@ -233,7 +233,7 @@ func (a *app) init(ctx context.Context) error {
 		return err
 	}
 
-	snd := models2.NewSenderProvider(tg, smbS, smtpS)
+	snd := models.NewSenderProvider(tg, smbS, smtpS)
 
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
