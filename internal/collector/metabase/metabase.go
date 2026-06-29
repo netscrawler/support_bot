@@ -15,7 +15,7 @@ type Metabase struct {
 }
 
 func New(baseURL string) *Metabase {
-	rt := newRetraibleRoundTripper(http.DefaultTransport)
+	rt := newRetractileRoundTripper(http.DefaultTransport)
 	client := http.Client{Transport: rt, Timeout: 5 * time.Minute}
 
 	return &Metabase{client: metabase.NewClient(baseURL, &client)}

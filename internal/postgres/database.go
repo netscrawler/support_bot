@@ -19,12 +19,12 @@ type DB struct {
 	log *slog.Logger
 }
 
-func New(ctx context.Context, cfg PostgresConfig, log *slog.Logger) (*DB, error) {
+func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 	l := log.With(slog.Any("module", "postgres"))
 
 	l.InfoContext(ctx, "start connecting to postgres")
 
-	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.GetDSN())
+	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.getDSN())
 	if err != nil {
 		l.ErrorContext(ctx, "error connecting to database", slog.Any("error", err))
 

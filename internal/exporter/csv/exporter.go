@@ -5,31 +5,31 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"support_bot/internal/pkg"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
-type Exporter[T models.FileData] struct {
+type Exporter struct {
 	buf   map[string][]map[string]any
 	order map[string][]string
 	name  string
 }
 
-func New[T models.FileData](
+func New(
 	data map[string][]map[string]any,
 	name string,
 	order map[string][]string,
-) *Exporter[T] {
-	return &Exporter[T]{
+) *Exporter {
+	return &Exporter{
 		buf:   data,
 		order: order,
 		name:  name,
 	}
 }
 
-func (e *Exporter[T]) Export() (*T, error) {
-	fd := models.NewEmptyFileData()
+func (e *Exporter) Export() ([]models.Data, error) {
+	var fd []models.Data
 
 	var err error
 
@@ -44,13 +44,17 @@ func (e *Exporter[T]) Export() (*T, error) {
 
 		buf := writeCsv(cBuf)
 
-		eErr := fd.Extend(buf, e.name+"_"+k+".csv")
+		dt, eErr := models.NewFileData(buf, e.name+"_"+k+".csv")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
+
+			continue
 		}
+
+		fd = append(fd, dt)
 	}
 
-	return any(fd).(*T), nil
+	return fd, nil
 }
 
 func writeCsv(data [][]any) *bytes.Buffer {

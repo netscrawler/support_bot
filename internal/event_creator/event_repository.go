@@ -23,7 +23,7 @@ func NewRepository(db *sqlx.DB, log *slog.Logger) *EventRepository {
 	}
 }
 
-func (er *EventRepository) Load(ctx context.Context) ([]Event, error) {
+func (er *EventRepository) Load(ctx context.Context) ([]event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("event repository load : %w", err)
 	}
@@ -37,7 +37,7 @@ where r.active = true
 
 `
 
-	var events []Event
+	var events []event
 
 	err := er.db.SelectContext(ctx, &events, query)
 	if err != nil {
@@ -51,7 +51,7 @@ where r.active = true
 	return events, nil
 }
 
-func (er *EventRepository) LoadByName(ctx context.Context, name string) ([]Event, error) {
+func (er *EventRepository) LoadByName(ctx context.Context, name string) ([]event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("event repository load by name : %w", err)
 	}
@@ -65,7 +65,7 @@ where c.name = $1 and r.active = true
 
 `
 
-	var events []Event
+	var events []event
 
 	err := er.db.SelectContext(ctx, &events, query, name)
 	if err != nil {

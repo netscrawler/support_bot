@@ -21,12 +21,12 @@ func Setup(logCfg LogConfig) (*slog.Logger, error) {
 func getLogger(format string, writer io.Writer, opts *slog.HandlerOptions) *slog.Logger {
 	if format == "json" {
 		return slog.New(
-			ContextHandler{Handler: slog.NewJSONHandler(writer, opts)},
+			contextHandler{Handler: slog.NewJSONHandler(writer, opts)},
 		)
 	}
 
 	return slog.New(
-		ContextHandler{Handler: slog.NewTextHandler(writer, opts)},
+		contextHandler{Handler: slog.NewTextHandler(writer, opts)},
 	)
 }
 
@@ -48,19 +48,19 @@ func getOpts(level string) *slog.HandlerOptions {
 }
 
 func getWriters(logCfg LogConfig) (io.Writer, error) {
-	writers := []io.Writer{}
+	var writers []io.Writer
 
 	var err error
 
 	for _, form := range logCfg.Output {
 		switch form {
-		case LogOutStdout:
+		case logOutStdout:
 			writers = append(writers, os.Stdout)
-		case LogOutStderr:
+		case logOutStderr:
 			writers = append(writers, os.Stderr)
-		case LogOutStdin:
+		case logOutStdin:
 			writers = append(writers, os.Stdin)
-		case LogOutFile:
+		case logOutFile:
 			logFile, cErr := os.OpenFile(
 				logCfg.File,
 				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
