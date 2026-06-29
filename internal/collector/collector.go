@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 )
 
-const defaultParralellCollectors = 32
+const defaultParallelCollectors = 32
 
 type DataFetcher interface {
 	Fetch(ctx context.Context, uuid string) ([]map[string]any, error)
@@ -22,20 +22,20 @@ type Collector struct {
 	parallel chan struct{}
 }
 
-func NewCollector(parralell uint8, mb DataFetcher, log *slog.Logger) *Collector {
+func NewCollector(parallel uint8, mb DataFetcher, log *slog.Logger) *Collector {
 	l := log.With(slog.Any("module", "collector"))
 
-	if parralell == 0 {
-		parralell = defaultParralellCollectors
+	if parallel == 0 {
+		parallel = defaultParallelCollectors
 	}
 
-	l.Info("create collector", slog.Any("parralell_query", parralell))
-	semaphor := make(chan struct{}, parralell)
+	l.Info("create collector", slog.Any("parallel_query", parallel))
+	semaphore := make(chan struct{}, parallel)
 
 	return &Collector{
 		mb:       mb,
 		log:      l,
-		parallel: semaphor,
+		parallel: semaphore,
 	}
 }
 

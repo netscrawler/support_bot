@@ -8,20 +8,21 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"syscall"
+	"time"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg"
 	"support_bot/internal/pkg/logger"
-	"syscall"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 var (
 	Version   = "v0.0.0"
-	Commit    = "unknown"
-	BuildTime = "unknown"
+	commit    = "unknown"
+	buildTime = "unknown"
 )
 
 func main() {
@@ -49,20 +50,20 @@ func main() {
 		"starting with config",
 		slog.Any("config", cfg),
 		slog.GroupAttrs("app_info", slog.Any("version", Version),
-			slog.Any("commit", Commit),
-			slog.Any("BuildTime", BuildTime)),
+			slog.Any("commit", commit),
+			slog.Any("BuildTime", buildTime)),
 	)
 
-	app, err := app.New(ctx, cfg)
+	appContainer, err := app.New(ctx, cfg)
 	if err != nil {
-		log.Error("failing creating app", slog.Any("error", err))
+		log.Error("failing creating appContainer", slog.Any("error", err))
 
 		return
 	}
 
-	err = app.Start(ctx)
+	err = appContainer.Start(ctx)
 	if err != nil {
-		log.Error("failing start app", slog.Any("error", err))
+		log.Error("failing start appContainer", slog.Any("error", err))
 
 		return
 	}
@@ -78,47 +79,47 @@ func main() {
 
 	shutdownCtx := logger.AppendCtx(sCtx,
 		slog.Any("function", "shutting down"))
-	app.GracefulShutdown(shutdownCtx)
+	appContainer.GracefulShutdown(shutdownCtx)
 }
 
 var (
-	SetModeVer          = false
-	SetModeHelp         = false
-	SetModeCreateConfig = false
-	SetModeCreateEnv    = false
+	setModeVer          = false
+	setModeHelp         = false
+	setModeCreateConfig = false
+	setModeCreateEnv    = false
 )
 
 func modeStart() {
-	flag.BoolVar(&SetModeVer, "v", false, "Версия приложения")
-	flag.BoolVar(&SetModeHelp, "h", false, "Помощь")
-	flag.StringVar(&config.ConfigPath, "config", "", "Путь к файлу конфигурации")
+	flag.BoolVar(&setModeVer, "v", false, "Версия приложения")
+	flag.BoolVar(&setModeHelp, "h", false, "Помощь")
+	flag.StringVar(&config.Path, "config", "", "Путь к файлу конфигурации")
 	flag.BoolVar(
-		&SetModeCreateConfig,
+		&setModeCreateConfig,
 		"example-config",
 		false,
 		"Сгенерировать пример файла конфигурации",
 	)
 	flag.BoolVar(
-		&SetModeCreateEnv,
+		&setModeCreateEnv,
 		"example-env",
 		false,
 		"Сгенерировать пример файла .env",
 	)
 	flag.Parse()
 
-	if SetModeVer {
+	if setModeVer {
 		version()
 	}
 
-	if SetModeHelp {
+	if setModeHelp {
 		help()
 	}
 
-	if SetModeCreateEnv {
+	if setModeCreateEnv {
 		createEnv()
 	}
 
-	if SetModeCreateConfig {
+	if setModeCreateConfig {
 		createConf()
 	}
 }
@@ -127,8 +128,8 @@ func version() {
 	fmt.Printf(
 		"Version: %s\nCommit: %s\nBuildTime: %s\nRuntime: %s",
 		Version,
-		Commit,
-		BuildTime,
+		commit,
+		buildTime,
 		runtime.Version(),
 	)
 	os.Exit(0)

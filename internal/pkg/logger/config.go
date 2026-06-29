@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	LogOutStdout = "stdout"
-	LogOutStdin  = "stdin"
-	LogOutStderr = "stderr"
-	LogOutFile   = "file"
+	logOutStdout = "stdout"
+	logOutStdin  = "stdin"
+	logOutStderr = "stderr"
+	logOutFile   = "file"
 )
 
 const (
@@ -35,7 +35,7 @@ func (l *LogConfig) Default() {
 	}
 
 	if len(l.Output) == 0 {
-		l.Output = append(l.Output, LogOutStdout)
+		l.Output = append(l.Output, logOutStdout)
 	}
 }
 
@@ -62,7 +62,7 @@ func (l *LogConfig) Validate() error {
 
 func validateOut(out string) bool {
 	switch out {
-	case LogOutFile, LogOutStderr, LogOutStdin, LogOutStdout:
+	case logOutFile, logOutStderr, logOutStdin, logOutStdout:
 		return true
 	default:
 		return false

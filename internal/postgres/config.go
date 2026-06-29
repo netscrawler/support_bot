@@ -16,7 +16,7 @@ const (
 	sslPrefer     = "prefer"
 )
 
-type PostgresConfig struct {
+type Config struct {
 	Port     int    `env:"DATABASE_PORT"     env-default:"5432"      yaml:"port"     comment:"Порт для подключения к базе"`
 	Host     string `env:"DATABASE_HOST"     env-default:"localhost" yaml:"host"     comment:"Адрес базы данных"`
 	User     string `env:"DATABASE_USER"     env-default:"user"      yaml:"user"                                                                               Comment:"Пользователь"`
@@ -34,7 +34,7 @@ type PostgresConfig struct {
 	DSN string `yaml:"-"`
 }
 
-func (pc *PostgresConfig) GetDSN() string {
+func (pc *Config) getDSN() string {
 	mode := sslDisable
 	modes := map[string]struct{}{
 		sslDisable:    {},

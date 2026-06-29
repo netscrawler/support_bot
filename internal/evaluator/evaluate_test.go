@@ -1,22 +1,17 @@
 package evaluator_test
 
 import (
-	"log/slog"
-	"os"
-	"support_bot/internal/evaluator"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"support_bot/internal/evaluator"
 )
 
 func TestEvaluator_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	th := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
-	l := slog.New(th)
-
-	eval, err := evaluator.NewEvaluator(l)
+	eval, err := evaluator.NewEvaluator()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +25,18 @@ func TestEvaluator_Evaluate(t *testing.T) {
 				{"total": 10, "count": 0},
 			},
 		}
+
+		fn := `report["sheet1"].all(r, r["total"] != 0)`
+
+		allow, err := eval.Evaluate(t.Context(), report, fn)
+		require.NoError(t, err)
+		assert.False(t, allow)
+	})
+
+	t.Run("none data", func(t *testing.T) {
+		t.Parallel()
+
+		report := map[string][]map[string]any{}
 
 		fn := `report["sheet1"].all(r, r["total"] != 0)`
 
