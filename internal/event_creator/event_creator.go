@@ -150,7 +150,7 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]models
 
 	for _, ev := range events {
 		names = append(names, models.Event{
-			Name: name,
+			Name: ev.Name,
 			Type: models.EventTypeGenReport,
 		})
 

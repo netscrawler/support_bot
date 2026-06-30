@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -29,6 +30,7 @@ type bot struct {
 	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  comment:"CleanUpTime — интервал очистки временных данных бота\n(кэш, состояния диалогов, временные сообщения и т.п.)." env-default:"10m"`
 	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       comment:"BotPoll — интервал long-polling запросов к Telegram API."                                                     env-default:"30s"`
 	Proxy         string        `env:"PROXY"                     yaml:"proxy"`
+	ApiProxy      string        `                                yaml:"api_proxy"                                                                                                                                               end:"API_PROXY"`
 }
 
 type timeout struct {
