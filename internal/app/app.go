@@ -189,7 +189,13 @@ func (a *app) init(ctx context.Context) error {
 
 	a.storage = rdb
 
-	tgBot, err := newTelegramClient(cfg.Bot.TelegramToken, cfg.Bot.Proxy, cfg.Bot.BotPoll)
+	tgBot, err := newTelegramClient(
+		cfg.Bot.TelegramToken,
+		cfg.Bot.Proxy,
+		cfg.Bot.ApiProxy,
+		cfg.Bot.BotPoll,
+		log,
+	)
 	if err != nil {
 		return err
 	}
@@ -340,16 +346,38 @@ func buildHTTPClient(proxyStr string) (*http.Client, error) {
 	}
 }
 
-func newTelegramClient(token string, proxy string, poll time.Duration) (*telebot.Bot, error) {
-	client, err := buildHTTPClient(proxy)
-	if err != nil {
-		return nil, err
+func newTelegramClient(
+	token string,
+	proxy string,
+	apiProxy string,
+	poll time.Duration,
+	log *slog.Logger,
+) (*telebot.Bot, error) {
+	client := &http.Client{}
+	if proxy != "" {
+		log.Info(
+			"proxy addr not empty, creating bot with system proxy",
+			slog.Any("proxy addr", proxy),
+		)
+		clientB, err := buildHTTPClient(proxy)
+		if err != nil {
+			return nil, err
+		}
+		client = clientB
 	}
 
 	pref := telebot.Settings{
 		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: poll},
 		Client: client,
+	}
+
+	if apiProxy != "" {
+		log.Info(
+			"api proxy not empty, creating bot with custom api server",
+			slog.Any("api server", apiProxy),
+		)
+		pref.URL = apiProxy
 	}
 
 	b, err := telebot.NewBot(pref)
