@@ -163,6 +163,12 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		return nil
 	}
 
+	l.InfoContext(
+		ctx,
+		"saving message to database",
+		slog.Any("report", report.Name),
+		slog.Any("message", resMsg),
+	)
 	err = g.sentMsgRepo.saveTgMsg(ctx, msg.ReportName, resMsg)
 	if err != nil {
 		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
