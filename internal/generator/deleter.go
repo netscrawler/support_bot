@@ -83,6 +83,8 @@ func (d *Deleter) delete(ctx context.Context) {
 		return
 	}
 
+	d.log.InfoContext(ctx, "loaded message to delete", slog.Any("count", len(msg)))
+
 	defer func() {
 		err = u.Rollback()
 		if err != nil {
