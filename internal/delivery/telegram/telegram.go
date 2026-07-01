@@ -8,29 +8,35 @@ import (
 	"log/slog"
 	"strconv"
 
+	"support_bot/internal/models"
+
+	"golang.org/x/time/rate"
 	"gopkg.in/telebot.v4"
-	models2 "support_bot/internal/models"
 )
 
 type ChatAdaptor struct {
 	bot *telebot.Bot
 	log *slog.Logger
+	rl  *rate.Limiter
 }
 
 func NewChatAdaptor(bot *telebot.Bot, log *slog.Logger) *ChatAdaptor {
 	l := log.With(slog.Any("module", "telegram_sender"))
+	rl := rate.NewLimiter(rate.Limit(9), 5)
 
 	return &ChatAdaptor{
 		bot: bot,
+		rl:  rl,
+
 		log: l,
 	}
 }
 
 func (ca *ChatAdaptor) SendText(
 	ctx context.Context,
-	chat models2.TgChat,
+	chat models.TgChat,
 	msg string,
-) (*models2.TgMessage, error) {
+) (*models.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -46,19 +52,23 @@ func (ca *ChatAdaptor) SendText(
 		ThreadID:  chat.ThreadID,
 	}
 
+	if err := ca.rl.Wait(ctx); err != nil {
+		return nil, err
+	}
+
 	tgMsg, err := ca.bot.Send(c, msg, o)
 	if err != nil {
 		return nil, fmt.Errorf("error send text message: %w", err)
 	}
 
-	return models2.NewFromTelebot(tgMsg), nil
+	return models.NewFromTelebot(tgMsg), nil
 }
 
 func (ca *ChatAdaptor) SendMedia(
 	ctx context.Context,
-	chat models2.TgChat,
-	imgs []models2.Data,
-) ([]models2.TgMessage, error) {
+	chat models.TgChat,
+	imgs []models.Data,
+) ([]models.TgMessage, error) {
 	var album telebot.Album
 
 	l := ca.log.With(
@@ -81,6 +91,9 @@ func (ca *ChatAdaptor) SendMedia(
 		album = append(album, photo)
 	}
 
+	if err := ca.rl.Wait(ctx); err != nil {
+		return nil, err
+	}
 	tgMsg, err := ca.bot.SendAlbum(c, album, o)
 	if err != nil {
 		l.ErrorContext(ctx, "Error send media", slog.Any("error", err))
@@ -90,14 +103,14 @@ func (ca *ChatAdaptor) SendMedia(
 
 	l.InfoContext(ctx, "Successfully send media")
 
-	return models2.NewMsgFromTelebotMany(tgMsg), nil
+	return models.NewMsgFromTelebotMany(tgMsg), nil
 }
 
 func (ca *ChatAdaptor) SendDocument(
 	ctx context.Context,
-	chat models2.TgChat,
-	doc []models2.Data,
-) ([]models2.TgMessage, error) {
+	chat models.TgChat,
+	doc []models.Data,
+) ([]models.TgMessage, error) {
 	l := ca.log.With(
 		slog.Group(
 			"recipient",
@@ -111,13 +124,17 @@ func (ca *ChatAdaptor) SendDocument(
 
 	var retErr error
 
-	var retMsg []models2.TgMessage
+	var retMsg []models.TgMessage
 
 	for _, f := range doc {
 		doc, name := f.Data, f.Name
 		tgDoc := &telebot.Document{
 			File:     telebot.FromReader(doc),
 			FileName: name,
+		}
+
+		if err := ca.rl.Wait(ctx); err != nil {
+			return nil, err
 		}
 
 		tgMsg, err := ca.bot.Send(c, tgDoc, o)
@@ -133,7 +150,7 @@ func (ca *ChatAdaptor) SendDocument(
 			continue
 		}
 
-		retMsg = append(retMsg, *models2.NewFromTelebot(tgMsg))
+		retMsg = append(retMsg, *models.NewFromTelebot(tgMsg))
 
 		l.InfoContext(ctx, "Successfully send document", slog.Any("document_name", tgDoc.FileName))
 	}
@@ -141,7 +158,10 @@ func (ca *ChatAdaptor) SendDocument(
 	return retMsg, retErr
 }
 
-func (ca *ChatAdaptor) DeleteMsg(message models2.TgMessage) error {
+func (ca *ChatAdaptor) DeleteMsg(message models.TgMessage) error {
+	if err := ca.rl.Wait(context.Background()); err != nil {
+		return err
+	}
 	return ca.bot.Delete(telebot.StoredMessage{
 		MessageID: strconv.Itoa(message.MessageID),
 		ChatID:    message.ChatID,

@@ -130,6 +130,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 					Time:      msg.Time,
 					ChatID:    msg.ChatID,
 					ThreadID:  msg.ThreadID,
+					Title:     msg.Title,
 				})
 			}
 		}
@@ -146,6 +147,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 					Time:      m.Time,
 					ChatID:    m.ChatID,
 					ThreadID:  m.ThreadID,
+					Title:     m.Title,
 				})
 			}
 		}
@@ -162,6 +164,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 					Time:      m.Time,
 					ChatID:    m.ChatID,
 					ThreadID:  m.ThreadID,
+					Title:     m.Title,
 				})
 			}
 		}
