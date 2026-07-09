@@ -94,6 +94,9 @@ create table sent_messages
     report_name text        not null
 );
 
+alter table sent_messages
+add column message_id_str varchar(250);
+
 
 CREATE TABLE report_crons
 (

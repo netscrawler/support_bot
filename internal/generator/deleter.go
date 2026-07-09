@@ -7,36 +7,39 @@ import (
 	"log/slog"
 	"time"
 
-	models2 "support_bot/internal/models"
+	"support_bot/internal/models"
 )
 
-type tgMsgDeleter interface {
-	DeleteMsg(msg models2.TgMessage) error
+type msgDeleter interface {
+	DeleteMsg(ctx context.Context, msg models.SentMessage) error
 }
 
 type Deleter struct {
-	tgDel tgMsgDeleter
+	tgDel  msgDeleter
+	maxDel msgDeleter
 
 	repo SentMsgRepository
 
-	evC chan models2.Event
+	evC chan models.Event
 
 	log *slog.Logger
 }
 
 func NewDeleter(
-	evC chan models2.Event,
-	tgDel tgMsgDeleter,
+	evC chan models.Event,
+	tgDel msgDeleter,
+	maxDel msgDeleter,
 	repo SentMsgRepository,
 	log *slog.Logger,
 ) *Deleter {
 	l := log.With(slog.Any("module", "deleter"))
 
 	return &Deleter{
-		tgDel: tgDel,
-		repo:  repo,
-		log:   l,
-		evC:   evC,
+		tgDel:  tgDel,
+		maxDel: maxDel,
+		repo:   repo,
+		log:    l,
+		evC:    evC,
 	}
 }
 
@@ -61,7 +64,7 @@ func (d *Deleter) Start(ctx context.Context) {
 
 				d.log.InfoContext(ctx, "receiving event", slog.Any("event", e))
 
-				if e.Type != models2.EventTypeDeleteSentReport {
+				if e.Type != models.EventTypeDeleteSentReport {
 					d.log.ErrorContext(ctx, "unexpected event type", slog.Any("event", e))
 				}
 
@@ -95,12 +98,24 @@ func (d *Deleter) delete(ctx context.Context) {
 	}()
 
 	for _, m := range msg {
-		err := d.tgDel.DeleteMsg(m)
-		if err != nil {
-			d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
+		if m.MessageID != 0 {
+			err := d.tgDel.DeleteMsg(ctx, m)
+			if err != nil {
+				d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
 
-			if time.Since(m.Time) < 72*time.Hour {
-				continue
+				if time.Since(m.Time) < 48*time.Hour {
+					continue
+				}
+			}
+		}
+		if m.MessageIDStr != "" {
+			err := d.maxDel.DeleteMsg(ctx, m)
+			if err != nil {
+				d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
+
+				if time.Since(m.Time) < 48*time.Hour {
+					continue
+				}
 			}
 		}
 

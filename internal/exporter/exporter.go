@@ -9,62 +9,62 @@ import (
 	"support_bot/internal/exporter/png"
 	"support_bot/internal/exporter/text"
 	"support_bot/internal/exporter/xlsx"
-	models2 "support_bot/internal/models"
+	"support_bot/internal/models"
 )
 
 func Export(
 	data map[string][]map[string]any,
-	exp models2.Export,
-) ([]models2.Data, error) {
+	exp models.Export,
+) ([]models.Data, error) {
 	switch exp.Format {
-	case models2.ReportFormatCsv:
+	case models.ReportFormatCsv:
 		r, err := csv.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
 			return nil, err
 		}
 
 		return r, nil
-	case models2.ReportFormatXlsx:
+	case models.ReportFormatXlsx:
 		r, err := xlsx.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return []models2.Data{*r}, nil
-	case models2.ReportFormatPng:
+		return []models.Data{*r}, nil
+	case models.ReportFormatPng:
 		r, err := png.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
 			return nil, err
 		}
 
 		return r, nil
-	case models2.ReportFormatHTML:
+	case models.ReportFormatHTML:
 		r, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return []models2.Data{*r}, nil
+		return []models.Data{*r}, nil
 
-	case models2.ReportFormatPdf:
+	case models.ReportFormatPdf:
 		rh, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		r, err := pdf.New(*exp.FileName, []models2.Data{*rh}...).Export()
+		r, err := pdf.New(*exp.FileName, []models.Data{*rh}...).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return []models2.Data{*r}, nil
-	case models2.ReportFormatText:
+		return []models.Data{*r}, nil
+	case models.ReportFormatText:
 		r, err := text.New(data, exp.Template.TemplateText).Export()
 		if err != nil {
 			return nil, err
 		}
 
-		return []models2.Data{*r}, nil
+		return []models.Data{*r}, nil
 	default:
 		return nil, fmt.Errorf("undefined format: %s", exp.Format)
 	}

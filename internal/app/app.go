@@ -3,34 +3,32 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
-	"net/url"
 	"time"
 
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
+	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
 	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/pkg/logger"
+	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
-	bot "support_bot/internal/tg_bot"
+	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 
-	"golang.org/x/net/proxy"
 	"gopkg.in/telebot.v4"
 )
 
@@ -60,11 +58,12 @@ type reportApp struct {
 	Orchestrator *orchestrator.Orchestrator
 	Generator    *generator.Generator
 	Deleter      *generator.Deleter
+	Retry        *retry.Retry
 }
 
 type telegramBot struct {
 	Bot    *telebot.Bot
-	Router *bot.Router
+	Router *tgbot.Router
 	Shed   *sheduler.SheduleAPI
 }
 
@@ -189,14 +188,16 @@ func (a *app) init(ctx context.Context) error {
 
 	a.storage = rdb
 
-	tgBot, err := newTelegramClient(
-		cfg.Bot.TelegramToken,
-		cfg.Bot.Proxy,
-		cfg.Bot.ApiProxy,
-		cfg.Bot.BotPoll,
+	tgBot, err := tgbot.NewTelegramBot(
+		cfg.TgBot,
 		log,
 	)
 	if err != nil {
+		return err
+	}
+
+	maxBot, err := maxbot.New(ctx, a.cfg.MaxBot, log)
+	if err != nil && a.cfg.MaxBot.Enabled {
 		return err
 	}
 
@@ -205,7 +206,22 @@ func (a *app) init(ctx context.Context) error {
 	mb := metabase.New(cfg.MetabaseDomain)
 	clct := collector.NewCollector(parallel, mb, log)
 
-	tg := telegram.NewChatAdaptor(tgBot, log)
+	retr := retry.New(retry.Config{
+		QueueSize:  100,
+		Workers:    4,
+		MaxRetries: 3,
+		Backoff: retry.ExponentialBackoff{
+			Base: 3 * time.Second,
+			Max:  30 * time.Second,
+		},
+		Policy: retry.PolicyAlways{},
+		Logger: log,
+		Silent: false,
+	})
+
+	tg := telegram.NewChatAdaptor(tgBot, retr, log)
+	maxAdp := maxadp.New(maxBot, retr, a.cfg.MaxBot.Enabled, log)
+
 	smtpS := smtp.New(cfg.SMTP, log)
 
 	var smbS *smb.SMB
@@ -239,11 +255,11 @@ func (a *app) init(ctx context.Context) error {
 		return err
 	}
 
-	snd := models.NewSenderProvider(tg, smbS, smtpS)
+	snd := models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
 
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
-	deleter := generator.NewDeleter(delChan, tg, *delRepo, log)
+	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
 	gen := generator.New(reportChan, clct, *snd, *delRepo, eval, 4, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
@@ -256,9 +272,10 @@ func (a *app) init(ctx context.Context) error {
 		Orchestrator: orch,
 		Generator:    gen,
 		Deleter:      deleter,
+		Retry:        retr,
 	}
 
-	state := handlers.NewState(cfg.Bot.CleanUpTime)
+	state := handlers.NewState(cfg.TgBot.CleanUpTime)
 
 	chatRepo := repository.NewChatRepository(rdb.GetConn(), log)
 	userRepo := repository.NewUserRepository(rdb.GetConn(), log)
@@ -270,7 +287,7 @@ func (a *app) init(ctx context.Context) error {
 	userService := service.NewUser(userRepo, log)
 
 	shed := sheduler.NewSheduleAPI(shdAPI)
-	reportService := service.NewReportService(shed, evAPI, reportRepo, log)
+	reportService := service.NewReportService(shed, evAPI, reportRepo, cfg.MetabaseDomain, log)
 
 	adminHandler := handlers.NewAdminHandler(
 		tgBot,
@@ -292,7 +309,7 @@ func (a *app) init(ctx context.Context) error {
 
 	mw := middlewares.NewMw(userService)
 
-	router := bot.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
+	router := tgbot.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
 
 	router.Setup()
 	tgBotUser := &telegramBot{
@@ -305,85 +322,4 @@ func (a *app) init(ctx context.Context) error {
 	a.tgBot = tgBotUser
 
 	return nil
-}
-
-func buildHTTPClient(proxyStr string) (*http.Client, error) {
-	if proxyStr == "" {
-		return &http.Client{}, nil
-	}
-
-	u, err := url.Parse(proxyStr)
-	if err != nil {
-		return nil, err
-	}
-
-	switch u.Scheme {
-	case "http", "https":
-		return &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyURL(u),
-			},
-			Timeout: 30 * time.Second,
-		}, nil
-
-	case "socks5", "socks5h":
-		dialer, err := proxy.SOCKS5("tcp", u.Host, nil, proxy.Direct)
-		if err != nil {
-			return nil, err
-		}
-
-		return &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
-					return dialer.Dial(network, addr)
-				},
-			},
-			Timeout: 30 * time.Second,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported proxy scheme: %s", u.Scheme)
-	}
-}
-
-func newTelegramClient(
-	token string,
-	proxy string,
-	apiProxy string,
-	poll time.Duration,
-	log *slog.Logger,
-) (*telebot.Bot, error) {
-	client := &http.Client{}
-	if proxy != "" {
-		log.Info(
-			"proxy addr not empty, creating bot with system proxy",
-			slog.Any("proxy addr", proxy),
-		)
-		clientB, err := buildHTTPClient(proxy)
-		if err != nil {
-			return nil, err
-		}
-		client = clientB
-	}
-
-	pref := telebot.Settings{
-		Token:  token,
-		Poller: &telebot.LongPoller{Timeout: poll},
-		Client: client,
-	}
-
-	if apiProxy != "" {
-		log.Info(
-			"api proxy not empty, creating bot with custom api server",
-			slog.Any("api server", apiProxy),
-		)
-		pref.URL = apiProxy
-	}
-
-	b, err := telebot.NewBot(pref)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
 }
