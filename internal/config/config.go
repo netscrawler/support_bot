@@ -8,8 +8,10 @@ import (
 
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	tgbot "support_bot/internal/tg_bot"
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/joho/godotenv"
@@ -19,18 +21,11 @@ type Config struct {
 	Log            logger.LogConfig `yaml:"log"             comment:"Настройки логгирования"`
 	MetabaseDomain string           `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
 	Database       postgres.Config  `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	Bot            bot              `yaml:"bot"             comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	TgBot          tgbot.Config     `yaml:"telegram"        comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout          `yaml:"timeout"         comment:"Настройка таймаутов"`
 	SMB            smb.Config       `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
 	SMTP           smtp.Config      `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
-}
-
-type bot struct {
-	TelegramToken string        `env:"TELEGRAM_TOKEN"            yaml:"telegram_token" comment:"Телеграмм токен бота полученый от @BotFather\nОбязателен для запуска бота."`
-	CleanUpTime   time.Duration `env:"TELEGRAM_CLEAN_UP_TIME"    yaml:"clean_up_time"  comment:"CleanUpTime — интервал очистки временных данных бота\n(кэш, состояния диалогов, временные сообщения и т.п.)." env-default:"10m"`
-	BotPoll       time.Duration `env:"TELEGRAM_BOT_POLL_TIMEOUT" yaml:"bot_poll"       comment:"BotPoll — интервал long-polling запросов к Telegram API."                                                     env-default:"30s"`
-	Proxy         string        `env:"PROXY"                     yaml:"proxy"`
-	ApiProxy      string        `                                yaml:"api_proxy"                                                                                                                                               end:"API_PROXY"`
+	MaxBot         maxbot.Config    `yaml:"max"             comment:"Настройка Max бота"`
 }
 
 type timeout struct {
@@ -94,7 +89,8 @@ type safeConfig Config
 
 func (c Config) LogValue() slog.Value {
 	c.Database.Password = "***"
-	c.Bot.TelegramToken = "***"
+	c.TgBot.TelegramToken = "***"
+	c.MaxBot.Token = "***"
 	c.Database.DSN = "postgres://***"
 	c.SMB.Password = "***"
 	c.SMTP.Password = "***"

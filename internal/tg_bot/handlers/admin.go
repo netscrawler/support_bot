@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -56,24 +57,6 @@ func (h *AdminHandler) StartAdmin(c tele.Context) error {
 	c.Delete()
 
 	return c.Send(helloAdminRegistration, menu.AdminMenu)
-}
-
-func (h *AdminHandler) loadReports(c tele.Context) error {
-	h.state.set(c.Sender().ID, loadReportState)
-	//nolint:errcheck
-	// c.Delete()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	rpl, err := h.report.LoadReportsWithPagination(ctx)
-	if err != nil {
-		return c.Send("Ошибка получения отчетов: " + err.Error())
-	}
-
-	mark := mapReportRPLToMarkup(rpl)
-
-	return c.Send(menu.MsgHelloReport, &mark)
 }
 
 func (h *AdminHandler) LoadReportsPage(c tele.Context) error {
@@ -150,6 +133,100 @@ func (h *AdminHandler) GenerateSelectedReport(c tele.Context) error {
 	h.state.set(userID, menuState)
 
 	if err := c.Edit("Отчет запущен. Результат придет в этот чат."); err != nil {
+		if errors.Is(err, tele.ErrMessageNotModified) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (h *AdminHandler) SelectReport(c tele.Context) error {
+	userID := c.Sender().ID
+	if h.state.get(userID) != loadReportState {
+		return c.Edit("Время на выбор отчета истекло, начните заново")
+	}
+
+	id, reportName, ok := strings.Cut(c.Data(), ";")
+	if !ok || reportName == "" {
+		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
+	}
+
+	data := strings.Split(c.Data(), ";")
+	if len(data) < 2 {
+		slog.Debug("data parse", data)
+		return c.Respond(&tele.CallbackResponse{Text: "Внутренняя ошибка" + c.Data()})
+	}
+
+	id, reportName, pageFromStr := data[0], data[1], data[2]
+	if reportName == "" {
+		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
+	}
+
+	pageFrom, err := strconv.Atoi(pageFromStr)
+	if err != nil {
+		pageFrom = 0
+	}
+
+	_, err = strconv.Atoi(id)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "Внутренняя ошибка" + err.Error()})
+	}
+
+	if err := c.Respond(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	rpInf, err := h.report.GetReportInfoByName(ctx, reportName)
+	if err != nil {
+		return c.Edit("Не удалось получить информацию об отчете: " + err.Error())
+	}
+	rpInf.ID = id
+
+	mark := getMarkupForReport(rpInf, pageFrom)
+
+	if err := c.Edit(
+		rpInf.String(),
+		&tele.SendOptions{ParseMode: tele.ModeHTML, ReplyMarkup: &mark},
+	); err != nil {
+		if errors.Is(err, tele.ErrMessageNotModified) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (h *AdminHandler) ResendSelectedReport(c tele.Context) error {
+	userID := c.Sender().ID
+	if h.state.get(userID) != loadReportState {
+		return c.Edit("Время на выбор отчета истекло, начните заново")
+	}
+
+	_, reportName, ok := strings.Cut(c.Data(), ";")
+	if !ok || reportName == "" {
+		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
+	}
+
+	if err := c.Respond(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	h.report.GenerateAndSendReportByName(ctx, reportName)
+
+	h.state.set(userID, menuState)
+
+	if err := c.Edit("Отчет запущен. Результат будет отправлен получателю"); err != nil {
 		if errors.Is(err, tele.ErrMessageNotModified) {
 			return nil
 		}

@@ -59,6 +59,7 @@ require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
+	github.com/max-messenger/max-bot-api-client-go/v2 v2.1.1
 	github.com/netscrawler/metabase-public-api v0.0.0-20250722130654-59cfc07f3d73
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1

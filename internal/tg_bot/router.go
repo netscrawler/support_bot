@@ -1,14 +1,15 @@
-package bot
+package tgbot
 
 import (
 	"log/slog"
 	"runtime/debug"
 
-	"gopkg.in/telebot.v4"
-	telemw "gopkg.in/telebot.v4/middleware"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/middlewares"
+
+	"gopkg.in/telebot.v4"
+	telemw "gopkg.in/telebot.v4/middleware"
 )
 
 type Router struct {
@@ -88,7 +89,10 @@ func (r *Router) Setup() {
 		r.adminHl.AddUserWithUserRole,
 	)
 	adminOnly.Handle(&telebot.InlineButton{Unique: "back_report_list"}, r.adminHl.LoadReportsPage)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "back_to_report_list"}, r.adminHl.LoadReportsPage)
 	adminOnly.Handle(&telebot.InlineButton{Unique: "next_report_list"}, r.adminHl.LoadReportsPage)
 	adminOnly.Handle(&telebot.InlineButton{Unique: "_"}, r.adminHl.IgnoreReportPage)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.adminHl.GenerateSelectedReport)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.adminHl.SelectReport)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "report_get"}, r.adminHl.GenerateSelectedReport)
+	adminOnly.Handle(&telebot.InlineButton{Unique: "report_resend"}, r.adminHl.ResendSelectedReport)
 }

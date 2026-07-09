@@ -11,12 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg"
 	"support_bot/internal/pkg/logger"
-
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -174,7 +173,7 @@ func createConf() {
 
 func help() {
 	fmt.Println(`
-Support Bot CLI
+Support TgBot CLI
 ===============
 
 Использование:

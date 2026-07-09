@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jmoiron/sqlx"
 	"support_bot/internal/models"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type Repository struct {
@@ -240,7 +241,8 @@ select
     c.title,
     c.type as chat_type,
     c.description,
-    c.is_active
+    c.is_active,
+    c.ch_type
 from reports_recipients rr
 join recipients r on r.id = rr.recipient_id
 left join chats c on c.id = r.chat_id

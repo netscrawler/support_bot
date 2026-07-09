@@ -5,8 +5,10 @@ import (
 
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	tgbot "support_bot/internal/tg_bot"
 )
 
 func Default() *Config {
@@ -31,10 +33,17 @@ func Default() *Config {
 			MaxConnIdleTime: 2 * time.Minute,
 			DatabaseConnect: 30 * time.Second,
 		},
-		Bot: bot{
+		TgBot: tgbot.Config{
 			TelegramToken: "telegram_bot_token",
 			CleanUpTime:   10 * time.Minute,
 			BotPoll:       30 * time.Second,
+		},
+		MaxBot: maxbot.Config{
+			Token:       "max_bot_token",
+			CleanUpTime: 0,
+			BotPoll:     0,
+			ApiProxy:    "",
+			Enabled:     false,
 		},
 		Timeout: timeout{
 			Shutdown: 5 * time.Second,

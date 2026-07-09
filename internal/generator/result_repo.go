@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jmoiron/sqlx"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/uow"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type SentMsgRepository struct {
@@ -28,9 +29,9 @@ func NewResultRepository(db *sqlx.DB, log *slog.Logger) *SentMsgRepository {
 func (rr *SentMsgRepository) saveTgMsg(
 	ctx context.Context,
 	reportName string,
-	msgs []models.TgMessage,
+	msgs []models.SentMessage,
 ) error {
-	const query = `insert into sent_messages(chat_id, thread_id, message_id, title, sent_at, report_name) values ($1, $2, $3, $4, $5, $6);`
+	const query = `insert into sent_messages(chat_id, thread_id, message_id,message_id_str, title, sent_at, report_name) values ($1, $2, $3, $4, $5, $6, $7);`
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("chat repository create: %w", err)
@@ -45,6 +46,7 @@ func (rr *SentMsgRepository) saveTgMsg(
 			msg.ChatID,
 			msg.ThreadID,
 			msg.MessageID,
+			msg.MessageIDStr,
 			msg.Title,
 			msg.Time,
 			reportName,
@@ -59,11 +61,11 @@ func (rr *SentMsgRepository) saveTgMsg(
 
 func (rr *SentMsgRepository) loadMsgToDelete(
 	ctx context.Context,
-) ([]models.TgMessage, uow.UOW, error) {
-	const query = `select id, chat_id, thread_id, message_id, title, sent_at, deleted from sent_messages where deleted = False AND sent_at >= CURRENT_DATE - INTERVAL '1 day'
+) ([]models.SentMessage, uow.UOW, error) {
+	const query = `select id, chat_id, thread_id, message_id, message_id_str, title, sent_at, deleted from sent_messages where deleted = False AND sent_at >= CURRENT_DATE - INTERVAL '1 day'
 	AND sent_at < CURRENT_DATE for update skip locked;`
 
-	var msgs []models.TgMessage
+	var msgs []models.SentMessage
 
 	tx, err := rr.db.BeginTxx(ctx, nil)
 	if err != nil {

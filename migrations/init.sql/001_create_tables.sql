@@ -23,3 +23,6 @@ CREATE TABLE chats
     is_active   BOOLEAN       NOT NULL DEFAULT true
 );
 
+
+alter table chats
+    add column ch_type varchar(50) NOT NULL default 'tg';
