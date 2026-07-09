@@ -9,12 +9,15 @@ import (
 	"support_bot/internal/pkg/text"
 )
 
-var errEmptyRecipient = errors.New("empty recipient")
+var (
+	errEmptyRecipient       = errors.New("empty recipient")
+	errInvalidChatRecipient = errors.New("invalid recipient")
+)
 
 type TgSender interface {
-	SendText(ctx context.Context, rcpt TgChat, s string) (*TgMessage, error)
-	SendDocument(ctx context.Context, rcpt TgChat, model []Data) ([]TgMessage, error)
-	SendMedia(ctx context.Context, rcpt TgChat, model []Data) ([]TgMessage, error)
+	SendText(ctx context.Context, rcpt TgChat, s string) (*SentMessage, error)
+	SendDocument(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
+	SendMedia(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
 }
 
 type SmbSender interface {
@@ -25,10 +28,17 @@ type SmtpSender interface {
 	Send(ctx context.Context, mail smtp.Mail) error
 }
 
+type MaxSender interface {
+	SendText(ctx context.Context, rcpt MaxChat, s string) (*SentMessage, error)
+	SendDocument(ctx context.Context, rcpt MaxChat, model []Data) (*SentMessage, error)
+	SendMedia(ctx context.Context, rcpt MaxChat, model []Data) (*SentMessage, error)
+}
+
 type senderProvider interface {
 	Tg() TgSender
 	SMB() SmbSender
 	SMTP() SmtpSender
+	MAX() MaxSender
 }
 
 type Message struct {
@@ -65,10 +75,10 @@ func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
 	}
 }
 
-func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, error) {
+func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, error) {
 	var (
 		sendErr error
-		tgMsg   []TgMessage
+		sentMsg []SentMessage
 	)
 
 	for _, r := range m.Recipients {
@@ -82,7 +92,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, err
 			}
 
 			if r.NeedDeleteAfterEndOfDay {
-				tgMsg = append(tgMsg, msg...)
+				sentMsg = append(sentMsg, msg...)
 			}
 		case emailRecipient:
 			err := m.sendSMTP(ctx, sp.SMTP(), r)
@@ -98,6 +108,16 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, err
 
 				continue
 			}
+		case maxRecipient:
+			msg, err := m.sentMax(ctx, sp.MAX(), r)
+			if err != nil {
+				sendErr = errors.Join(sendErr, err)
+				continue
+			}
+
+			if r.NeedDeleteAfterEndOfDay {
+				sentMsg = append(sentMsg, msg...)
+			}
 
 		default:
 			sendErr = errors.Join(sendErr, fmt.Errorf("unsupported recipient type: %s", r.Type))
@@ -105,19 +125,28 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]TgMessage, err
 		}
 	}
 
-	return tgMsg, sendErr
+	return sentMsg, sendErr
 }
 
-func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]TgMessage, error) {
+func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]SentMessage, error) {
 	if r.Chat == nil {
 		return nil, errEmptyRecipient
+	}
+
+	if r.Chat.ChType != ChatTypeTg {
+		return nil, fmt.Errorf(
+			"%w: %s for recipient %s",
+			errInvalidChatRecipient,
+			r.Chat.ChType,
+			r.Type,
+		)
 	}
 
 	rcpt := TgChat{ChatID: r.Chat.ChatID, ThreadID: deRef(r.ThreadID, 0)}
 
 	var sendErr error
 
-	var retMsg []TgMessage
+	var retMsg []SentMessage
 
 	if m.Text != nil {
 		for _, data := range m.Text {
@@ -125,7 +154,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 			if err != nil {
 				sendErr = fmt.Errorf("sending text: %w", err)
 			} else {
-				retMsg = append(retMsg, TgMessage{
+				retMsg = append(retMsg, SentMessage{
 					MessageID: msg.MessageID,
 					Time:      msg.Time,
 					ChatID:    msg.ChatID,
@@ -142,7 +171,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 			sendErr = fmt.Errorf("sending document: %w", err)
 		} else {
 			for _, m := range msg {
-				retMsg = append(retMsg, TgMessage{
+				retMsg = append(retMsg, SentMessage{
 					MessageID: m.MessageID,
 					Time:      m.Time,
 					ChatID:    m.ChatID,
@@ -159,7 +188,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 			sendErr = fmt.Errorf("sending document: %w", err)
 		} else {
 			for _, m := range msg {
-				retMsg = append(retMsg, TgMessage{
+				retMsg = append(retMsg, SentMessage{
 					MessageID: m.MessageID,
 					Time:      m.Time,
 					ChatID:    m.ChatID,
@@ -167,6 +196,62 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]T
 					Title:     m.Title,
 				})
 			}
+		}
+	}
+
+	return retMsg, sendErr
+}
+
+func (m *Message) sentMax(
+	ctx context.Context,
+	sender MaxSender,
+	r Recipient,
+) ([]SentMessage, error) {
+	if r.Chat == nil {
+		return nil, errEmptyRecipient
+	}
+
+	if r.Chat.ChType != ChatTypeMax {
+		return nil, fmt.Errorf(
+			"%w: %s for recipient %s",
+			errInvalidChatRecipient,
+			r.Chat.ChType,
+			r.Type,
+		)
+	}
+
+	rcpt := MaxChat{ChatID: r.Chat.ChatID}
+
+	var sendErr error
+
+	var retMsg []SentMessage
+
+	if m.Text != nil {
+		for _, data := range m.Text {
+			msg, err := sender.SendText(ctx, rcpt, data.Data.String())
+			if err != nil {
+				sendErr = fmt.Errorf("sending text: %w", err)
+			} else {
+				retMsg = append(retMsg, *msg)
+			}
+		}
+	}
+
+	if m.Files != nil {
+		msg, err := sender.SendDocument(ctx, rcpt, m.Files)
+		if err != nil {
+			sendErr = fmt.Errorf("sending document: %w", err)
+		} else {
+			retMsg = append(retMsg, *msg)
+		}
+	}
+
+	if m.Images != nil {
+		msg, err := sender.SendMedia(ctx, rcpt, m.Images)
+		if err != nil {
+			sendErr = fmt.Errorf("sending document: %w", err)
+		} else {
+			retMsg = append(retMsg, *msg)
 		}
 	}
 

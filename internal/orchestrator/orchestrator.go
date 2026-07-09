@@ -6,39 +6,39 @@ import (
 	"sync"
 	"time"
 
-	models2 "support_bot/internal/models"
+	"support_bot/internal/models"
 )
 
 type ReportLoader interface {
-	Load(ctx context.Context) ([]models2.Report, error)
-	LoadByEvent(ctx context.Context, event string, active bool) (*models2.Report, error)
+	Load(ctx context.Context) ([]models.Report, error)
+	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
 }
 
 type Orchestrator struct {
-	EventC        chan models2.Event
-	SpecialEventC chan models2.SpecialEventForLK
+	EventC        chan models.Event
+	SpecialEventC chan models.SpecialEventForLK
 
-	ReportC chan models2.Report
-	DeleteC chan models2.Event
+	ReportC chan models.Report
+	DeleteC chan models.Event
 
 	rL ReportLoader
 
 	mu    sync.RWMutex
-	cache map[string][]models2.Report
+	cache map[string][]models.Report
 
 	log *slog.Logger
 }
 
 func New(
-	evC chan models2.Event,
-	specialEventC chan models2.SpecialEventForLK,
-	reportC chan models2.Report,
-	delC chan models2.Event,
+	evC chan models.Event,
+	specialEventC chan models.SpecialEventForLK,
+	reportC chan models.Report,
+	delC chan models.Event,
 	rl ReportLoader,
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
-	cache := make(map[string][]models2.Report)
+	cache := make(map[string][]models.Report)
 
 	return &Orchestrator{
 		EventC:        evC,
@@ -80,7 +80,7 @@ func (o *Orchestrator) run(ctx context.Context) {
 			}
 
 			switch event.Type {
-			case models2.EventTypeDeleteSentReport:
+			case models.EventTypeDeleteSentReport:
 				o.processDelReportEvent(ctx, event.Name)
 
 			default:
@@ -95,7 +95,9 @@ func (o *Orchestrator) run(ctx context.Context) {
 			}
 
 			switch event.Event.Type {
-			case models2.EventTypeGenReportForTG:
+			case models.EventTypeGenReportForTG:
+				o.processGenReportSpecialEvent(ctx, event)
+			case models.EventTypeGenReport:
 				o.processGenReportSpecialEvent(ctx, event)
 			default:
 			}
@@ -129,7 +131,7 @@ func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) 
 
 func (o *Orchestrator) processGenReportSpecialEvent(
 	ctx context.Context,
-	event models2.SpecialEventForLK,
+	event models.SpecialEventForLK,
 ) {
 	reports, err := o.getReportByEvent(ctx, event.Event.Name, false)
 	if err != nil {
@@ -139,7 +141,9 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 	}
 
 	for _, report := range reports {
-		report.Recipients = []models2.Recipient{event.Recipient}
+		if event.Event.Type == models.EventTypeGenReportForTG {
+			report.Recipients = []models.Recipient{event.Recipient}
+		}
 		select {
 		case <-ctx.Done():
 			o.log.InfoContext(ctx, "context cancelled. stopping")
@@ -161,7 +165,7 @@ func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) 
 		o.log.InfoContext(ctx, "context cancelled. stopping")
 
 		return
-	case o.DeleteC <- models2.Event{Name: event, Type: models2.EventTypeDeleteSentReport}:
+	case o.DeleteC <- models.Event{Name: event, Type: models.EventTypeDeleteSentReport}:
 		o.log.InfoContext(ctx, "sending delete event to deleter")
 	}
 }
@@ -188,7 +192,7 @@ func (o *Orchestrator) getReportByEvent(
 	ctx context.Context,
 	event string,
 	active bool,
-) ([]models2.Report, error) {
+) ([]models.Report, error) {
 	l := o.log.With(slog.Any("event", event))
 	l.DebugContext(ctx, "getting report by event")
 
@@ -214,7 +218,7 @@ func (o *Orchestrator) getReportByEvent(
 	}
 
 	if !active {
-		return []models2.Report{*reports}, nil
+		return []models.Report{*reports}, nil
 	}
 
 	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", 1))
@@ -225,8 +229,8 @@ func (o *Orchestrator) getReportByEvent(
 	if rp, ok := o.cache[event]; ok {
 		o.cache[event] = append(rp, *reports)
 	} else {
-		o.cache[event] = append([]models2.Report{}, *reports)
+		o.cache[event] = append([]models.Report{}, *reports)
 	}
 
-	return []models2.Report{*reports}, nil
+	return []models.Report{*reports}, nil
 }
