@@ -193,13 +193,13 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 		return err
 	}
 
-	r, err := ca.api.Messages.DeleteMessage(ctx, message.MessageIDStr)
+	r, err := ca.api.Messages.DeleteMessage(ctx, deRef(message.MessageIDStr))
 	if err != nil {
 		retryErr := ca.retry.Submit(
 			retry.NewTask(
 				fmt.Sprintf("max %d", message.MessageID),
 				func(ctx context.Context) error {
-					_, err := ca.api.Messages.DeleteMessage(ctx, message.MessageIDStr)
+					_, err := ca.api.Messages.DeleteMessage(ctx, deRef(message.MessageIDStr))
 
 					return err
 				},
@@ -208,7 +208,6 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 		if retryErr != nil {
 			return errors.Join(err, retryErr)
 		}
-
 		return err
 	}
 
@@ -217,4 +216,12 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 	}
 
 	return nil
+}
+
+func deRef[T any](t *T) T {
+	var tt T
+	if t == nil {
+		return tt
+	}
+	return *t
 }
