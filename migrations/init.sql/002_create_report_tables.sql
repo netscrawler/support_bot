@@ -98,6 +98,10 @@ alter table sent_messages
 add column message_id_str varchar(250);
 
 
+alter table sent_messages
+add column ch_type varchar(250) not null default 'tg';
+
+
 CREATE TABLE report_crons
 (
     report_id INT NOT NULL,

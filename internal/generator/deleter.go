@@ -98,24 +98,27 @@ func (d *Deleter) delete(ctx context.Context) {
 	}()
 
 	for _, m := range msg {
-		if m.MessageID != 0 {
-			err := d.tgDel.DeleteMsg(ctx, m)
-			if err != nil {
-				d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
-
-				if time.Since(m.Time) < 48*time.Hour {
-					continue
-				}
+		var del msgDeleter
+		switch m.ChType {
+		case models.ChatTypeMax:
+			del = d.tgDel
+		case models.ChatTypeTg:
+			del = d.maxDel
+		default:
+			if m.MessageID != 0 {
+				del = d.tgDel
+			}
+			if m.MessageIDStr != nil {
+				del = d.maxDel
 			}
 		}
-		if m.MessageIDStr != "" {
-			err := d.maxDel.DeleteMsg(ctx, m)
-			if err != nil {
-				d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
 
-				if time.Since(m.Time) < 48*time.Hour {
-					continue
-				}
+		err := del.DeleteMsg(ctx, m)
+		if err != nil {
+			d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
+
+			if time.Since(m.Time) < 48*time.Hour {
+				continue
 			}
 		}
 
