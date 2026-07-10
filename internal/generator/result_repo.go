@@ -31,7 +31,7 @@ func (rr *SentMsgRepository) saveTgMsg(
 	reportName string,
 	msgs []models.SentMessage,
 ) error {
-	const query = `insert into sent_messages(chat_id, thread_id, message_id,message_id_str, title, sent_at, report_name) values ($1, $2, $3, $4, $5, $6, $7);`
+	const query = `insert into sent_messages(chat_id, thread_id, message_id,message_id_str, title, sent_at, report_name, ch_type) values ($1, $2, $3, $4, $5, $6, $7);`
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("chat repository create: %w", err)
@@ -50,6 +50,7 @@ func (rr *SentMsgRepository) saveTgMsg(
 			msg.Title,
 			msg.Time,
 			reportName,
+			msg.ChType,
 		)
 		if err != nil {
 			saveErr = errors.Join(saveErr, err)
@@ -62,7 +63,7 @@ func (rr *SentMsgRepository) saveTgMsg(
 func (rr *SentMsgRepository) loadMsgToDelete(
 	ctx context.Context,
 ) ([]models.SentMessage, uow.UOW, error) {
-	const query = `select id, chat_id, thread_id, message_id, message_id_str, title, sent_at, deleted from sent_messages where deleted = False AND sent_at >= CURRENT_DATE - INTERVAL '1 day'
+	const query = `select id, chat_id, thread_id, message_id, message_id_str, title, sent_at, deleted, ch_type from sent_messages where deleted = False AND sent_at >= CURRENT_DATE - INTERVAL '1 day'
 	AND sent_at < CURRENT_DATE for update skip locked;`
 
 	var msgs []models.SentMessage

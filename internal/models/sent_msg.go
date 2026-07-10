@@ -15,8 +15,8 @@ type TgChat struct {
 type SentMessage struct {
 	ID int64 `db:"id"`
 
-	MessageID    int    `db:"message_id"`
-	MessageIDStr string `db:"message_id_str"`
+	MessageID    int     `db:"message_id"`
+	MessageIDStr *string `db:"message_id_str"`
 
 	Time time.Time `db:"sent_at"`
 
@@ -26,7 +26,8 @@ type SentMessage struct {
 
 	Title string `db:"title"`
 
-	Deleted bool `db:"deleted"`
+	Deleted bool   `db:"deleted"`
+	ChType  string `db:"ch_type"`
 }
 
 func NewFromTelebot(msg *telebot.Message) *SentMessage {
@@ -40,6 +41,7 @@ func NewFromTelebot(msg *telebot.Message) *SentMessage {
 		ChatID:    msg.Chat.ID,
 		ThreadID:  msg.ThreadID,
 		Title:     msg.Chat.Title,
+		ChType:    ChatTypeTg,
 	}
 }
 
@@ -54,10 +56,11 @@ func NewMsgFromTelebotMany(msgs []telebot.Message) []SentMessage {
 
 func NewMsgFromMax(max model.Message) *SentMessage {
 	return &SentMessage{
-		MessageIDStr: max.Body.Mid,
+		MessageIDStr: &max.Body.Mid,
 		Time:         time.UnixMilli(max.Timestamp),
 		ChatID:       max.Recipient.ChatID,
 		ThreadID:     0,
 		Title:        "max chat",
+		ChType:       ChatTypeMax,
 	}
 }
