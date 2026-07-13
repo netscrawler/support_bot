@@ -6,14 +6,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"support_bot/internal/core/workflow/execution"
-	"support_bot/internal/core/workflow/registry"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	workflow "support_bot/internal/core/workflow"
+	"support_bot/internal/core/workflow"
+	"support_bot/internal/core/workflow/execution"
+	"support_bot/internal/core/workflow/registry"
 )
 
 // --- mock action ---
@@ -24,7 +24,10 @@ type mockAction struct {
 	sleep time.Duration
 }
 
-func (m *mockAction) Execute(ctx context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
+func (m *mockAction) Execute(
+	ctx context.Context,
+	_ registry.ActionInput,
+) (registry.ActionOutput, error) {
 	m.calls.Add(1)
 
 	if m.sleep > 0 {
@@ -97,7 +100,7 @@ func TestEngine_SingleNode_Success(t *testing.T) {
 
 	raw := (&wfBuilder{}).addNode("n1", "std@noop").json(t)
 
-	if err := engine.Run(context.Background(), raw); err != nil {
+	if _, err := engine.Run(context.Background(), raw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -110,12 +113,12 @@ func TestEngine_RunWithResult_SingleTerminal_ReturnsTerminalOutput(t *testing.T)
 	engine := newEngine(t, map[string]registry.Action{"std@noop": &mockAction{}})
 	raw := (&wfBuilder{}).addNode("n1", "std@noop").json(t)
 
-	res, err := engine.RunWithResult(context.Background(), raw)
+	res, err := engine.Run(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	m, ok := res.(map[string]any)
+	m, ok := res.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected result type: %T", res)
 	}
@@ -159,7 +162,7 @@ func TestEngine_RunWithHistory_ReturnsResultAndNodeHistory(t *testing.T) {
 	engine := newEngine(t, map[string]registry.Action{"std@noop": &mockAction{}})
 	raw := (&wfBuilder{}).addNode("n1", "std@noop").json(t)
 
-	h, err := engine.RunWithHistory(context.Background(), raw)
+	h, err := engine.Run(t.Context(), raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,7 +185,11 @@ func TestEngine_RunWithHistory_ReturnsResultAndNodeHistory(t *testing.T) {
 	}
 
 	if len(h.HistoryGraph.Events) != len(h.History) {
-		t.Fatalf("graph events must match flat history length: %d != %d", len(h.HistoryGraph.Events), len(h.History))
+		t.Fatalf(
+			"graph events must match flat history length: %d != %d",
+			len(h.HistoryGraph.Events),
+			len(h.History),
+		)
 	}
 
 	if len(h.HistoryGraph.Edges) == 0 {
@@ -226,7 +233,7 @@ func TestEngine_LinearChain_ExecutedInOrder(t *testing.T) {
 		addEdge("b", "c").
 		json(t)
 
-	if err := engine.Run(context.Background(), raw); err != nil {
+	if _, err := engine.Run(t.Context(), raw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -272,7 +279,7 @@ func TestEngine_ParallelBranches(t *testing.T) {
 
 	start := time.Now()
 
-	if err := engine.Run(context.Background(), raw); err != nil {
+	if _, err := engine.Run(t.Context(), raw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -281,7 +288,11 @@ func TestEngine_ParallelBranches(t *testing.T) {
 	// sequential execution would take ≥ 1.8 * sleep; parallel ≈ sleep + overhead
 	maxAllowed := time.Duration(float64(sleep) * 1.8)
 	if elapsed > maxAllowed {
-		t.Errorf("b and c should run in parallel: elapsed %v > max allowed %v (1.8× sleep)", elapsed, maxAllowed)
+		t.Errorf(
+			"b and c should run in parallel: elapsed %v > max allowed %v (1.8× sleep)",
+			elapsed,
+			maxAllowed,
+		)
 	}
 }
 
@@ -299,7 +310,7 @@ func TestEngine_NodeError_WorkflowFails(t *testing.T) {
 		addEdge("a", "b").
 		json(t)
 
-	err := engine.Run(context.Background(), raw)
+	_, err := engine.Run(context.Background(), raw)
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
@@ -325,10 +336,11 @@ func TestEngine_CancelContext_DownstreamDoesNotStart(t *testing.T) {
 		addEdge("a", "b").
 		json(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- engine.Run(ctx, raw)
+		_, err := engine.Run(ctx, raw)
+		errCh <- err
 	}()
 
 	// Wait until the first node actually starts before cancelling.
@@ -351,7 +363,10 @@ func TestEngine_CancelContext_DownstreamDoesNotStart(t *testing.T) {
 	}
 
 	if b.calls.Load() != 0 {
-		t.Fatalf("downstream node should not start after cancellation, got %d calls", b.calls.Load())
+		t.Fatalf(
+			"downstream node should not start after cancellation, got %d calls",
+			b.calls.Load(),
+		)
 	}
 }
 
@@ -374,7 +389,7 @@ func TestEngine_FanIn_OneParentFailed_ChildSkipped(t *testing.T) {
 		addEdge("p2", "c").
 		json(t)
 
-	err := engine.Run(context.Background(), raw)
+	_, err := engine.Run(context.Background(), raw)
 	if err == nil {
 		t.Fatal("want workflow error, got nil")
 	}
@@ -384,7 +399,10 @@ func TestEngine_FanIn_OneParentFailed_ChildSkipped(t *testing.T) {
 	}
 
 	if child.calls.Load() != 0 {
-		t.Fatalf("fan-in child must be skipped when any parent fails, got %d calls", child.calls.Load())
+		t.Fatalf(
+			"fan-in child must be skipped when any parent fails, got %d calls",
+			child.calls.Load(),
+		)
 	}
 }
 
@@ -393,7 +411,7 @@ func TestEngine_UnknownActionType_Fails(t *testing.T) {
 
 	raw := (&wfBuilder{}).addNode("n1", "std@unknown").json(t)
 
-	err := engine.Run(context.Background(), raw)
+	_, err := engine.Run(context.Background(), raw)
 	if err == nil {
 		t.Fatal("want error for unknown action type, got nil")
 	}
@@ -413,7 +431,7 @@ func TestEngine_UnknownActionType_DoesNotRunAnyNodes(t *testing.T) {
 		addEdge("a", "b").
 		json(t)
 
-	err := engine.Run(context.Background(), raw)
+	_, err := engine.Run(context.Background(), raw)
 	if err == nil {
 		t.Fatal("want validation error for unknown action type, got nil")
 	}
@@ -423,7 +441,10 @@ func TestEngine_UnknownActionType_DoesNotRunAnyNodes(t *testing.T) {
 	}
 
 	if known.calls.Load() != 0 {
-		t.Fatalf("expected no side-effects before validation failure, got %d calls", known.calls.Load())
+		t.Fatalf(
+			"expected no side-effects before validation failure, got %d calls",
+			known.calls.Load(),
+		)
 	}
 }
 
@@ -435,7 +456,7 @@ func TestEngine_NewEngine_NilLogger(t *testing.T) {
 	engine := workflow.NewEngine(reg, 1, nil, nil)
 	raw := (&wfBuilder{}).addNode("n1", "std@noop").json(t)
 
-	if err := engine.Run(context.Background(), raw); err != nil {
+	if _, err := engine.Run(context.Background(), raw); err != nil {
 		t.Fatalf("unexpected error with nil logger: %v", err)
 	}
 
@@ -452,7 +473,7 @@ func TestEngine_NewEngine_NilRegistry_DefaultsAndRegistryAccessible(t *testing.T
 
 	raw := (&wfBuilder{}).addNode("n1", "std@noop").json(t)
 
-	if err := engine.Run(context.Background(), raw); err != nil {
+	if _, err := engine.Run(context.Background(), raw); err != nil {
 		t.Fatalf("unexpected error with nil registry: %v", err)
 	}
 
@@ -480,7 +501,7 @@ func TestEngine_DuplicateEdge_FailsValidation(t *testing.T) {
 		addEdge("a", "b").
 		json(t)
 
-	err := engine.Run(context.Background(), raw)
+	_, err := engine.Run(context.Background(), raw)
 	if err == nil {
 		t.Fatal("want validation error for duplicate edge, got nil")
 	}
@@ -504,7 +525,8 @@ func TestEngine_CancelContext_NodeWaitingForWorkerDoesNotStart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- engine.Run(ctx, raw)
+		_, err := engine.Run(ctx, raw)
+		errCh <- err
 	}()
 
 	select {
@@ -526,14 +548,17 @@ func TestEngine_CancelContext_NodeWaitingForWorkerDoesNotStart(t *testing.T) {
 	}
 
 	if b.calls.Load() != 0 {
-		t.Fatalf("node waiting for worker slot should not start after cancellation, got %d calls", b.calls.Load())
+		t.Fatalf(
+			"node waiting for worker slot should not start after cancellation, got %d calls",
+			b.calls.Load(),
+		)
 	}
 }
 
 func TestEngine_InvalidJSON_Fails(t *testing.T) {
 	engine := newEngine(t, nil)
 
-	if err := engine.Run(context.Background(), json.RawMessage(`{invalid`)); err == nil {
+	if _, err := engine.Run(context.Background(), json.RawMessage(`{invalid`)); err == nil {
 		t.Fatal("want parse error, got nil")
 	}
 }
@@ -553,7 +578,7 @@ func TestEngine_CyclicWorkflow_Fails(t *testing.T) {
 		},
 	})
 
-	if err := engine.Run(context.Background(), raw); err == nil {
+	if _, err := engine.Run(context.Background(), raw); err == nil {
 		t.Fatal("want validation error for cycle, got nil")
 	}
 }
@@ -579,7 +604,10 @@ func newBlockingAction(release <-chan struct{}) *blockingAction {
 	}
 }
 
-func (b *blockingAction) Execute(ctx context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
+func (b *blockingAction) Execute(
+	ctx context.Context,
+	_ registry.ActionInput,
+) (registry.ActionOutput, error) {
 	b.once.Do(func() { close(b.started) })
 
 	select {
@@ -596,7 +624,10 @@ type stubbornAction struct {
 	err   error
 }
 
-func (s *stubbornAction) Execute(_ context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
+func (s *stubbornAction) Execute(
+	_ context.Context,
+	_ registry.ActionInput,
+) (registry.ActionOutput, error) {
 	if s.sleep > 0 {
 		time.Sleep(s.sleep)
 	}
@@ -608,7 +639,10 @@ func (s *stubbornAction) Execute(_ context.Context, _ registry.ActionInput) (reg
 	return registry.ActionOutput{Data: map[string]any{"ok": true}}, nil
 }
 
-func (r *recordAction) Execute(_ context.Context, _ registry.ActionInput) (registry.ActionOutput, error) {
+func (r *recordAction) Execute(
+	_ context.Context,
+	_ registry.ActionInput,
+) (registry.ActionOutput, error) {
 	<-r.mu
 	*r.order = append(*r.order, r.id)
 	r.mu <- struct{}{}

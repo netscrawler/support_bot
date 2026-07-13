@@ -1,4 +1,4 @@
-package core
+package event
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type EventRepository struct {
 	log *slog.Logger
 }
 
-func NewEventRepository(db *sqlx.DB, log *slog.Logger) *EventRepository {
+func NewRepository(db *sqlx.DB, log *slog.Logger) *EventRepository {
 	l := log.With("module", "event_repository")
 
 	return &EventRepository{

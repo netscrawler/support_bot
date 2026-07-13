@@ -1,4 +1,4 @@
-package eventcreator
+package event
 
 import (
 	"context"

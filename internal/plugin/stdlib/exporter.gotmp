@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -13,7 +13,7 @@ type ExportFunc func(
 	ctx context.Context,
 	data map[string][]map[string]any,
 	exp models.Export,
-) (models.ExportedReport, error)
+) (models.Data, error)
 
 type ExporterPlugin struct {
 	exp ExportFunc

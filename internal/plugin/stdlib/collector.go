@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	models "support_bot/internal/models/report"
+	models "support_bot/internal/models"
 
 	lua "github.com/yuin/gopher-lua"
 )

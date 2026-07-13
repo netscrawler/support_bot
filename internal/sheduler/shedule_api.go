@@ -1,4 +1,4 @@
-package core
+package sheduler
 
 type SheduleAPIEvent string
 

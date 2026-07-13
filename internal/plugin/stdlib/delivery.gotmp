@@ -5,13 +5,13 @@ import (
 	"support_bot/internal/delivery/smtp"
 	"time"
 
-	models "support_bot/internal/models/report"
+	models "support_bot/internal/models"
 
 	lua "github.com/yuin/gopher-lua"
 )
 
 type TelegramChatSender interface {
-	Send(ctx context.Context, chat models.TargetTelegramChat, data ...models.ExportedReport) error
+	Send(ctx context.Context, chat models.Chat, data ...models.Report) error
 }
 
 type FileUploader interface {

@@ -6,17 +6,16 @@ import (
 	"log/slog"
 	"time"
 
-	eventcreator "support_bot/internal/event_creator"
+	"github.com/robfig/cron/v3"
+	"support_bot/internal/event"
 	"support_bot/internal/models"
 	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/repository"
-
-	"github.com/robfig/cron/v3"
 )
 
 type Report struct {
 	*sheduler.SheduleAPI
-	*eventcreator.EventAPI
+	*event.EventAPI
 
 	repo *repository.ReportRepository
 
@@ -29,7 +28,7 @@ const reportsPageSize = 5
 
 func NewReportService(
 	shd *sheduler.SheduleAPI,
-	eventAPI *eventcreator.EventAPI,
+	eventAPI *event.EventAPI,
 	repo *repository.ReportRepository,
 	mbURL string,
 	log *slog.Logger,

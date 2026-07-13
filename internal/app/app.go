@@ -14,7 +14,7 @@ import (
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
-	eventcreator "support_bot/internal/event_creator"
+	eventcreator "support_bot/internal/event"
 	"support_bot/internal/generator"
 	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/models"
@@ -247,7 +247,7 @@ func (a *app) init(ctx context.Context) error {
 	shd := sheduler.NewSheduler(shdLoader, log, sheduleEvents, shdAPI)
 
 	evRepository := eventcreator.NewRepository(rdb.GetConn(), log)
-	evC := eventcreator.New(sheduleEvents, eventChan, log, evRepository)
+	evC := eventcreator.NewCreator(sheduleEvents, eventChan, log, evRepository)
 	evAPI := eventcreator.NewEventAPI(eventChan, specialEventChan)
 
 	eval, err := evaluator.NewEvaluator()

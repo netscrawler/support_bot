@@ -17,6 +17,8 @@ type Report struct {
 	Recipients []Recipient
 	Exports    []Export
 	Evaluation string
+
+	Workflow *json.RawMessage
 }
 
 type ReportInfo struct {

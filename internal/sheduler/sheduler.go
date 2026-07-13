@@ -1,11 +1,12 @@
-package core
+package sheduler
 
 import (
 	"context"
 	"log/slog"
 
-	"github.com/robfig/cron/v3"
 	models2 "support_bot/internal/models"
+
+	"github.com/robfig/cron/v3"
 )
 
 type SheduleLoader interface {

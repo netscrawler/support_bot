@@ -1,4 +1,4 @@
-package eventcreator
+package event
 
 import (
 	"context"
@@ -30,7 +30,7 @@ type EventCreator struct {
 	ep  EventProvider
 }
 
-func New(
+func NewCreator(
 	input chan models.Event,
 	out chan models.Event,
 	log *slog.Logger,

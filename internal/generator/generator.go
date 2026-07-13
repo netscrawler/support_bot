@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"support_bot/internal/collector"
+	"support_bot/internal/core/workflow"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
@@ -37,6 +38,8 @@ type Generator struct {
 	numWorkers uint8
 
 	sentMsgRepo SentMsgRepository
+
+	engine *workflow.Engine
 
 	log *slog.Logger
 }
@@ -106,11 +109,18 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
-	data, err := g.clct.Collect(ctx, report.Queries...)
-	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
-		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
+	var data map[string][]map[string]any
+	var dataErr error
 
-		return err
+	if report.Workflow != nil {
+		data, dataErr = g.runWithCustomFlow(ctx, report)
+	} else {
+		data, dataErr = g.clct.Collect(ctx, report.Queries...)
+	}
+
+	if dataErr != nil && !errors.Is(dataErr, collector.ErrEmtyCard) {
+		l.ErrorContext(ctx, "error while collect data", slog.Any("error", dataErr))
+		return dataErr
 	}
 
 	approve, err := g.eval.Evaluate(ctx, data, report.Evaluation)
@@ -175,4 +185,16 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 	}
 
 	return nil
+}
+
+func (g *Generator) runWithCustomFlow(
+	ctx context.Context,
+	report models.Report,
+) (map[string][]map[string]any, error) {
+	history, err := g.engine.Run(ctx, *report.Workflow, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return history.Result.(map[string][]map[string]any), nil
 }

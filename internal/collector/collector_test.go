@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
+	cmock "support_bot/internal/collector/mock"
+	"support_bot/internal/models"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"support_bot/internal/collector"
-	cmock "support_bot/internal/collector/mock"
-	"support_bot/internal/models"
 )
 
 func TestCollect(t *testing.T) {
@@ -35,7 +35,7 @@ func TestCollect(t *testing.T) {
 			{"field": "value1"},
 		}, nil)
 
-		c := collector.NewCollector(0, df, l)
+		c := NewCollector(0, df, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -67,7 +67,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, l)
+		c := NewCollector(3, df, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -106,7 +106,7 @@ func TestCollect(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
-		c := collector.NewCollector(3, df, l)
+		c := NewCollector(3, df, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -143,7 +143,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
 
-		c := collector.NewCollector(2, df, slog.Default())
+		c := NewCollector(2, df, slog.Default())
 
 		start := time.Now()
 
@@ -237,7 +237,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, slog.Default())
+		c := NewCollector(3, df, slog.Default())
 
 		var wg sync.WaitGroup
 

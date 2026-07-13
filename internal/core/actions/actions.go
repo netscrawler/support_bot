@@ -7,12 +7,9 @@ package actions
 // Plugin format:     "plugin@<plugin_name>"
 const (
 	// Built-in action types.
-	ActionTypeCollect  = "std@collect"
-	ActionTypeEvaluate = "std@evaluate"
-	ActionTypeExport   = "std@export"
-	ActionTypeSend     = "std@send"
-	ActionTypeStart    = "std@start"
-	ActionTypeEnd      = "std@end"
+	ActionTypeCollect = "std@collect"
+	ActionTypeStart   = "std@start"
+	ActionTypeEnd     = "std@end"
 
 	// DefaultWorkflow is the well-known type for the legacy linear pipeline.
 	DefaultWorkflow = "std@default"
@@ -25,6 +22,4 @@ const (
 	// stored as a key in the output map and is available to downstream nodes via
 	// the execution context (e.g. "$.query_node.totals").
 	ActionTypeQuery = "std@query"
-
-	ActionTypeSave = "std@save"
 )

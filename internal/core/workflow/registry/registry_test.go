@@ -15,7 +15,10 @@ func TestRegistryRegister_PanicsOnEmptyType(t *testing.T) {
 	reg := New()
 
 	assertPanics(t, func() {
-		reg.Register("", noopAction{})
+		err := reg.Register("", noopAction{})
+		if err != nil {
+			panic(err)
+		}
 	})
 }
 
@@ -23,7 +26,10 @@ func TestRegistryRegister_PanicsOnNilAction(t *testing.T) {
 	reg := New()
 
 	assertPanics(t, func() {
-		reg.Register("std@noop", nil)
+		err := reg.Register("std@noop", nil)
+		if err != nil {
+			panic(err)
+		}
 	})
 }
 
@@ -31,11 +37,17 @@ func TestRegistryRegisterOrReplace_PanicsOnInvalidInput(t *testing.T) {
 	reg := New()
 
 	assertPanics(t, func() {
-		reg.RegisterOrReplace("   ", noopAction{})
+		err := reg.RegisterOrReplace("   ", noopAction{})
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	assertPanics(t, func() {
-		reg.RegisterOrReplace("std@noop", nil)
+		err := reg.RegisterOrReplace("std@noop", nil)
+		if err != nil {
+			panic(err)
+		}
 	})
 }
 

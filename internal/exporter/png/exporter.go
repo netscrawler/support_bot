@@ -11,10 +11,11 @@ import (
 	"math"
 	"strings"
 
-	"github.com/fogleman/gg"
-	"golang.org/x/image/font"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
+
+	"github.com/fogleman/gg"
+	"golang.org/x/image/font"
 )
 
 type Exporter struct {

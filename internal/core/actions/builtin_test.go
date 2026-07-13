@@ -6,11 +6,9 @@ import (
 	"errors"
 	"testing"
 
+	"support_bot/internal/core/workflow"
 	"support_bot/internal/core/workflow/registry"
-
-	workflow "support_bot/internal/core/workflow"
-
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 )
 
 type fakeCollector struct {
@@ -58,31 +56,10 @@ func (f *fakeEvaluator) Evaluate(
 	return f.ok, nil
 }
 
-type fakeSender struct {
-	called  int
-	targets []models.Targeted
-	reports []models.ExportedReport
-	err     error
-}
-
-func (f *fakeSender) Send(
-	_ context.Context,
-	targets []models.Targeted,
-	reports []models.ExportedReport,
-) error {
-	f.called++
-	f.targets = targets
-	f.reports = reports
-
-	return f.err
-}
-
 func TestRegisterBuiltins_Success(t *testing.T) {
 	reg := registry.New()
 	deps := BuiltinDeps{
 		Collector: &fakeCollector{},
-		Evaluator: &fakeEvaluator{},
-		Sender:    &fakeSender{},
 	}
 
 	if err := RegisterBuiltins(reg, deps); err != nil {
@@ -91,9 +68,6 @@ func TestRegisterBuiltins_Success(t *testing.T) {
 
 	for _, typ := range []string{
 		workflow.ActionTypeCollect,
-		workflow.ActionTypeEvaluate,
-		workflow.ActionTypeExport,
-		workflow.ActionTypeSend,
 	} {
 		if !reg.Has(typ) {
 			t.Fatalf("expected registry to contain %s", typ)

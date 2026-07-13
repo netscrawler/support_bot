@@ -1,11 +1,12 @@
-package core
+package sheduler
 
 import (
 	"context"
 	"log/slog"
 
-	"github.com/jmoiron/sqlx"
 	"support_bot/internal/models"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type SheduleRepo struct {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+
 	"support_bot/internal/core/actions"
 	"support_bot/internal/core/workflow/definition"
 	"support_bot/internal/core/workflow/execution"
@@ -63,7 +64,12 @@ var ErrUnknownActionType = errors.New("workflow has unknown action type")
 //   - reg     — action registry, pre-populated with all supported action types
 //   - workers — max parallel nodes (defaults to 4 when <= 0)
 //   - log     — structured logger
-func NewEngine(reg *registry.Registry, workers int, log *slog.Logger, provider externalActionProvider) *Engine {
+func NewEngine(
+	reg *registry.Registry,
+	workers int,
+	log *slog.Logger,
+	provider externalActionProvider,
+) *Engine {
 	if workers <= 0 {
 		workers = 4
 	}
@@ -84,7 +90,11 @@ func NewEngine(reg *registry.Registry, workers int, log *slog.Logger, provider e
 	}
 }
 
-func (e *Engine) RunSimple(ctx context.Context, raw json.RawMessage, meta ...map[string]string) error {
+func (e *Engine) RunSimple(
+	ctx context.Context,
+	raw json.RawMessage,
+	meta ...map[string]string,
+) error {
 	_, err := e.RunWithResult(ctx, raw, meta...)
 
 	return err
@@ -92,7 +102,11 @@ func (e *Engine) RunSimple(ctx context.Context, raw json.RawMessage, meta ...map
 
 // RunWithResult executes a workflow and returns the final output produced by
 // pseudo end node.
-func (e *Engine) RunWithResult(ctx context.Context, raw json.RawMessage, meta ...map[string]string) (any, error) {
+func (e *Engine) RunWithResult(
+	ctx context.Context,
+	raw json.RawMessage,
+	meta ...map[string]string,
+) (any, error) {
 	runHistory, err := e.Run(ctx, raw, meta...)
 	if err != nil {
 		return nil, err
@@ -110,7 +124,11 @@ func (e *Engine) RunWithResult(ctx context.Context, raw json.RawMessage, meta ..
 //  4. Execute — Scheduler + Executor drive parallel node execution
 //
 // Returns nil on success. Returns the first node error encountered on failure.
-func (e *Engine) Run(ctx context.Context, raw json.RawMessage, meta ...map[string]string) (*RunHistory, error) {
+func (e *Engine) Run(
+	ctx context.Context,
+	raw json.RawMessage,
+	meta ...map[string]string,
+) (*RunHistory, error) {
 	// 1. parse
 	def, err := definition.Parse(raw)
 	if err != nil {
@@ -135,8 +153,10 @@ func (e *Engine) Run(ctx context.Context, raw json.RawMessage, meta ...map[strin
 		return nil, fmt.Errorf("workflow: register pseudo actions: %w", err)
 	}
 
-	if err := e.eP.RegisterFromDef(ctx, nReg, def); err != nil {
-		return nil, fmt.Errorf("workflow: register external actions: %w", err)
+	if e.eP != nil {
+		if err := e.eP.RegisterFromDef(ctx, nReg, def); err != nil {
+			return nil, fmt.Errorf("workflow: register external actions: %w", err)
+		}
 	}
 
 	if err := validateRegisteredActions(def, nReg); err != nil {
@@ -192,7 +212,11 @@ func (e *Engine) Registry() *registry.Registry {
 	return e.reg
 }
 
-func (e *Engine) collectNeededActionsToRegistry(ctx context.Context, modules []string, reg *registry.Registry) error {
+func (e *Engine) collectNeededActionsToRegistry(
+	ctx context.Context,
+	modules []string,
+	reg *registry.Registry,
+) error {
 	for _, module := range modules {
 		act, err := e.eP.GetAction(ctx, module)
 		if err != nil {
