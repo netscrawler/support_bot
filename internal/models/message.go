@@ -154,13 +154,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]S
 			if err != nil {
 				sendErr = fmt.Errorf("sending text: %w", err)
 			} else {
-				retMsg = append(retMsg, SentMessage{
-					MessageID: msg.MessageID,
-					Time:      msg.Time,
-					ChatID:    msg.ChatID,
-					ThreadID:  msg.ThreadID,
-					Title:     msg.Title,
-				})
+				retMsg = append(retMsg, *msg)
 			}
 		}
 	}
@@ -170,15 +164,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]S
 		if err != nil {
 			sendErr = fmt.Errorf("sending document: %w", err)
 		} else {
-			for _, m := range msg {
-				retMsg = append(retMsg, SentMessage{
-					MessageID: m.MessageID,
-					Time:      m.Time,
-					ChatID:    m.ChatID,
-					ThreadID:  m.ThreadID,
-					Title:     m.Title,
-				})
-			}
+			retMsg = append(retMsg, msg...)
 		}
 	}
 
@@ -187,15 +173,7 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]S
 		if err != nil {
 			sendErr = fmt.Errorf("sending document: %w", err)
 		} else {
-			for _, m := range msg {
-				retMsg = append(retMsg, SentMessage{
-					MessageID: m.MessageID,
-					Time:      m.Time,
-					ChatID:    m.ChatID,
-					ThreadID:  m.ThreadID,
-					Title:     m.Title,
-				})
-			}
+			retMsg = append(retMsg, msg...)
 		}
 	}
 

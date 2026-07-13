@@ -55,7 +55,7 @@ type recipient struct {
 	ThreadID                *int    `db:"thread_id"`
 	ChatTitle               *string `db:"title"`
 	ChatType                *string `db:"chat_type"`
-	ChType                  string  `db:"ch_type"`
+	ChType                  *string `db:"ch_type"`
 	Description             *string `db:"description"`
 	IsActive                *bool   `db:"is_active"`
 	NeedDeleteAfterEndOfDay *bool   `db:"need_delete_after_end_of_day"`
@@ -79,7 +79,7 @@ func mapRecipientToModel(r recipient) models.Recipient {
 			Type:        deref(r.ChatType),
 			Description: r.Description,
 			IsActive:    *r.IsActive,
-			ChType:      r.ChType,
+			ChType:      deref(r.ChType),
 		}
 	}
 

@@ -31,7 +31,7 @@ func (rr *SentMsgRepository) saveTgMsg(
 	reportName string,
 	msgs []models.SentMessage,
 ) error {
-	const query = `insert into sent_messages(chat_id, thread_id, message_id,message_id_str, title, sent_at, report_name, ch_type) values ($1, $2, $3, $4, $5, $6, $7);`
+	const query = `insert into sent_messages(chat_id, thread_id, message_id,message_id_str, title, sent_at, report_name, ch_type) values ($1, $2, $3, $4, $5, $6, $7, $8);`
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("chat repository create: %w", err)
