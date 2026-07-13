@@ -39,7 +39,6 @@ func NewUser(tgID int64, username, firstname string, lastname *string, isAdmin b
 	return u
 }
 
-//nolint:gosec
 func NewEmptyUser(username string, isAdmin bool) User {
 	role := UserRole
 

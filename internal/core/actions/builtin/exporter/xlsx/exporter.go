@@ -7,11 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"support_bot/internal/pkg"
-
-	models "support_bot/internal/models/report"
-
 	"github.com/xuri/excelize/v2"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct {
@@ -32,7 +30,7 @@ func New(
 	}
 }
 
-func (e *Exporter) Export() (*models.FileData, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	buf, err := e.createXlsxBook(e.buf)
 	if err != nil {
 		return nil, err
@@ -43,13 +41,14 @@ func (e *Exporter) Export() (*models.FileData, error) {
 		return nil, err
 	}
 
-	return fd, nil
+	return &fd, nil
 }
 
 func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
+	defer f.Close()
 
 	for unit, records := range dataMap {
 		if len(records) == 0 {

@@ -1,7 +1,9 @@
 package models
 
-// Chat представляет чат для отправки уведомлений.
-type Chat struct {
+import "fmt"
+
+// TgChatDTO представляет чат для отправки уведомлений.
+type TgChatDTO struct {
 	ID          int     `db:"id"          json:"id"`
 	ChatID      int64   `db:"chat_id"     json:"chat_id"`
 	Title       string  `db:"title"       json:"title"`
@@ -11,8 +13,8 @@ type Chat struct {
 	ThreadID    int64
 }
 
-func NewChat(id int64, title, cType, desc string) *Chat {
-	return &Chat{
+func NewTgChatDTO(id int64, title, cType, desc string) *TgChatDTO {
+	return &TgChatDTO{
 		ChatID:      id,
 		Title:       title,
 		Type:        cType,
@@ -20,10 +22,16 @@ func NewChat(id int64, title, cType, desc string) *Chat {
 	}
 }
 
-func (c *Chat) Activate() {
+func (c *TgChatDTO) Activate() {
 	c.IsActive = true
 }
 
-func (c *Chat) DeActivate() {
+func (c *TgChatDTO) DeActivate() {
 	c.IsActive = false
+}
+
+func (c *TgChatDTO) String() string {
+	return fmt.Sprintf(`Чат: 
+	ID: %d
+	Title: %s`, c.ChatID, c.Title)
 }

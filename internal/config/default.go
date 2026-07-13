@@ -1,12 +1,14 @@
 package config
 
 import (
+	"time"
+
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
-	plugins "support_bot/internal/plugin"
 	"support_bot/internal/postgres"
-	"time"
+	tgbot "support_bot/internal/tg_bot"
 )
 
 func Default() *Config {
@@ -18,7 +20,7 @@ func Default() *Config {
 			Format: "text",
 		},
 		MetabaseDomain: "https://metabase.domain",
-		Database: postgres.PostgresConfig{
+		Database: postgres.Config{
 			Port:            5432,
 			Host:            "localhost",
 			User:            "postgres",
@@ -31,15 +33,22 @@ func Default() *Config {
 			MaxConnIdleTime: 2 * time.Minute,
 			DatabaseConnect: 30 * time.Second,
 		},
-		Bot: Bot{
+		TgBot: tgbot.Config{
 			TelegramToken: "telegram_bot_token",
 			CleanUpTime:   10 * time.Minute,
 			BotPoll:       30 * time.Second,
 		},
+		MaxBot: maxbot.Config{
+			Token:       "max_bot_token",
+			CleanUpTime: 0,
+			BotPoll:     0,
+			ApiProxy:    "",
+			Enabled:     false,
+		},
 		Timeout: timeout{
 			Shutdown: 5 * time.Second,
 		},
-		SMB: smb.SMBConfig{
+		SMB: smb.Config{
 			Address:  "localhost:542",
 			User:     "user",
 			Password: "password",
@@ -47,16 +56,11 @@ func Default() *Config {
 			Share:    "public",
 			Active:   true,
 		},
-		SMTP: smtp.SMTPConfig{
+		SMTP: smtp.Config{
 			Host:     "smtp.example.com",
 			Port:     "465",
 			Email:    "example@example.com",
 			Password: "password",
-		},
-		LuaPlugins: plugins.Config{
-			ExecutionTimeout: 1 * time.Minute,
-			MaxMemoryMB:      10 * 1024 * 1024,
-			AllowedModules:   make([]string, 0),
 		},
 	}
 }

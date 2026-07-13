@@ -1,9 +1,8 @@
 package handlers
 
 import (
-	models "support_bot/internal/models/notify"
-
 	tele "gopkg.in/telebot.v4"
+	"support_bot/internal/models"
 )
 
 type TextHandler struct {
@@ -26,11 +25,11 @@ func NewTextHandler(
 
 func (h *TextHandler) ProcessTextInput(c tele.Context) error {
 	if c.Get("role") == models.UserRole {
-		return h.userhandler.ProcessUserInput(c)
+		return h.userhandler.processUserInput(c)
 	}
 
 	if c.Get("role") == models.AdminRole || c.Get("role") == models.PrimaryAdminRole {
-		return h.adminhandler.ProcessAdminInput(c)
+		return h.adminhandler.processAdminInput(c)
 	}
 
 	return nil

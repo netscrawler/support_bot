@@ -13,5 +13,5 @@ reports/
 .env
 docker.env
 config.json
-*.sql
 .idea
+migrations/*

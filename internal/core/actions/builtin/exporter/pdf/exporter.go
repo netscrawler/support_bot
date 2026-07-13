@@ -1,32 +1,34 @@
 package pdf
 
 import (
-	"bytes"
-	models "support_bot/internal/models/report"
+	"strings"
 
 	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
+	"support_bot/internal/models"
 )
 
 type Exporter struct {
-	data *models.FileData
+	data []models.Data
 	name string
 }
 
-func New(data *models.FileData, name string) *Exporter {
+func New(name string, data ...models.Data) *Exporter {
 	return &Exporter{
 		data: data,
 		name: name,
 	}
 }
 
-func (e *Exporter) Export() (*models.FileData, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	pdfg, err := wkhtmltopdf.NewPDFGenerator()
 	if err != nil {
 		return nil, err
 	}
 
-	page := wkhtmltopdf.NewPageReader(bytes.NewReader(e.data.File.Bytes()))
-	pdfg.AddPage(page)
+	for _, b := range e.data {
+		page := wkhtmltopdf.NewPageReader(strings.NewReader(b.Data.String()))
+		pdfg.AddPage(page)
+	}
 
 	if err := pdfg.Create(); err != nil {
 		return nil, err
@@ -37,5 +39,5 @@ func (e *Exporter) Export() (*models.FileData, error) {
 		return nil, err
 	}
 
-	return fd, nil
+	return &fd, nil
 }

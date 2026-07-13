@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	models "support_bot/internal/models/report"
+	"support_bot/internal/models"
 )
 
 const defaultParallelCollectors = 32
@@ -30,12 +30,12 @@ func NewCollector(parallel uint8, mb DataFetcher, log *slog.Logger) *Collector {
 	}
 
 	l.Info("create collector", slog.Any("parallel_query", parallel))
-	semaphor := make(chan struct{}, parallel)
+	semaphore := make(chan struct{}, parallel)
 
 	return &Collector{
 		mb:       mb,
 		log:      l,
-		parallel: semaphor,
+		parallel: semaphore,
 	}
 }
 
@@ -45,10 +45,10 @@ func (c *Collector) Collect(
 ) (map[string][]map[string]any, error) {
 	start := time.Now()
 
-	c.log.DebugContext(ctx, "Start collecting data")
+	c.log.InfoContext(ctx, "Start collecting data")
 
 	defer func() {
-		c.log.DebugContext(
+		c.log.InfoContext(
 			ctx,
 			"Finish collecting data",
 			slog.Any("time elapsed", time.Since(start)),
@@ -56,7 +56,7 @@ func (c *Collector) Collect(
 	}()
 
 	if len(cards) == 0 {
-		c.log.DebugContext(ctx, "empty card list")
+		c.log.ErrorContext(ctx, "empty card list")
 
 		return nil, ErrEmtyCard
 	}

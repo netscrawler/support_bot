@@ -18,8 +18,6 @@ GOARCH = amd64
 
 BUILD_FLAGS = -ldflags "\
 			  -s -w \
-			  -linkmode external \
-			  -extldflags "-static" \
 			  -X main.Version=$(VERSION) \
 			  -X main.Commit=$(COMMIT) \
 			  -X main.BuildTime=$(BUILD_TIME)"
@@ -29,13 +27,16 @@ BUILD_FLAGS = -ldflags "\
 all: build
 
 build:
-	CC=musl-gcc CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
 
 run: build
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go run $(BUILD_FLAGS) $(MAIN_PACKAGE) --config=$(CONFIG_PATH)
 
 clean:
 	rm -f ./bin/$(BINARY_NAME)
+
+release: build
+	scp $(BIN_DIR)/$(BINARY_NAME) ${RELEASE_USER}@${RELEASE_SRV}:${RELEASE_PATH}/support_bot_new
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)

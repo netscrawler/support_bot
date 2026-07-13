@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"html/template"
 	"maps"
-	"support_bot/internal/pkg/text"
-
-	models "support_bot/internal/models/report"
 
 	"github.com/Masterminds/sprig/v3"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/text"
 )
 
 type Exporter struct {
@@ -25,7 +24,7 @@ func New(data any, template string, name string) *Exporter {
 	}
 }
 
-func (e *Exporter) Export() (*models.FileData, error) {
+func (e *Exporter) Export() (*models.Data, error) {
 	allFuncs := sprig.FuncMap()
 	maps.Copy(allFuncs, text.FuncMap)
 
@@ -46,5 +45,5 @@ func (e *Exporter) Export() (*models.FileData, error) {
 		return nil, err
 	}
 
-	return fd, nil
+	return &fd, nil
 }

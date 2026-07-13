@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/robfig/cron/v3"
 )
@@ -9,15 +10,15 @@ import (
 type SheduleUnit struct {
 	Crontab string `db:"cron"`
 	Name    string `db:"name"`
+
+	EventType int `db:"event_type"`
+}
+
+func (s SheduleUnit) String() string {
+	return fmt.Sprintf("%s: %s", s.Name, s.Crontab)
 }
 
 type CronVO string
-
-type Cron struct {
-	Cron        CronVO
-	Name        string
-	Description *string
-}
 
 var ErrInvalidCron = errors.New("invalid cron")
 

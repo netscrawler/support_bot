@@ -2,21 +2,21 @@ package pkg
 
 import (
 	"embed"
-	"support_bot/assets"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
+	"support_bot/assets"
 )
 
 func GetFontFaceBold(fontSize float64) (font.Face, error) {
-	return GetFontFaceFromEmbedFS(assets.FontFS, "fonts/bold.ttf", fontSize)
+	return getFontFaceFromEmbedFS(assets.FontFS, "fonts/bold.ttf", fontSize)
 }
 
 func GetFontFaceNormal(fontSize float64) (font.Face, error) {
-	return GetFontFaceFromEmbedFS(assets.FontFS, "fonts/font.ttf", fontSize)
+	return getFontFaceFromEmbedFS(assets.FontFS, "fonts/font.ttf", fontSize)
 }
 
-func GetFontFaceFromEmbedFS(fs embed.FS, path string, fontSize float64) (font.Face, error) {
+func getFontFaceFromEmbedFS(fs embed.FS, path string, fontSize float64) (font.Face, error) {
 	// Чтение шрифта из embed.FS
 	fontBytes, err := fs.ReadFile(path)
 	if err != nil {

@@ -2,12 +2,12 @@ package text_test
 
 import (
 	"fmt"
-	"support_bot/internal/pkg/text"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"support_bot/internal/pkg/text"
 )
 
 func TestExecuteTemplate(t *testing.T) {

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"support_bot/internal/core/actions/builtin/collector"
-	cmock "support_bot/internal/core/actions/builtin/collector/mock"
 	"sync"
 	"testing"
 	"time"
@@ -14,8 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	models "support_bot/internal/models/report"
+	"support_bot/internal/collector"
+	cmock "support_bot/internal/collector/mock"
+	"support_bot/internal/models"
 )
 
 func TestCollect(t *testing.T) {

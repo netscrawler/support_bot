@@ -39,7 +39,7 @@ database:
 
 # Настройки Telegram-бота.
 # Используется для приема команд и отправки уведомлений.
-bot:
+telegram:
     # Телеграмм токен бота полученый от @BotFather
     # Обязателен для запуска бота.
     telegram_token: telegram_bot_token
@@ -48,6 +48,8 @@ bot:
     clean_up_time: 10m0s
     # BotPoll — интервал long-polling запросов к Telegram API.
     bot_poll: 30s
+    proxy: ""
+    api_proxy: ""
 # Настройка таймаутов
 timeout:
     # Shutdown — максимальное время на корректное завершение приложения.
@@ -96,27 +98,16 @@ smtp:
     # Пароль от email-учетной записи.
     # Обычно это пароль приложения, а не основной пароль аккаунта.
     password: password
-http:
-    jwt:
-        secret: "very_secret"
-        access_token_ttl: 15m
-        refresh_token_ttl: 720h
-    cors:
-        enabled: false
-        allowed_origins:
-            - "*"
-        allowed_methods:
-            - GET
-            - POST
-            - PUT
-            - DELETE
-            - OPTIONS
-        allowed_headers:
-            - Authorization
-            - Content-Type
-            - X-Trace-ID
-        exposed_headers:
-            - X-Trace-ID
-        allow_credentials: true
-        max_age: 600
+# Настройка Max бота
+max:
+    # Телеграмм токен бота полученный на платформе.
+    max_token: max_bot_token
+    # CleanUpTime — интервал очистки временных данных бота
+    # (кэш, состояния диалогов, временные сообщения и т.п.).
+    clean_up_time: 0s
+    # BotPoll — интервал long-polling запросов к Max API.
+    bot_poll: 0s
+    api_proxy: ""
+    # Флаг активации бота, false по умолчанию. Отвечает за то включать бота или нет
+    max_enabled: false
 

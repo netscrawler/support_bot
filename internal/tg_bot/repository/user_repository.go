@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	models "support_bot/internal/models/notify"
+	"support_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
 )
