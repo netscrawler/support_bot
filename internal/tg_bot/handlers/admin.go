@@ -124,6 +124,7 @@ func (h *AdminHandler) GenerateSelectedReport(c tele.Context) error {
 		Title:    &c.Chat().FirstName,
 		Type:     string(c.Chat().Type),
 		IsActive: true,
+		ChType:   models.ChatTypeTg,
 	}
 
 	if err := h.report.GenerateReportByName(ctx, reportName, chat); err != nil {

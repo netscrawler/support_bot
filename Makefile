@@ -35,7 +35,7 @@ run: build
 clean:
 	rm -f ./bin/$(BINARY_NAME)
 
-release: build
+deploy: build
 	scp $(BIN_DIR)/$(BINARY_NAME) ${RELEASE_USER}@${RELEASE_SRV}:${RELEASE_PATH}/support_bot_new
 
 $(BIN_DIR):
