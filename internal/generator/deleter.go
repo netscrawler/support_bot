@@ -101,9 +101,9 @@ func (d *Deleter) delete(ctx context.Context) {
 		var del msgDeleter
 		switch m.ChType {
 		case models.ChatTypeMax:
-			del = d.tgDel
-		case models.ChatTypeTg:
 			del = d.maxDel
+		case models.ChatTypeTg:
+			del = d.tgDel
 		default:
 			if m.MessageID != 0 {
 				del = d.tgDel
