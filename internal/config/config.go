@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"support_bot/internal/collector/appmetrica"
 	"time"
 
 	"support_bot/internal/delivery/smb"
@@ -18,14 +19,15 @@ import (
 )
 
 type Config struct {
-	Log            logger.LogConfig `yaml:"log"             comment:"Настройки логгирования"`
-	MetabaseDomain string           `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
-	Database       postgres.Config  `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	TgBot          tgbot.Config     `yaml:"telegram"        comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
-	Timeout        timeout          `yaml:"timeout"         comment:"Настройка таймаутов"`
-	SMB            smb.Config       `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
-	SMTP           smtp.Config      `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
-	MaxBot         maxbot.Config    `yaml:"max"             comment:"Настройка Max бота"`
+	Log            logger.LogConfig  `yaml:"log"             comment:"Настройки логгирования"`
+	MetabaseDomain string            `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
+	AppMetrica     appmetrica.Config `yaml:"appmetrica" env:"APP_METRICA"`
+	Database       postgres.Config   `yaml:"database"        comment:"Настройки подключения к Postgres"`
+	TgBot          tgbot.Config      `yaml:"telegram"        comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	Timeout        timeout           `yaml:"timeout"         comment:"Настройка таймаутов"`
+	SMB            smb.Config        `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
+	SMTP           smtp.Config       `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
+	MaxBot         maxbot.Config     `yaml:"max"             comment:"Настройка Max бота"`
 }
 
 type timeout struct {

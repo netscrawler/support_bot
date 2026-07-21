@@ -3,15 +3,16 @@ package evaluator_test
 import (
 	"testing"
 
+	"support_bot/internal/evaluator"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"support_bot/internal/evaluator"
 )
 
 func TestEvaluator_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	eval, err := evaluator.NewEvaluator()
+	eval, err := evaluator.NewEngine()
 	if err != nil {
 		t.Fatal(err)
 	}

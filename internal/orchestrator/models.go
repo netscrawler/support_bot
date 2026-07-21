@@ -16,14 +16,18 @@ type report struct {
 }
 
 type card struct {
-	CardUUID string `db:"card_uuid"`
-	Title    string `db:"title"`
+	CardUUID string          `db:"card_uuid"`
+	Title    string          `db:"title"`
+	Params   json.RawMessage `db:"params"`
+	Type     string          `db:"q_type"`
 }
 
 func mapCardToModel(c card) models.Card {
 	return models.Card{
-		CardUUID: c.CardUUID,
-		Title:    c.Title,
+		CardUUID:  c.CardUUID,
+		Title:     c.Title,
+		Type:      c.Type,
+		RawParams: c.Params,
 	}
 }
 
