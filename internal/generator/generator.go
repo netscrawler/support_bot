@@ -23,6 +23,7 @@ type Evaluator interface {
 		data map[string][]map[string]any,
 		expr string,
 	) (bool, error)
+	EvalStr(ctx context.Context, expr string) (string, error)
 }
 
 type Generator struct {
@@ -105,6 +106,20 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 func (g *Generator) createReport(ctx context.Context, report models.Report) error {
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
+
+	var queries []models.Card
+	for _, q := range report.Queries {
+		err := q.ResolveParams(ctx, g.eval)
+		if err != nil {
+			l.ErrorContext(
+				ctx,
+				"resolving query params",
+				slog.Any("error", err),
+				slog.Any("query", q),
+			)
+		}
+		queries = append(queries, q)
+	}
 
 	data, err := g.clct.Collect(ctx, report.Queries...)
 	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
