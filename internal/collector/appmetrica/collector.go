@@ -1,6 +1,8 @@
 package appmetrica
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -9,6 +11,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"strings"
 
 	"support_bot/internal/pkg/retry"
 )
@@ -46,11 +49,14 @@ func (c *Collector) Fetch(
 	}
 	req.URL.RawQuery = q.Encode()
 
+	c.log.Debug("making request", "url", req.URL.String())
+
 	raw, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer raw.Body.Close()
+	c.log.Debug("parsing response", raw.Status)
 
 	mediaType, _, err := mime.ParseMediaType(raw.Header.Get("Content-Type"))
 	if err != nil {
@@ -157,9 +163,21 @@ func (c *Collector) processJSONResponse(resp *http.Response) ([]map[string]any, 
 }
 
 func (c *Collector) processCSVResponse(resp *http.Response) ([]map[string]any, error) {
-	r := csv.NewReader(resp.Body)
+	reader := bufio.NewReader(resp.Body)
 
-	headers, err := r.Read()
+	// Удаляем UTF-8 BOM, который часто добавляет AppMetrica
+	bom, err := reader.Peek(3)
+	if err == nil && bytes.Equal(bom, []byte{0xEF, 0xBB, 0xBF}) {
+		_, _ = reader.Discard(3)
+	}
+
+	csvReader := csv.NewReader(reader)
+
+	// Иногда CSV от API может содержать большие поля
+	csvReader.FieldsPerRecord = -1
+	csvReader.TrimLeadingSpace = true
+
+	headers, err := csvReader.Read()
 	if err == io.EOF {
 		return []map[string]any{}, nil
 	}
@@ -167,13 +185,20 @@ func (c *Collector) processCSVResponse(resp *http.Response) ([]map[string]any, e
 		return nil, err
 	}
 
+	// Чистим заголовки
+	for i := range headers {
+		headers[i] = strings.TrimSpace(headers[i])
+	}
+
 	result := make([]map[string]any, 0)
 
 	for {
-		record, err := r.Read()
+		record, err := csvReader.Read()
+
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return nil, err
 		}

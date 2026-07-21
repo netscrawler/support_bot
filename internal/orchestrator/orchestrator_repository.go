@@ -200,7 +200,7 @@ func (o *Repository) loadQueriesByReportID(
 		return nil, fmt.Errorf("orchestrator load queries by report id: %w", ctx.Err())
 	}
 
-	const query = `select q.card_uuid, q.title
+	const query = `select q.card_uuid, q.title, q.q_type, q.params
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1
