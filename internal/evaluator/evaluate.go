@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -59,6 +60,11 @@ func NewEngine() (*Engine, error) {
 }
 
 func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error) {
+	if strings.HasPrefix(expression, "=") {
+		expression = expression[1:]
+	} else {
+		return expression, nil
+	}
 	ast, issues := e.env.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return expression, issues.Err()

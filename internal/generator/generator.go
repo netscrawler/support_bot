@@ -121,7 +121,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		queries = append(queries, q)
 	}
 
-	data, err := g.clct.Collect(ctx, report.Queries...)
+	data, err := g.clct.Collect(ctx, queries...)
 	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 
@@ -155,6 +155,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 
 			continue
 		}
+		g.log.Debug("msg", slog.Any("report", r[0].Data.String()))
 
 		res = append(res, r...)
 	}
