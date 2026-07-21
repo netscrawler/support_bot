@@ -2,7 +2,9 @@ package models
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"strings"
@@ -58,14 +60,46 @@ func (r ReportInfo) String() string {
 	return buf.String()
 }
 
+const (
+	CollectTypeMetabase   = "mb"
+	CollectTypeAppMetrica = "appmetrica"
+)
+
 type Card struct {
-	CardUUID string `json:"card_uuid"`
-	Title    string `json:"title"`
+	CardUUID  string `json:"card_uuid"`
+	Title     string `json:"title"`
+	RawParams json.RawMessage
+	Params    map[string]string
+	Type      string
 }
 
 func (c Card) GetFullURL(baseUrl string) string {
 	bUrl := strings.TrimRight(baseUrl, "/")
 	return fmt.Sprintf("%s/public/question/%s", bUrl, c.CardUUID)
+}
+
+type Evaluator interface {
+	EvalStr(ctx context.Context, expr string) (string, error)
+}
+
+func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
+	var params map[string]string
+	err := json.Unmarshal(c.RawParams, &params)
+	if err != nil {
+		return err
+	}
+
+	var evErr error
+
+	for k, v := range params {
+		q, err := eval.EvalStr(ctx, v)
+		if err != nil {
+			evErr = errors.Join(evErr, err)
+		}
+		c.Params[k] = q
+	}
+
+	return evErr
 }
 
 type RecipientType string

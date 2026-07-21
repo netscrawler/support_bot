@@ -3,6 +3,7 @@ package config
 import (
 	"time"
 
+	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	maxbot "support_bot/internal/max_bot"
@@ -20,6 +21,10 @@ func Default() *Config {
 			Format: "text",
 		},
 		MetabaseDomain: "https://metabase.domain",
+		AppMetrica: appmetrica.Config{
+			OAuthToken: "bhdsafmibhhjadskbjinkja",
+			Timeout:    5 * time.Minute,
+		},
 		Database: postgres.Config{
 			Port:            5432,
 			Host:            "localhost",

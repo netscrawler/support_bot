@@ -13,6 +13,9 @@ log:
     format: text
 # Адрес Metabase для забора данных
 metabase_domain: https://metabase.domain
+appmetrica:
+    o_auth_token: bhdsafmibhhjadskbjinkja
+    Timeout: 5m0s
 # Настройки подключения к Postgres
 database:
     # Порт для подключения к базе

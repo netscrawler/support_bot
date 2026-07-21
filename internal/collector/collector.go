@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -13,16 +14,22 @@ import (
 const defaultParallelCollectors = 32
 
 type DataFetcher interface {
-	Fetch(ctx context.Context, uuid string) ([]map[string]any, error)
+	Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
 }
 
 type Collector struct {
-	mb       DataFetcher
-	log      *slog.Logger
-	parallel chan struct{}
+	mb         DataFetcher
+	appMetrica DataFetcher
+	log        *slog.Logger
+	parallel   chan struct{}
 }
 
-func NewCollector(parallel uint8, mb DataFetcher, log *slog.Logger) *Collector {
+func NewCollector(
+	parallel uint8,
+	mb DataFetcher,
+	appMetrica DataFetcher,
+	log *slog.Logger,
+) *Collector {
 	l := log.With(slog.Any("module", "collector"))
 
 	if parallel == 0 {
@@ -33,9 +40,10 @@ func NewCollector(parallel uint8, mb DataFetcher, log *slog.Logger) *Collector {
 	semaphore := make(chan struct{}, parallel)
 
 	return &Collector{
-		mb:       mb,
-		log:      l,
-		parallel: semaphore,
+		mb:         mb,
+		appMetrica: appMetrica,
+		log:        l,
+		parallel:   semaphore,
 	}
 }
 
@@ -108,7 +116,21 @@ func (c *Collector) collect(
 			defer wg.Done()
 			defer func() { <-c.parallel }()
 
-			data, err := c.mb.Fetch(ctx, crd.CardUUID)
+			var fetchFn func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
+
+			switch crd.Type {
+			case models.CollectTypeMetabase:
+				fetchFn = c.mb.Fetch
+			case models.CollectTypeAppMetrica:
+				fetchFn = c.appMetrica.Fetch
+			default:
+				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
+					return nil, fmt.Errorf("unknown fetcher type")
+				}
+
+			}
+
+			data, err := fetchFn(ctx, crd.CardUUID, crd.Params)
 			if err != nil {
 				c.log.ErrorContext(
 					ctx,

@@ -3,8 +3,9 @@ package pdf
 import (
 	"strings"
 
-	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 	"support_bot/internal/models"
+
+	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
 )
 
 type Exporter struct {
@@ -27,6 +28,10 @@ func (e *Exporter) Export() (*models.Data, error) {
 
 	for _, b := range e.data {
 		page := wkhtmltopdf.NewPageReader(strings.NewReader(b.Data.String()))
+		page.DisableJavascript.Set(false)
+		page.EnablePlugins.Set(true)
+		page.EnableForms.Set(true)
+		page.JavascriptDelay.Set(2000)
 		pdfg.AddPage(page)
 	}
 

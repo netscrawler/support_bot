@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"support_bot/internal/pkg/retry"
+
 	"github.com/netscrawler/metabase-public-api"
 )
 
@@ -15,18 +17,28 @@ type Metabase struct {
 }
 
 func New(baseURL string) *Metabase {
-	rt := newRetractileRoundTripper(http.DefaultTransport)
+	rt := retry.NewRoundTripper(http.DefaultTransport)
 	client := http.Client{Transport: rt, Timeout: 5 * time.Minute}
 
 	return &Metabase{client: metabase.NewClient(baseURL, &client)}
 }
 
-func (m *Metabase) Fetch(ctx context.Context, cardUUID string) ([]map[string]any, error) {
+func (m *Metabase) Fetch(
+	ctx context.Context,
+	cardUUID string,
+	params map[string]string,
+) ([]map[string]any, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("metabase query context : %w", err)
 	}
 
-	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, nil)
+	var filters []metabase.Filter
+
+	for k, v := range params {
+		filters = append(filters, metabase.NewCategoryFilter(k, v))
+	}
+
+	data, err := m.client.CardQuery(ctx, cardUUID, metabase.FormatJSON, filters)
 	if err != nil {
 		return nil, fmt.Errorf("metabase card query : %w", err)
 	}

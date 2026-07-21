@@ -58,6 +58,10 @@ CREATE TABLE queries
     title     TEXT NOT NULL
 );
 
+alter table queries
+add column q_type text not null default 'mb',
+add column params jsonb not null default '{}';
+
 CREATE TABLE templates
 (
     id            SERIAL PRIMARY KEY,
