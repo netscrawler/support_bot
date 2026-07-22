@@ -30,7 +30,8 @@ import (
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 
-	"gopkg.in/telebot.v4"
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
 )
 
 const (
@@ -63,9 +64,10 @@ type reportApp struct {
 }
 
 type telegramBot struct {
-	Bot    *telebot.Bot
-	Router *tgbot.Router
-	Shed   *sheduler.SheduleAPI
+	Bot        *telego.Bot
+	BotHandler *th.BotHandler
+	Router     *tgbot.Router
+	Shed       *sheduler.SheduleAPI
 }
 
 func New(ctx context.Context, cfg *config.Config) (*app, error) {
@@ -162,13 +164,18 @@ func (r *reportApp) stop(_ context.Context) {
 func (b *telegramBot) start() {
 	slog.Info("starting bot polling")
 
-	go b.Bot.Start()
+	//go func() {
+	//	err := b..Start()
+	//	panic(err)
+	//}()
+	b.Router.Start()
 }
 
 func (b *telegramBot) stop() {
 	slog.Info("stop bot polling")
 
-	b.Bot.Stop()
+	b.Router.Stop(context.TODO())
+	// b.Bot.StopPoll(context.Background(), )
 }
 
 func (a *app) init(ctx context.Context) error {
@@ -189,7 +196,7 @@ func (a *app) init(ctx context.Context) error {
 
 	a.storage = rdb
 
-	tgBot, err := tgbot.NewTelegramBot(
+	tgBot, tHandler, err := tgbot.NewTelegramBot(ctx,
 		cfg.TgBot,
 		log,
 	)
@@ -292,16 +299,16 @@ func (a *app) init(ctx context.Context) error {
 	}
 
 	state := handlers.NewState(cfg.TgBot.CleanUpTime)
-
+	//
 	chatRepo := repository.NewChatRepository(rdb.GetConn(), log)
 	userRepo := repository.NewUserRepository(rdb.GetConn(), log)
 	reportRepo := repository.NewReportRepository(rdb.GetConn(), log)
-
+	//
 	notify := service.NewNotify(tg, userRepo, log)
 
 	chatService := service.NewChat(chatRepo, notify, log)
 	userService := service.NewUser(userRepo, log)
-
+	//
 	shed := sheduler.NewSheduleAPI(shdAPI)
 	reportService := service.NewReportService(shed, evAPI, reportRepo, cfg.MetabaseDomain, log)
 
@@ -312,7 +319,7 @@ func (a *app) init(ctx context.Context) error {
 		reportService,
 		state,
 	)
-
+	//
 	userHandler := handlers.NewUserHandler(
 		tgBot,
 		chatService,
@@ -320,18 +327,18 @@ func (a *app) init(ctx context.Context) error {
 		reportService,
 		state,
 	)
-
-	textHandler := handlers.NewTextHandler(adminHandler, userHandler, state)
-
+	//
+	textHandler := handlers.NewTextHandler(adminHandler, &userHandler, state)
+	//
 	mw := middlewares.NewMw(userService)
-
-	router := tgbot.NewRouter(tgBot, adminHandler, userHandler, textHandler, mw)
-
-	router.Setup()
+	//
+	router := tgbot.NewRouter(tgBot, tHandler, adminHandler, &userHandler, textHandler, mw)
+	//
 	tgBotUser := &telegramBot{
-		Bot:    tgBot,
-		Router: router,
-		Shed:   shed,
+		Bot:        tgBot,
+		BotHandler: tHandler,
+		Router:     router,
+		Shed:       shed,
 	}
 
 	a.report = report

@@ -155,7 +155,6 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 
 			continue
 		}
-		g.log.Debug("msg", slog.Any("report", r[0].Data.String()))
 
 		res = append(res, r...)
 	}

@@ -5,20 +5,23 @@ import (
 	"maps"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 type Exporter struct {
 	data     any
 	template string
+	eType    string
 }
 
-func New(data any, template string) *Exporter {
+func New(data any, template string, eType string) *Exporter {
 	return &Exporter{
 		data:     data,
 		template: template,
+		eType:    eType,
 	}
 }
 
@@ -38,7 +41,7 @@ func (e *Exporter) Export() (*models.Data, error) {
 		return nil, err
 	}
 
-	dt := models.NewTextData(&buf)
+	dt := models.NewTextData(&buf, e.eType)
 
 	return &dt, nil
 }

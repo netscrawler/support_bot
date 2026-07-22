@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
-
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	maxModel "github.com/max-messenger/max-bot-api-client-go/v2/model"
 	"golang.org/x/time/rate"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 )
 
 var ErrMaxAdaptorInactive = errors.New("max adaptor inactive from config")
@@ -99,7 +98,7 @@ func (ca *Adaptor) SendMedia(
 			ctx,
 			maxModel.UploadImage,
 			i.Data,
-			i.Name,
+			i.FileName,
 			int64(i.Data.Len()),
 		)
 		if err != nil {
@@ -152,7 +151,7 @@ func (ca *Adaptor) SendDocument(
 			ctx,
 			maxModel.UploadFile,
 			i.Data,
-			i.Name,
+			i.FileName,
 			int64(i.Data.Len()),
 		)
 		if err != nil {
