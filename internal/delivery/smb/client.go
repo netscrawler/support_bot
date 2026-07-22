@@ -7,8 +7,9 @@ import (
 	"net"
 	"path/filepath"
 
-	"github.com/hirochachacha/go-smb2"
 	"support_bot/internal/models"
+
+	"github.com/hirochachacha/go-smb2"
 )
 
 type SMB struct {
@@ -97,7 +98,7 @@ func (smb *SMB) Upload(
 		return fmt.Errorf("smb conn inactive from config")
 	}
 
-	remotePath := filepath.Join(remote, data.Name)
+	remotePath := filepath.Join(remote, data.FileName)
 
 	f, err := smb.fs.Create(remotePath)
 	if err != nil {

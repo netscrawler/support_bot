@@ -15,7 +15,10 @@ type Notify struct {
 	log  *slog.Logger
 }
 
-func NewNotify(tg *telegram.ChatAdaptor, user *repository.UserRepository, log *slog.Logger) *Notify {
+func NewNotify(tg *telegram.ChatAdaptor,
+	user *repository.UserRepository,
+	log *slog.Logger,
+) *Notify {
 	return &Notify{tg: tg, user: user, log: log}
 }
 
@@ -33,6 +36,7 @@ func (n *Notify) SendAdminNotify(ctx context.Context, msg string) {
 
 	if len(admins) == 0 {
 		n.log.ErrorContext(ctx, "admins not found")
+
 		return
 	}
 

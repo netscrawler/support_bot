@@ -24,8 +24,8 @@ package text_test
 // 	t.Run("Variable", func(t *testing.T) {
 // 		t.Parallel()
 //
-// 		data := map[string]string{"Name": "Alice"}
-// 		got, err := templatex.RenderText("Hello, {{.Name}}!", data)
+// 		data := map[string]string{"FileName": "Alice"}
+// 		got, err := templatex.RenderText("Hello, {{.FileName}}!", data)
 // 		require.NoError(t, err)
 // 		assert.Equal(t, "Hello, Alice!", got)
 // 	})
@@ -33,8 +33,8 @@ package text_test
 // 	t.Run("UpperFunction", func(t *testing.T) {
 // 		t.Parallel()
 //
-// 		data := map[string]string{"Name": "alice"}
-// 		got, err := templatex.RenderText("{{upper .Name}}", data)
+// 		data := map[string]string{"FileName": "alice"}
+// 		got, err := templatex.RenderText("{{upper .FileName}}", data)
 // 		require.NoError(t, err)
 // 		assert.Equal(t, "ALICE", got)
 // 	})
@@ -42,8 +42,8 @@ package text_test
 // 	t.Run("LowerFunction", func(t *testing.T) {
 // 		t.Parallel()
 //
-// 		data := map[string]string{"Name": "ALICE"}
-// 		got, err := templatex.RenderText("{{lower .Name}}", data)
+// 		data := map[string]string{"FileName": "ALICE"}
+// 		got, err := templatex.RenderText("{{lower .FileName}}", data)
 // 		require.NoError(t, err)
 // 		assert.Equal(t, "alice", got)
 // 	})
@@ -92,7 +92,7 @@ package text_test
 // 	t.Run("InvalidTemplate", func(t *testing.T) {
 // 		t.Parallel()
 //
-// 		_, err := templatex.RenderText("Hello, {{.Name", map[string]string{"Name": "Alice"})
+// 		_, err := templatex.RenderText("Hello, {{.FileName", map[string]string{"FileName": "Alice"})
 // 		assert.Error(t, err)
 // 	})
 // }
@@ -103,11 +103,11 @@ package text_test
 // 		t.Parallel()
 //
 // 		data := []map[string]any{
-// 			{"Name": "Alice", "Score": 95},
-// 			{"Name": "Bob", "Score": 88},
+// 			{"FileName": "Alice", "Score": 95},
+// 			{"FileName": "Bob", "Score": 88},
 // 		}
 //
-// 		tmpl := `{{range .}}{{.Name}} scored {{.Score}}
+// 		tmpl := `{{range .}}{{.FileName}} scored {{.Score}}
 // {{end}}`
 //
 // 		got, err := templatex.RenderText(tmpl, data)
@@ -123,11 +123,11 @@ package text_test
 // 		t.Parallel()
 //
 // 		data := []map[string]any{
-// 			{"Name": "Alice", "Active": true},
-// 			{"Name": "Bob", "Active": false},
+// 			{"FileName": "Alice", "Active": true},
+// 			{"FileName": "Bob", "Active": false},
 // 		}
 //
-// 		tmpl := `{{range .}}{{.Name}} active: {{.Active}}
+// 		tmpl := `{{range .}}{{.FileName}} active: {{.Active}}
 // {{end}}`
 //
 // 		got, err := templatex.RenderText(tmpl, data)
@@ -163,11 +163,11 @@ package text_test
 // 		t.Parallel()
 //
 // 		data := []map[string]any{
-// 			{"Name": "alice"},
-// 			{"Name": "bob"},
+// 			{"FileName": "alice"},
+// 			{"FileName": "bob"},
 // 		}
 //
-// 		tmpl := `{{range .}}{{upper .Name}} / {{lower .Name}}
+// 		tmpl := `{{range .}}{{upper .FileName}} / {{lower .FileName}}
 // {{end}}`
 //
 // 		got, err := templatex.RenderText(tmpl, data)
@@ -183,11 +183,11 @@ package text_test
 // 		t.Parallel()
 //
 // 		data := []map[string]any{
-// 			{"Name": "Alice", "Date": time.Date(2025, time.September, 24, 0, 0, 0, 0, time.UTC)},
-// 			{"Name": "Bob", "Date": time.Date(2025, time.September, 25, 0, 0, 0, 0, time.UTC)},
+// 			{"FileName": "Alice", "Date": time.Date(2025, time.September, 24, 0, 0, 0, 0, time.UTC)},
+// 			{"FileName": "Bob", "Date": time.Date(2025, time.September, 25, 0, 0, 0, 0, time.UTC)},
 // 		}
 //
-// 		tmpl := `{{range .}}{{.Name}} +3 days: {{(addDays .Date 3).Format "2006-01-02"}}
+// 		tmpl := `{{range .}}{{.FileName}} +3 days: {{(addDays .Date 3).Format "2006-01-02"}}
 // {{end}}`
 //
 // 		got, err := templatex.RenderText(tmpl, data)

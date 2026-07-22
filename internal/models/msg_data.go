@@ -9,22 +9,38 @@ import (
 type sendKind int
 
 const (
-	sendTextKind sendKind = iota
+	SendTextKind sendKind = iota
 	sendImageKind
 	sendFileKind
+	SendRichTextKind
 )
 
 type Data struct {
-	Data *bytes.Buffer
-	Name string
+	Data     *bytes.Buffer
+	FileName string
 
 	Type sendKind
 }
 
-func NewTextData(text *bytes.Buffer) Data {
+func (d Data) Read(p []byte) (n int, err error) {
+	return d.Data.Read(p)
+}
+
+func (d Data) Name() string {
+	return d.FileName
+}
+
+func NewTextData(text *bytes.Buffer, eType string) Data {
+	if eType == "rich_text" {
+		return Data{
+			Data: text,
+			Type: SendRichTextKind,
+		}
+	}
+
 	return Data{
 		Data: text,
-		Type: sendTextKind,
+		Type: SendTextKind,
 	}
 }
 
@@ -35,9 +51,9 @@ func NewImageData(image *bytes.Buffer, name string) (Data, error) {
 	}
 
 	return Data{
-		Data: image,
-		Name: n,
-		Type: sendImageKind,
+		Data:     image,
+		FileName: n,
+		Type:     sendImageKind,
 	}, nil
 }
 
@@ -48,9 +64,9 @@ func NewFileData(file *bytes.Buffer, name string) (Data, error) {
 	}
 
 	return Data{
-		Data: file,
-		Name: n,
-		Type: sendFileKind,
+		Data:     file,
+		FileName: n,
+		Type:     sendFileKind,
 	}, nil
 }
 
