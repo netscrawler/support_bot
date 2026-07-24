@@ -2,24 +2,21 @@ package handlers
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	"support_bot/internal/errorz"
 	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
 
-	tele "gopkg.in/telebot.v4"
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
+	tu "github.com/mymmrac/telego/telegoutil"
 )
 
 type AdminHandler struct {
-	bot         *tele.Bot
+	bot         *telego.Bot
 	userService *service.User
 	chatService *service.Chat
 	report      *service.Report
@@ -27,7 +24,7 @@ type AdminHandler struct {
 }
 
 func NewAdminHandler(
-	bot *tele.Bot,
+	bot *telego.Bot,
 	userService *service.User,
 	chatService *service.Chat,
 	report *service.Report,
@@ -42,548 +39,269 @@ func NewAdminHandler(
 	}
 }
 
-// StartAdmin handles the start command for admins.
-func (h *AdminHandler) StartAdmin(c tele.Context) error {
-	if c.Chat().Type != tele.ChatPrivate {
-		return nil
-	}
-
-	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.ManageUsers, menu.ManageChats),
-		menu.AdminMenu.Row(menu.LoadAndShowReportUser, menu.ManageCron),
-	)
-	h.state.set(c.Sender().ID, menuState)
-	//nolint:errcheck
-	c.Delete()
-
-	return c.Send(helloAdminRegistration, menu.AdminMenu)
+func (h *AdminHandler) Start(ctx *th.Context, message telego.Message) error {
+	return showAdminMenu(ctx.Bot(), message)
 }
 
-func (h *AdminHandler) LoadReportsPage(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
-	}
-
-	page, err := strconv.Atoi(c.Data())
-	if err != nil {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить страницу"})
-	}
-
-	if err := c.Respond(); err != nil {
+func (h *AdminHandler) ListReports(ctx *th.Context, query telego.CallbackQuery) error {
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	rpl, err := h.report.LoadReportByPage(ctx, page)
+	rpl, err := h.report.LoadReportsWithPagination(tctx)
 	if err != nil {
-		return c.Edit("Ошибка получения отчетов: " + err.Error())
+		return editOrSend(ctx, query, "Ошибка получения отчетов", nil)
 	}
 
-	mark := mapReportRPLToMarkup(rpl)
+	mark := mapReportRPLToAdminMarkup(rpl)
 
-	h.state.set(userID, loadReportState)
+	err = editOrSend(ctx, query, menu.MsgHelloReport, &mark)
 
-	if err := c.Edit(menu.MsgHelloReport, &mark); err != nil {
-		if isMessageNotModified(err) {
-			return nil
-		}
+	return err
+}
 
+func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuery) error {
+	data := strings.Split(query.Data, ";")
+	if len(data) != 2 {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить страницу",
+		})
+	}
+	page, err := strconv.Atoi(data[1])
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить страницу",
+		})
+	}
+
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (h *AdminHandler) IgnoreReportPage(c tele.Context) error {
-	return c.Respond()
-}
-
-func (h *AdminHandler) GenerateSelectedReport(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
-	}
-
-	_, reportName, ok := strings.Cut(c.Data(), ";")
-	if !ok || reportName == "" {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
-	}
-
-	if err := c.Respond(); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
+	rpl, err := h.report.LoadReportByPage(tctx, page)
+	if err != nil {
+		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
+			MessageID: query.Message.GetMessageID(),
+			Text:      "Ошибка получения отчетов: " + err.Error(),
+		})
+		return err
+	}
+
+	mark := mapReportRPLToAdminMarkup(rpl)
+
+	err = editOrSend(ctx, query, menu.MsgHelloReport, &mark)
+
+	return err
+}
+
+func (h *AdminHandler) IgnoreReportPage(ctx *th.Context, query telego.CallbackQuery) error {
+	err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
+
+	return err
+}
+
+func (h *AdminHandler) SelectReport(ctx *th.Context, query telego.CallbackQuery) error {
+	repInf, err := getReportInfoFromQuery(query)
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить отчет",
+		})
+	}
+
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
+		return err
+	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	rpInf, err := h.report.GetReportInfoByName(tctx, repInf.ReportName)
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось получить информацию об отчете",
+		})
+	}
+	rpInf.ID = repInf.ID
+
+	mark := getMarkupForReport(rpInf, repInf.PageFrom)
+
+	return editOrSendRich(ctx, query, rpInf.String(), &mark)
+}
+
+func (h *AdminHandler) ResendSelectReport(ctx *th.Context, query telego.CallbackQuery) error {
+	repInf, err := getReportInfoFromQuery(query)
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить отчет",
+		})
+	}
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
+		return err
+	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	h.report.GenerateAndSendReportByName(tctx, repInf.ReportName)
+
+	return editOrSend(ctx, query, "Отчет запущен. Результат будет отправлен получателям", nil)
+}
+
+func (h *AdminHandler) GenerateSelectedReport(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	repInf, err := getReportInfoFromQuery(query)
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить отчет",
+		})
+	}
+
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
+		return err
+	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	title := query.Message.Message().Chat.FirstName
 
 	chat := &models.Chat{
-		ChatID:   c.Chat().ID,
-		Title:    &c.Chat().FirstName,
-		Type:     string(c.Chat().Type),
+		ChatID:   query.Message.GetChat().ID,
+		Title:    &title,
+		Type:     query.Message.GetChat().Type,
 		IsActive: true,
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateReportByName(ctx, reportName, chat); err != nil {
-		return c.Edit("Не удалось запустить отчет: " + err.Error())
-	}
-
-	h.state.set(userID, menuState)
-
-	if err := c.Edit("Отчет запущен. Результат придет в этот чат."); err != nil {
-		if errors.Is(err, tele.ErrMessageNotModified) {
-			return nil
-		}
-
+	if err := h.report.GenerateReportByName(tctx, repInf.ReportName, chat); err != nil {
+		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
+			MessageID: query.Message.Message().MessageID,
+			Text:      "Не удалось запустить отчет",
+		})
 		return err
 	}
 
-	return nil
+	return editOrSend(ctx, query, "Отчет запущен. Результат придет в этот чат.", nil)
 }
 
-func (h *AdminHandler) SelectReport(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
-	}
+func (h *AdminHandler) ManageUsers(ctx *th.Context, query telego.CallbackQuery) error {
+	rmkp := tu.InlineKeyboard(
+		tu.InlineKeyboardCols(
+			1,
+			menu.ListUser,
+			menu.AddUser,
+			menu.RemoveUser,
+		)...)
 
-	id, reportName, ok := strings.Cut(c.Data(), ";")
-	if !ok || reportName == "" {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
-	}
-
-	data := strings.Split(c.Data(), ";")
-	if len(data) < 2 {
-		slog.Debug("data parse", data)
-		return c.Respond(&tele.CallbackResponse{Text: "Внутренняя ошибка" + c.Data()})
-	}
-
-	id, reportName, pageFromStr := data[0], data[1], data[2]
-	if reportName == "" {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
-	}
-
-	pageFrom, err := strconv.Atoi(pageFromStr)
-	if err != nil {
-		pageFrom = 0
-	}
-
-	_, err = strconv.Atoi(id)
-	if err != nil {
-		return c.Respond(&tele.CallbackResponse{Text: "Внутренняя ошибка" + err.Error()})
-	}
-
-	if err := c.Respond(); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	rpInf, err := h.report.GetReportInfoByName(ctx, reportName)
-	if err != nil {
-		return c.Edit("Не удалось получить информацию об отчете: " + err.Error())
-	}
-	rpInf.ID = id
-
-	mark := getMarkupForReport(rpInf, pageFrom)
-
-	if err := c.Edit(
-		rpInf.String(),
-		&tele.SendOptions{ParseMode: tele.ModeHTML, ReplyMarkup: &mark},
-	); err != nil {
-		if errors.Is(err, tele.ErrMessageNotModified) {
-			return nil
-		}
-
-		return err
-	}
-
-	return nil
+	return editOrSend(ctx, query, "Управление пользователями", rmkp)
 }
 
-func (h *AdminHandler) ResendSelectedReport(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
-	}
-
-	_, reportName, ok := strings.Cut(c.Data(), ";")
-	if !ok || reportName == "" {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
-	}
-
-	if err := c.Respond(); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	h.report.GenerateAndSendReportByName(ctx, reportName)
-
-	h.state.set(userID, menuState)
-
-	if err := c.Edit("Отчет запущен. Результат будет отправлен получателю"); err != nil {
-		if errors.Is(err, tele.ErrMessageNotModified) {
-			return nil
-		}
-
-		return err
-	}
-
-	return nil
-}
-
-// ManageUsers handles the user management menu.
-func (h *AdminHandler) ManageUsers(c tele.Context) error {
-	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.AddUser, menu.RemoveUser),
-		menu.AdminMenu.Row(menu.ListUser, menu.Back))
-	h.state.set(c.Sender().ID, menuState)
-
-	c.Delete()
-
-	return c.Send(ManageUsers, menu.AdminMenu)
-}
-
-func (h *AdminHandler) processAdminInput(c tele.Context) error {
-	userID := c.Sender().ID
-
-	if h.state.get(userID) == menuState {
-		return nil
-	}
-
-	state := h.state.get(userID)
-
-	switch state {
-	case addUserState:
-		return h.processAddUser(c) // Вызываем обработку добавления пользователя
-	case removeUserState:
-		return h.ProcessRemoveUser(c)
-	case addChatState:
-		return h.ProcessAddChat(c)
-	case removeChatState:
-		return h.ProcessRemoveChat(c)
-	default:
-		return nil // Если нет активного состояния — игнорируем
-	}
-}
-
-func (h *AdminHandler) AddUser(c tele.Context) error {
-	h.state.set(c.Sender().ID, addUserState)
-
-	c.Delete()
-
-	return c.Send(
-		userAddRemove,
-	)
-}
-
-// processAddUser processes the username input for adding a user.
-func (h *AdminHandler) processAddUser(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != addUserState {
-		return nil
-	}
-
-	c.Delete()
-
-	username := c.Text()
-	if !strings.HasPrefix(username, "@") {
-		return c.Send(pleaseSendCorrectUsername)
-	}
-
-	username = username[1:]
-	confirmBtn := menu.Selector.Data(
-		"Admin",
-		"add_admin",
-		username,
-	)
-	cancelBtn := menu.Selector.Data("User", "add_user", username)
-
-	menu.Selector.Inline(
-		menu.Selector.Row(cancelBtn, confirmBtn),
-	)
-	//nolint: errcheck
-	c.Delete()
-
-	return c.Send("Выберите роль для пользователя @"+username+".", menu.Selector)
-}
-
-func (h *AdminHandler) AddUserWithUserRole(c tele.Context) error {
-	ctx := context.Background()
-
-	userID := c.Sender().ID
-	if h.state.get(userID) != addUserState {
-		return nil
-	}
-
-	username := c.Data()
-
-	err := h.userService.CreateEmpty(ctx, username, false)
-	if err != nil {
-		return c.Send("Не удалось добавить пользователя: " + err.Error())
-	}
-
-	h.state.set(userID, menuState) // Сбрасываем состояние
-
-	return c.Edit("Пользователь @" + username + " добавлен.")
-}
-
-func (h *AdminHandler) AddUserWithAdminRole(c tele.Context) error {
-	ctx := context.Background()
-
-	userID := c.Sender().ID
-	if h.state.get(userID) != addUserState {
-		return nil
-	}
-
-	username := c.Data()
-
-	err := h.userService.CreateEmpty(ctx, username, true)
-	if err != nil {
-		return c.Edit("Не удалось добавить пользователя: " + err.Error())
-	}
-
-	h.state.set(userID, menuState) // Сбрасываем состояние
-
-	return c.Edit("Администратор @" + username + " добавлен.")
-}
-
-// RemoveUser handles removing a user.
-func (h *AdminHandler) RemoveUser(c tele.Context) error {
-	h.state.set(c.Sender().ID, removeUserState)
-	//nolint:errcheck
-	c.Delete()
-
-	return c.Send(
-		userAddRemove,
-	)
-}
-
-// ProcessRemoveUser processes the username input for removing a user.
-func (h *AdminHandler) ProcessRemoveUser(c tele.Context) error {
-	ctx := context.Background()
-	isPrimeReq := false
-
-	username := c.Text()
-	if !strings.HasPrefix(username, "@") {
-		return c.Send(pleaseSendCorrectUsername)
-	}
-
-	// Remove @ and extract the username
-	username = username[1:]
-	if username == c.Sender().Username {
-		return c.Send(errDeleteUserCauseSuicide)
-	}
-
-	role, err := h.userService.IsAllowed(ctx, c.Sender().ID)
-	if role == models.PrimaryAdminRole {
-		isPrimeReq = true
-	}
-
-	if err != nil {
-		return c.Send(errDeleteUser + err.Error())
-	}
-
-	// Call service to remove user
-	err = h.userService.Delete(ctx, username, isPrimeReq)
-	if err != nil {
-		return c.Send(errDeleteUser + err.Error())
-	}
-
-	h.state.set(c.Sender().ID, menuState)
-
-	return c.Send("Пользователь @" + username + " успешно удален!")
-}
-
-// ListUsers handles listing all users.
-func (h *AdminHandler) ListUsers(c tele.Context) error {
-	ctx := context.Background()
-
-	// c.Delete()
-
+func (h *AdminHandler) ListUsers(ctx *th.Context, query telego.CallbackQuery) error {
 	users, err := h.userService.GetAll(ctx)
-	if errors.Is(err, errorz.ErrNotFound) {
-		return c.Send("Пользователи не найдены.")
-	}
-
 	if err != nil {
-		return c.Send("Ошибка получения пользователей: " + err.Error())
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось получить список пользователей",
+		})
 	}
-
-	var response strings.Builder
-
-	response.WriteString("📋 *Список пользователей:*\n\n")
-
-	for i, user := range users {
-		fmt.Fprintf(&response, "%d. @%s - Role: %s\n", i+1, user.Username, user.Role)
-	}
-
-	return c.Send(
-		pkg.EscapeMarkdownV2(response.String()),
-		&tele.SendOptions{ParseMode: tele.ModeMarkdownV2},
-	)
-}
-
-// ManageChats handles the chat management menu.
-func (h *AdminHandler) ManageChats(c tele.Context) error {
-	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.RemoveChat),
-		menu.AdminMenu.Row(menu.ListChats, menu.Back))
-	//nolint:errcheck
-	c.Delete()
-
-	return c.Send("Управление чатами", menu.AdminMenu)
-}
-
-// ProcessAddActiveChat processes the chat input for adding a chat.
-func (h *AdminHandler) ProcessAddActiveChat(c tele.Context) error {
-	ctx := context.Background()
-
-	if c.Chat().Type == tele.ChatPrivate {
-		return c.Send("Эта команда может использоваться только в чатах")
-	}
-
-	c.Delete()
-
-	chatToAdd := models.NewTgChatDTO(
-		c.Chat().ID,
-		c.Chat().Title,
-		string(c.Chat().Type),
-		c.Chat().Description,
-	)
-	chatToAdd.Activate()
-
-	h.chatService.AddActive(ctx, chatToAdd)
 
 	return nil
 }
 
-// ProcessAddChat processes the chat input for adding a chat.
-func (h *AdminHandler) ProcessAddChat(c tele.Context) error {
-	ctx := context.Background()
-
-	if c.Chat().Type == tele.ChatPrivate {
-		return c.Send("Эта команда может использоваться только в чатах")
-	}
-
-	c.Delete()
-
-	chatToSave := models.NewTgChatDTO(
-		c.Chat().ID,
-		c.Chat().Title,
-		string(c.Chat().Type),
-		c.Chat().Description,
-	)
-
-	_ = h.chatService.Add(ctx, chatToSave)
-
+func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) error {
 	return nil
 }
 
-// ProcessInfoCommand processes the chat input for adding a chat.
-func (h *AdminHandler) ProcessInfoCommand(c tele.Context) error {
-	if c.Chat().Type == tele.ChatPrivate {
-		return c.Send("Эта команда может использоваться только в чатах")
-	}
+func (h *AdminHandler) ShowUser(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
 
-	c.Delete()
+func (h *AdminHandler) ManageChats(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
 
-	ans := fmt.Sprintf(
-		"*Информация о чате:*\n Title: `%s`\n MessageID: `%d`\n Thread: `%d`",
-		c.Chat().Title,
-		c.Chat().ID,
-		c.ThreadID(),
+func (h *AdminHandler) ListChats(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) DeleteChats(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) ShowChats(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) InfoChatCommand(ctx *th.Context, message telego.Message) error {
+	return nil
+}
+
+func (h *AdminHandler) ManageCrons(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) ListCrons(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) SwitchCronStatus(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) StartJobs(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func (h *AdminHandler) StopJobs(ctx *th.Context, query telego.CallbackQuery) error {
+	return nil
+}
+
+func showAdminMenu(bot *telego.Bot, message telego.Message) error {
+	rmkp := tu.InlineKeyboard(
+		tu.InlineKeyboardCols(
+			1,
+			menu.ShowReportsAdmin,
+			menu.ManageCron,
+			menu.ManageChats,
+			menu.ManageUsers,
+		)...)
+
+	_, err := bot.SendMessage(
+		context.Background(),
+		&telego.SendMessageParams{
+			ChatID:      message.Chat.ChatID(),
+			Text:        "Меню администратора",
+			ReplyMarkup: rmkp,
+		},
 	)
 
-	return c.Send(ans, &tele.SendOptions{ParseMode: tele.ModeMarkdownV2})
-}
-
-// RemoveChat handles removing a chat.
-func (h *AdminHandler) RemoveChat(c tele.Context) error {
-	h.state.set(c.Sender().ID, removeChatState)
-	c.Delete()
-
-	return c.Send("Пожалуйста пришлите имя чата который вы хотите удалить.")
-}
-
-// ProcessRemoveChat processes the chat input for removing a chat.
-func (h *AdminHandler) ProcessRemoveChat(c tele.Context) error {
-	ctx := context.Background()
-
-	chatName := c.Text()
-
-	err := h.chatService.Remove(ctx, chatName)
-	if err != nil {
-		return c.Send("Ошибка удаления чата: " + err.Error())
-	}
-
-	h.state.set(c.Sender().ID, menuState)
-
-	return c.Send("Чат " + chatName + " успешно удален!")
-}
-
-// ListChats handles listing all chats.
-func (h *AdminHandler) ListChats(c tele.Context) error {
-	ctx := context.Background()
-
-	chats, err := h.chatService.GetAll(ctx)
-	if err != nil {
-		return c.Send("Ошибка получения чатов: " + err.Error())
-	}
-
-	if len(chats) == 0 {
-		return c.Send("Чатов не найдено.")
-	}
-
-	var response strings.Builder
-
-	response.WriteString("*Список чатов:*\n\n")
-
-	for i, chat := range chats {
-		fmt.Fprintf(&response, "%d. %s\n", i+1, chat.Title)
-	}
-
-	s := pkg.EscapeMarkdownV2(response.String())
-
-	return c.Send(
-		s,
-		&tele.SendOptions{ParseMode: tele.ModeMarkdownV2},
-	)
-}
-
-// ManageCron handles the chat management menu.
-func (h *AdminHandler) ManageCron(c tele.Context) error {
-	menu.AdminMenu.Reply(
-		menu.AdminMenu.Row(menu.StartCron),
-		menu.AdminMenu.Row(menu.StopCron, menu.Back))
-
-	c.Delete()
-
-	return c.Send("Управление задачами", menu.AdminMenu)
-}
-
-// StartCronJobs перезапускает крон-задачи для уведомлений.
-func (h *AdminHandler) StartCronJobs(c tele.Context) error {
-	ans := h.startJobs()
-
-	return c.Send(ans)
-}
-
-// StopCronJobs перезапускает крон-задачи для уведомлений.
-func (h *AdminHandler) StopCronJobs(c tele.Context) error {
-	h.report.Stop()
-
-	return c.Send("Задачи успешно остановлены")
-}
-
-func (h *AdminHandler) startJobs() string {
-	h.report.Start()
-
-	return "Задачи запущены"
+	return err
 }
