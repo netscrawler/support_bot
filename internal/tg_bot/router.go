@@ -1,98 +1,78 @@
 package tgbot
 
 import (
+	"context"
 	"log/slog"
-	"runtime/debug"
 
 	"support_bot/internal/tg_bot/handlers"
-	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/middlewares"
 
-	"gopkg.in/telebot.v4"
-	telemw "gopkg.in/telebot.v4/middleware"
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
 )
 
 type Router struct {
-	bot     *telebot.Bot
+	bot     *telego.Bot
+	handler *th.BotHandler
 	adminHl *handlers.AdminHandler
 	textHl  *handlers.TextHandler
-	userHl  *handlers.UserHandler
+	userHl  handlers.UserHandler
 	mw      *middlewares.Mw
 }
 
 func NewRouter(
-	bot *telebot.Bot,
-	admin *handlers.AdminHandler,
-	user *handlers.UserHandler,
-	text *handlers.TextHandler,
+	bot *telego.Bot,
+	tHandler *th.BotHandler,
+	adminH *handlers.AdminHandler,
+	userH *handlers.UserHandler,
+	textH *handlers.TextHandler,
 	mw *middlewares.Mw,
 ) *Router {
-	return &Router{
+	base := tHandler.BaseGroup()
+	base.Use(th.PanicRecovery())
+
+	user := base.Group(mw.UserFilter)
+	user.HandleMessage(userH.Start, th.CommandEqual("start"))
+	user.HandleMessage(userH.Help, th.CommandEqual("help"))
+	user.HandleCallbackQuery(
+		userH.LoadReports,
+		th.CallbackDataEqual("reports_show_list"),
+	)
+	user.HandleCallbackQuery(userH.LoadReportsPage, th.CallbackDataContains("user_report_page"))
+	user.HandleCallbackQuery(userH.IgnoreReportPage, th.CallbackDataContains("ignore"))
+	user.HandleCallbackQuery(userH.GenerateSelectedReport, th.CallbackDataContains("report_gen"))
+
+	admin := base.Group(mw.AdminFilter)
+
+	admin.HandleMessage(adminH.Start, th.CommandEqual("admin"))
+	admin.HandleCallbackQuery(adminH.IgnoreReportPage, th.CallbackDataContains("ignore"))
+	admin.HandleCallbackQuery(adminH.ListReports, th.CallbackDataEqual("admin_reports_show_list"))
+	admin.HandleCallbackQuery(adminH.SelectReport, th.CallbackDataContains("admin_report_select"))
+	admin.HandleCallbackQuery(adminH.LoadReportPage, th.CallbackDataContains("admin_report_page"))
+	admin.HandleCallbackQuery(adminH.ResendSelectReport, th.CallbackDataContains("report_resend"))
+	admin.HandleCallbackQuery(adminH.GenerateSelectedReport, th.CallbackDataContains("report_get"))
+	admin.HandleCallbackQuery(adminH.LoadReportPage, th.CallbackDataContains("back_to_report_list"))
+
+	r := &Router{
 		bot:     bot,
-		adminHl: admin,
-		userHl:  user,
-		textHl:  text,
-		mw:      mw,
+		handler: tHandler,
 	}
+
+	return r
 }
 
-func (r *Router) Setup() {
-	r.bot.Use(telemw.Recover(func(err error, c telebot.Context) {
-		l := slog.Default()
-		l.Error(
-			"recovered from panic",
-			slog.Any("error", err),
-			slog.String("stack", string(debug.Stack())),
-		)
-	}))
-	register := r.bot.Group()
-	register.Handle(menu.RegisterCommand, r.userHl.RegisterUser)
+func (r *Router) Start() {
+	if r.handler.IsRunning() {
+		return
+	}
 
-	text := r.bot.Group()
-	text.Handle(telebot.OnText, r.textHl.ProcessTextInput, r.mw.UserAuthMiddleware)
+	go func() {
+		slog.Debug("start routing")
+		err := r.handler.Start()
+		slog.Debug("stop routing", slog.Any("err", err))
+	}()
+}
 
-	userOnly := r.bot.Group()
-
-	userOnly.Use(r.mw.UserAuthMiddleware)
-
-	userOnly.Handle(menu.UserStart, r.userHl.StartUser)
-	userOnly.Handle(&menu.LoadAndShowReportUser, r.userHl.LoadReports)
-	userOnly.Handle(&telebot.InlineButton{Unique: "back_report_list"}, r.userHl.LoadReportsPage)
-	userOnly.Handle(&telebot.InlineButton{Unique: "next_report_list"}, r.userHl.LoadReportsPage)
-	userOnly.Handle(&telebot.InlineButton{Unique: "_"}, r.userHl.IgnoreReportPage)
-	userOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.userHl.GenerateSelectedReport)
-
-	adminOnly := r.bot.Group()
-
-	adminOnly.Use(r.mw.AdminAuthMiddleware)
-	adminOnly.Handle(menu.StartCommand, r.adminHl.StartAdmin)
-	adminOnly.Handle(menu.InfoCommand, r.adminHl.ProcessInfoCommand)
-	adminOnly.Handle(&menu.ManageUsers, r.adminHl.ManageUsers)
-	adminOnly.Handle(&menu.ManageChats, r.adminHl.ManageChats)
-	adminOnly.Handle(&menu.ListUser, r.adminHl.ListUsers)
-	adminOnly.Handle(&menu.AddUser, r.adminHl.AddUser)
-	adminOnly.Handle(&menu.RemoveUser, r.adminHl.RemoveUser)
-	adminOnly.Handle(&menu.ListChats, r.adminHl.ListChats)
-	adminOnly.Handle(menu.AddChat, r.adminHl.ProcessAddChat)
-	adminOnly.Handle(menu.AddActiveChat, r.adminHl.ProcessAddActiveChat)
-	adminOnly.Handle(&menu.RemoveChat, r.adminHl.RemoveChat)
-	adminOnly.Handle(&menu.Back, r.adminHl.StartAdmin)
-	adminOnly.Handle(&menu.StartCron, r.adminHl.StartCronJobs)
-	adminOnly.Handle(&menu.ManageCron, r.adminHl.ManageCron)
-	adminOnly.Handle(&menu.StopCron, r.adminHl.StopCronJobs)
-	adminOnly.Handle(
-		&telebot.InlineButton{Unique: "add_admin"},
-		r.adminHl.AddUserWithAdminRole,
-	)
-	adminOnly.Handle(
-		&telebot.InlineButton{Unique: "add_user"},
-		r.adminHl.AddUserWithUserRole,
-	)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "back_report_list"}, r.adminHl.LoadReportsPage)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "back_to_report_list"}, r.adminHl.LoadReportsPage)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "next_report_list"}, r.adminHl.LoadReportsPage)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "_"}, r.adminHl.IgnoreReportPage)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "report"}, r.adminHl.SelectReport)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "report_get"}, r.adminHl.GenerateSelectedReport)
-	adminOnly.Handle(&telebot.InlineButton{Unique: "report_resend"}, r.adminHl.ResendSelectedReport)
+func (r *Router) Stop(ctx context.Context) error {
+	return r.handler.StopWithContext(ctx)
 }
