@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/max-messenger/max-bot-api-client-go/v2/model"
-	"gopkg.in/telebot.v4"
+	"github.com/mymmrac/telego"
 )
 
 type TgChat struct {
@@ -30,25 +30,25 @@ type SentMessage struct {
 	ChType  string `db:"ch_type"`
 }
 
-func NewFromTelebot(msg *telebot.Message) *SentMessage {
+func NewFromTelego(msg *telego.Message) *SentMessage {
 	if msg == nil {
 		return nil
 	}
 
 	return &SentMessage{
-		MessageID: msg.ID,
-		Time:      msg.Time(),
+		MessageID: msg.MessageID,
+		Time:      time.Unix(msg.GetDate(), 0),
 		ChatID:    msg.Chat.ID,
-		ThreadID:  msg.ThreadID,
+		ThreadID:  msg.MessageThreadID,
 		Title:     msg.Chat.Title,
 		ChType:    ChatTypeTg,
 	}
 }
 
-func NewMsgFromTelebotMany(msgs []telebot.Message) []SentMessage {
+func NewFromTelegoMany(msgs []telego.Message) []SentMessage {
 	retMsg := make([]SentMessage, 0, len(msgs))
 	for _, msg := range msgs {
-		retMsg = append(retMsg, *NewFromTelebot(&msg))
+		retMsg = append(retMsg, *NewFromTelego(&msg))
 	}
 
 	return retMsg
