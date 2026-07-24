@@ -8,6 +8,7 @@ import (
 
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
 	maxadp "support_bot/internal/delivery/max"
@@ -29,8 +30,6 @@ import (
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
-
-	"gopkg.in/telebot.v4"
 )
 
 const (
@@ -206,6 +205,7 @@ func (a *app) init(ctx context.Context) error {
 
 	mb := metabase.New(cfg.MetabaseDomain)
 	appM := appmetrica.NewCollector(&cfg.AppMetrica, log)
+	jiraColl := jira.New(cfg.Jira)
 	sup, err := appM.GetApplications(ctx)
 	if err != nil {
 		log.ErrorContext(
@@ -220,7 +220,7 @@ func (a *app) init(ctx context.Context) error {
 			slog.Any("apps", sup),
 		)
 	}
-	clct := collector.NewCollector(parallel, mb, appM, log)
+	clct := collector.NewCollector(parallel, mb, appM, jiraColl, log)
 
 	retr := retry.New(retry.Config{
 		QueueSize:  100,

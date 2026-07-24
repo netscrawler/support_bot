@@ -11,10 +11,11 @@ import (
 	"math"
 	"strings"
 
-	"github.com/fogleman/gg"
-	"golang.org/x/image/font"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
+
+	"github.com/fogleman/gg"
+	"golang.org/x/image/font"
 )
 
 type Exporter struct {
@@ -41,6 +42,8 @@ func (e *Exporter) Export() ([]models.Data, error) {
 	var id []models.Data
 
 	for k, v := range e.data {
+		_, pureData := splitMeta(v)
+
 		var order []string
 		if o, ok := e.order[k]; ok {
 			order = o
@@ -48,7 +51,7 @@ func (e *Exporter) Export() ([]models.Data, error) {
 			order = nil
 		}
 
-		mtx := pkg.ConvertSortedRows(v, order)
+		mtx := pkg.ConvertSortedRows(pureData, order)
 
 		img, gErr := createImageFromMatrix(mtx, &k)
 		if gErr != nil {
@@ -352,4 +355,22 @@ func wrapText(dc *gg.Context, text string, maxWidth float64) []string {
 	}
 
 	return lines
+}
+
+func splitMeta(records []map[string]any) (
+	meta map[string]any,
+	data []map[string]any,
+) {
+	data = make([]map[string]any, 0)
+
+	for _, record := range records {
+		if m, ok := record["_meta"].(map[string]any); ok {
+			meta = m
+			continue
+		}
+
+		data = append(data, record)
+	}
+
+	return
 }
