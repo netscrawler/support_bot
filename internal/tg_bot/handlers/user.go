@@ -50,7 +50,7 @@ func showUserMenu(bot *telego.Bot, message telego.Message) error {
 		context.Background(),
 		&telego.SendMessageParams{
 			ChatID:      message.Chat.ChatID(),
-			Text:        "Меню пользователя",
+			Text:        "Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.",
 			ReplyMarkup: rmkp,
 		},
 	)
@@ -59,7 +59,10 @@ func showUserMenu(bot *telego.Bot, message telego.Message) error {
 }
 
 const helpMsg = `
-Привет
+Вот что можно сделать:
+• /start — открыть главное меню
+• Нажмите «📊 Выбрать отчёт» и выберите нужный вариант
+• После запуска отчёт будет отправлен в этот чат
 `
 
 func (u *UserHandler) Start(ctx *th.Context, message telego.Message) error {
@@ -74,12 +77,22 @@ func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
 		Text:   helpMsg,
 	})
 	if err != nil {
-		u.log.Error("Error: (%s)", err.Error())
+		u.log.Error("Error", slog.Any("error", err))
 
 		return err
 	}
 
 	return nil
+}
+
+// Back returns user to main user menu when "back" callback is pressed
+func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
+	_ = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	rmkp := tu.InlineKeyboard(
+		tu.InlineKeyboardCols(1, menu.ShowReports)...)
+
+	return editOrSend(ctx, query, "Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.", &rmkp)
 }
 
 func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuery) error {
@@ -168,12 +181,12 @@ func (h *UserHandler) GenerateSelectedReport(
 		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID: query.Message.Message().MessageID,
-			Text:      "Не удалось запустить отчет",
+			Text:      "Не удалось запустить отчёт. Повторите попытку позже.",
 		})
 		return err
 	}
 
-	return editOrSend(ctx, query, "Отчет запущен. Результат придет в этот чат.", nil)
+	return editOrSend(ctx, query, "Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.", nil)
 }
 
 func (h *UserHandler) LoadReports(ctx *th.Context, query telego.CallbackQuery) error {
