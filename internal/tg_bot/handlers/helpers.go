@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
+	"support_bot/internal/models"
+
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
 	"github.com/mymmrac/telego/telegoutil"
-	"support_bot/internal/models"
 )
 
 func mapReportRPLToMarkup(rp models.LoadReportRPL) telego.InlineKeyboardMarkup {
@@ -106,16 +107,16 @@ func getMarkupForReport(r models.ReportInfo, pageFrom int) telego.InlineKeyboard
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
 				{
-					Text:         "Назад",
+					Text:         "⬅️ Назад",
 					CallbackData: fmt.Sprintf("back_to_report_list;%d", pageFrom),
 				},
 				{
-					Text:         "Запустить",
+					Text:         "▶️ Запустить",
 					CallbackData: fmt.Sprintf("report_resend;%s;%s", r.ID, r.Name),
 				},
 				{
-					Text:         "Получить",
-					CallbackData: fmt.Sprintf("report_get;%s;%s", r.ID, r.Name),
+					Text:         "📤 Получить",
+					CallbackData: fmt.Sprintf("report_get;%s;%s;%d", r.ID, r.Name, pageFrom),
 				},
 			},
 		},
@@ -207,9 +208,9 @@ type reportInfoFromQuery struct {
 
 func getReportInfoFromQuery(query telego.CallbackQuery) (reportInfoFromQuery, error) {
 	data := strings.Split(query.Data, ";")
-	if len(data) != 3 {
+	if len(data) != 4 {
 		return reportInfoFromQuery{}, fmt.Errorf(
-			"report info must be a format: (callback;id;report_name;page_from)",
+			"report info must be a format: (callback;id;report_name;page_from) %s", query.Data,
 		)
 	}
 

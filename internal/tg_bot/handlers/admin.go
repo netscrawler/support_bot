@@ -473,7 +473,8 @@ func (h *AdminHandler) HandleTextMessage(ctx *th.Context, message telego.Message
 	// Allow cancellation — keep state on validation errors to allow retry
 	if strings.EqualFold(text, "отмена") || strings.EqualFold(text, "/cancel") {
 		h.state.delete(message.Chat.ID)
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Действие отменено. Возвращаю вас в меню."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Действие отменено. Возвращаю вас в меню."})
 		return showAdminMenu(ctx.Bot(), message)
 	}
 
@@ -495,34 +496,40 @@ func (h *AdminHandler) HandleTextMessage(ctx *th.Context, message telego.Message
 func (h *AdminHandler) processUserChange(ctx *th.Context, message telego.Message, add bool) error {
 	username := strings.TrimSpace(message.Text)
 	if username == "" {
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Имя пользователя не может быть пустым. Попробуйте снова или отправьте 'отмена' чтобы прервать."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Имя пользователя не может быть пустым. Попробуйте снова или отправьте 'отмена' чтобы прервать."})
 		return nil
 	}
 
 	if add {
 		if err := h.userService.CreateEmpty(ctx.Context(), username, false); err != nil {
-			_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось добавить пользователя. Попробуйте ещё раз."})
+			_, _ = ctx.Bot().
+				SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось добавить пользователя. Попробуйте ещё раз."})
 			return err
 		}
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Пользователь добавлен."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Пользователь добавлен."})
 	} else {
 		if err := h.userService.Delete(ctx.Context(), username, false); err != nil {
-			_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось удалить пользователя. Убедитесь, что имя указано верно."})
+			_, _ = ctx.Bot().
+				SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось удалить пользователя. Убедитесь, что имя указано верно."})
 			return err
 		}
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Пользователь удалён."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Пользователь удалён."})
 	}
 
 	h.state.delete(message.Chat.ID)
-	// return to manage users menu
-	return h.ManageUsers(ctx, telego.CallbackQuery{Message: message.Message})
+	// return to admin menu
+	return showAdminMenu(ctx.Bot(), message)
 }
 
 // unified chat add/remove
 func (h *AdminHandler) processChatChange(ctx *th.Context, message telego.Message, add bool) error {
 	parts := strings.Fields(message.Text)
 	if len(parts) == 0 {
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось определить чат. Введите в формате: <chat_id> <title> или просто <title>."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось определить чат. Введите в формате: <chat_id> <title> или просто <title>."})
 		return nil
 	}
 
@@ -538,20 +545,25 @@ func (h *AdminHandler) processChatChange(ctx *th.Context, message telego.Message
 	chat := &models.TgChatDTO{ChatID: chatID, Title: title, Type: "private", IsActive: true}
 	if add {
 		if err := h.chatService.Add(ctx.Context(), chat); err != nil {
-			_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось добавить чат. Проверьте формат и попробуйте снова."})
+			_, _ = ctx.Bot().
+				SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось добавить чат. Проверьте формат и попробуйте снова."})
 			return err
 		}
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Чат добавлен."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Чат добавлен."})
 	} else {
 		if err := h.chatService.Remove(ctx.Context(), title); err != nil {
-			_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось удалить чат. Убедитесь, что название указано точно."})
+			_, _ = ctx.Bot().
+				SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Не удалось удалить чат. Убедитесь, что название указано точно."})
 			return err
 		}
-		_ = ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Чат удалён."})
+		_, _ = ctx.Bot().
+			SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: message.Chat.ID}, Text: "Чат удалён."})
 	}
 
 	h.state.delete(message.Chat.ID)
-	return h.ManageChats(ctx, telego.CallbackQuery{Message: message.Message})
+	// return to admin menu
+	return showAdminMenu(ctx.Bot(), message)
 }
 
 func (h *AdminHandler) ManageCrons(ctx *th.Context, query telego.CallbackQuery) error {
@@ -579,7 +591,7 @@ func (h *AdminHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 			menu.ManageUsers,
 		)...)
 
-	return editOrSend(ctx, query, "Панель администратора. Выберите нужное действие.", &rmkp)
+	return editOrSend(ctx, query, "Панель администратора. Выберите нужное действие.", rmkp)
 }
 
 func (h *AdminHandler) ListCrons(ctx *th.Context, query telego.CallbackQuery) error {

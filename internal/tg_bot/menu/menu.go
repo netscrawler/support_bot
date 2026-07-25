@@ -16,17 +16,17 @@ var (
 	}
 
 	ManageCron = telego.InlineKeyboardButton{
-		Text:         "🔄 Управление расписаниями",
+		Text:         "🔄 Управление рассылками",
 		CallbackData: "manage_cron",
 	}
 
 	StartCron = telego.InlineKeyboardButton{
-		Text:         "▶️ Перезапустить рассылки",
+		Text:         "▶️ Запустить рассылки",
 		CallbackData: "start_cron",
 	}
 
 	StopCron = telego.InlineKeyboardButton{
-		Text:         "⏹ Выключить рассылку",
+		Text:         "⏹ Остановить рассылки",
 		CallbackData: "stop_cron",
 	}
 
@@ -56,17 +56,17 @@ var (
 	}
 
 	Back = telego.InlineKeyboardButton{
-		Text:         "🔙 Назад",
+		Text:         "⬅️ Назад",
 		CallbackData: "back",
 	}
 
 	ShowReports = telego.InlineKeyboardButton{
-		Text:         "Отчёты",
+		Text:         "📊 Выбрать отчёт",
 		CallbackData: "reports_show_list",
 	}
 
 	ShowReportsAdmin = telego.InlineKeyboardButton{
-		Text:         "Отчёты",
+		Text:         "📊 Отчёты",
 		CallbackData: "admin_reports_show_list",
 	}
 )
@@ -80,4 +80,4 @@ var (
 	RegisterCommand = "/register"
 )
 
-var MsgHelloReport = `Выберите нужный отчет и он придет в данный чат`
+var MsgHelloReport = `Выберите отчёт из списка ниже. Я запущу его и отправлю результат в этот чат.`
