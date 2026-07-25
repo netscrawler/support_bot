@@ -187,7 +187,7 @@ func main() {
 		slog.Error("error watch for templates", slog.Any("error", err))
 	}
 
-	clct := collector.NewCollector(4, metabase.New(cfg.MetabaseBaseURL), slog.Default())
+	clct := collector.NewCollector(4, metabase.New(cfg.MetabaseBaseURL), metabase.New(cfg.MetabaseBaseURL), slog.Default())
 
 	slog.Info("collecting data for cards")
 

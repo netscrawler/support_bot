@@ -92,7 +92,12 @@ func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 	rmkp := tu.InlineKeyboard(
 		tu.InlineKeyboardCols(1, menu.ShowReports)...)
 
-	return editOrSend(ctx, query, "Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.", &rmkp)
+	return editOrSend(
+		ctx,
+		query,
+		"Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.",
+		rmkp,
+	)
 }
 
 func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuery) error {
@@ -186,7 +191,12 @@ func (h *UserHandler) GenerateSelectedReport(
 		return err
 	}
 
-	return editOrSend(ctx, query, "Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.", nil)
+	return editOrSend(
+		ctx,
+		query,
+		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.",
+		nil,
+	)
 }
 
 func (h *UserHandler) LoadReports(ctx *th.Context, query telego.CallbackQuery) error {
