@@ -63,6 +63,7 @@ func (r ReportInfo) String() string {
 const (
 	CollectTypeMetabase   = "mb"
 	CollectTypeAppMetrica = "appmetrica"
+	CollectTypeJIRA       = "jira"
 )
 
 type Card struct {

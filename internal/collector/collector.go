@@ -20,6 +20,7 @@ type DataFetcher interface {
 type Collector struct {
 	mb         DataFetcher
 	appMetrica DataFetcher
+	jira       DataFetcher
 	log        *slog.Logger
 	parallel   chan struct{}
 }
@@ -28,6 +29,7 @@ func NewCollector(
 	parallel uint8,
 	mb DataFetcher,
 	appMetrica DataFetcher,
+	jira DataFetcher,
 	log *slog.Logger,
 ) *Collector {
 	l := log.With(slog.Any("module", "collector"))
@@ -42,6 +44,7 @@ func NewCollector(
 	return &Collector{
 		mb:         mb,
 		appMetrica: appMetrica,
+		jira:       jira,
 		log:        l,
 		parallel:   semaphore,
 	}
@@ -123,6 +126,8 @@ func (c *Collector) collect(
 				fetchFn = c.mb.Fetch
 			case models.CollectTypeAppMetrica:
 				fetchFn = c.appMetrica.Fetch
+			case models.CollectTypeJIRA:
+				fetchFn = c.jira.Fetch
 			default:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return nil, fmt.Errorf("unknown fetcher type")
