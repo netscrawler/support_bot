@@ -10,6 +10,7 @@ type TgChatDTO struct {
 	Type        string  `db:"type"        json:"type"` // 'private', 'group', 'supergroup', 'channel'
 	Description *string `db:"description" json:"description"`
 	IsActive    bool    `db:"is_active"   json:"is_active"`
+	ChType      string  `db:"ch_type"`
 	ThreadID    int64
 }
 
@@ -19,6 +20,7 @@ func NewTgChatDTO(id int64, title, cType, desc string) *TgChatDTO {
 		Title:       title,
 		Type:        cType,
 		Description: &desc,
+		ChType:      ChatTypeTg,
 	}
 }
 
