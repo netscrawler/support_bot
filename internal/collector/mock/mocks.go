@@ -38,8 +38,8 @@ func (_m *MockDataFetcher) EXPECT() *MockDataFetcher_Expecter {
 }
 
 // Fetch provides a mock function for the type MockDataFetcher
-func (_mock *MockDataFetcher) Fetch(ctx context.Context, uuid string) ([]map[string]any, error) {
-	ret := _mock.Called(ctx, uuid)
+func (_mock *MockDataFetcher) Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
+	ret := _mock.Called(ctx, target, params)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Fetch")
@@ -47,18 +47,18 @@ func (_mock *MockDataFetcher) Fetch(ctx context.Context, uuid string) ([]map[str
 
 	var r0 []map[string]any
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]map[string]any, error)); ok {
-		return returnFunc(ctx, uuid)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, map[string]string) ([]map[string]any, error)); ok {
+		return returnFunc(ctx, target, params)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []map[string]any); ok {
-		r0 = returnFunc(ctx, uuid)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, map[string]string) []map[string]any); ok {
+		r0 = returnFunc(ctx, target, params)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]map[string]any)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, uuid)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, map[string]string) error); ok {
+		r1 = returnFunc(ctx, target, params)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -72,12 +72,13 @@ type MockDataFetcher_Fetch_Call struct {
 
 // Fetch is a helper method to define mock.On call
 //   - ctx context.Context
-//   - uuid string
-func (_e *MockDataFetcher_Expecter) Fetch(ctx interface{}, uuid interface{}) *MockDataFetcher_Fetch_Call {
-	return &MockDataFetcher_Fetch_Call{Call: _e.mock.On("Fetch", ctx, uuid)}
+//   - target string
+//   - params map[string]string
+func (_e *MockDataFetcher_Expecter) Fetch(ctx interface{}, target interface{}, params interface{}) *MockDataFetcher_Fetch_Call {
+	return &MockDataFetcher_Fetch_Call{Call: _e.mock.On("Fetch", ctx, target, params)}
 }
 
-func (_c *MockDataFetcher_Fetch_Call) Run(run func(ctx context.Context, uuid string)) *MockDataFetcher_Fetch_Call {
+func (_c *MockDataFetcher_Fetch_Call) Run(run func(ctx context.Context, target string, params map[string]string)) *MockDataFetcher_Fetch_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -87,9 +88,14 @@ func (_c *MockDataFetcher_Fetch_Call) Run(run func(ctx context.Context, uuid str
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 map[string]string
+		if args[2] != nil {
+			arg2 = args[2].(map[string]string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -100,75 +106,7 @@ func (_c *MockDataFetcher_Fetch_Call) Return(stringToVs []map[string]any, err er
 	return _c
 }
 
-func (_c *MockDataFetcher_Fetch_Call) RunAndReturn(run func(ctx context.Context, uuid string) ([]map[string]any, error)) *MockDataFetcher_Fetch_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// FetchMatrix provides a mock function for the type MockDataFetcher
-func (_mock *MockDataFetcher) FetchMatrix(ctx context.Context, uuid string) ([][]string, error) {
-	ret := _mock.Called(ctx, uuid)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FetchMatrix")
-	}
-
-	var r0 [][]string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([][]string, error)); ok {
-		return returnFunc(ctx, uuid)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) [][]string); ok {
-		r0 = returnFunc(ctx, uuid)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([][]string)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, uuid)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockDataFetcher_FetchMatrix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchMatrix'
-type MockDataFetcher_FetchMatrix_Call struct {
-	*mock.Call
-}
-
-// FetchMatrix is a helper method to define mock.On call
-//   - ctx context.Context
-//   - uuid string
-func (_e *MockDataFetcher_Expecter) FetchMatrix(ctx interface{}, uuid interface{}) *MockDataFetcher_FetchMatrix_Call {
-	return &MockDataFetcher_FetchMatrix_Call{Call: _e.mock.On("FetchMatrix", ctx, uuid)}
-}
-
-func (_c *MockDataFetcher_FetchMatrix_Call) Run(run func(ctx context.Context, uuid string)) *MockDataFetcher_FetchMatrix_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockDataFetcher_FetchMatrix_Call) Return(stringss [][]string, err error) *MockDataFetcher_FetchMatrix_Call {
-	_c.Call.Return(stringss, err)
-	return _c
-}
-
-func (_c *MockDataFetcher_FetchMatrix_Call) RunAndReturn(run func(ctx context.Context, uuid string) ([][]string, error)) *MockDataFetcher_FetchMatrix_Call {
+func (_c *MockDataFetcher_Fetch_Call) RunAndReturn(run func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)) *MockDataFetcher_Fetch_Call {
 	_c.Call.Return(run)
 	return _c
 }

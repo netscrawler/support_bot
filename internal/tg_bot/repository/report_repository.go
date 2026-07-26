@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/models"
-
 	"github.com/jmoiron/sqlx"
+	"support_bot/internal/models"
 )
 
 type ReportRepository struct {
@@ -90,6 +89,7 @@ func (r *ReportRepository) GetReportByName(
 	if err != nil {
 		return nil, fmt.Errorf("get report by id: %w", err)
 	}
+
 	return rpt, nil
 }
 
@@ -109,8 +109,10 @@ func (r *ReportRepository) GetReportLinkedCrons(
 		if errors.Is(err, sql.ErrNoRows) {
 			return []models.SheduleUnit{}, nil
 		}
+
 		return nil, err
 	}
+
 	return crons, nil
 }
 

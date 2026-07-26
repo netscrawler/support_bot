@@ -144,6 +144,7 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 		if event.Event.Type == models.EventTypeGenReportForTG {
 			report.Recipients = []models.Recipient{event.Recipient}
 		}
+
 		select {
 		case <-ctx.Done():
 			o.log.InfoContext(ctx, "context cancelled. stopping")
