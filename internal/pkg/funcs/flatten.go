@@ -22,18 +22,22 @@ func flatten(prefix string, v any, out map[string]any, stripPrefixes []string) {
 	case map[string]any:
 		for k, val := range x {
 			key := k
+
 			if prefix != "" {
 				key = prefix + "." + k
 			}
+
 			flatten(key, val, out, stripPrefixes)
 		}
 
 	case []any:
 		// Если массив объектов — разворачиваем по индексам.
 		allObjects := true
+
 		for _, item := range x {
 			if _, ok := item.(map[string]any); !ok {
 				allObjects = false
+
 				break
 			}
 		}
@@ -42,6 +46,7 @@ func flatten(prefix string, v any, out map[string]any, stripPrefixes []string) {
 			for i, item := range x {
 				flatten(fmt.Sprintf("%s.%d", prefix, i), item, out, stripPrefixes)
 			}
+
 			return
 		}
 
@@ -58,9 +63,11 @@ func stripPrefix(key string, prefixes []string) string {
 		if key == p {
 			return ""
 		}
-		if strings.HasPrefix(key, p+".") {
-			return strings.TrimPrefix(key, p+".")
+
+		if after, ok := strings.CutPrefix(key, p+"."); ok {
+			return after
 		}
 	}
+
 	return key
 }

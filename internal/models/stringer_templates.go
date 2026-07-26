@@ -60,6 +60,7 @@ const exportStringTemplate = `
     {{end}}
 </ul>
 `
+
 const reportInfoStringTemplate = `
 <h2>{{.Name}}</h2>
 

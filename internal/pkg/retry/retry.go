@@ -48,11 +48,7 @@ type ExponentialBackoff struct {
 }
 
 func (b ExponentialBackoff) Next(attempt int) time.Duration {
-	delay := b.Base * time.Duration(1<<(attempt-1))
-
-	if delay > b.Max {
-		delay = b.Max
-	}
+	delay := min(b.Base*time.Duration(1<<(attempt-1)), b.Max)
 
 	delay = time.Duration(rand.Int64N(int64(delay)))
 
@@ -164,7 +160,6 @@ func (r *Retry) worker(ctx context.Context) {
 
 				return
 			}
-
 		}
 	}
 }
@@ -174,8 +169,10 @@ func (r *Retry) execute(ctx context.Context, task Task) {
 		if !r.cfg.Silent {
 			r.cfg.Logger.InfoContext(ctx, "task failed", slog.Any("task id", task.ID))
 		}
+
 		return
 	}
+
 	err := task.Fn(ctx)
 	if err == nil {
 		return
@@ -205,6 +202,7 @@ func (r *Retry) execute(ctx context.Context, task Task) {
 				slog.Any("error", err),
 			)
 		}
+
 		return
 	}
 

@@ -8,13 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"support_bot/internal/models"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/service"
-
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
 	tu "github.com/mymmrac/telego/telegoutil"
+	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/service"
 )
 
 type AdminHandler struct {
@@ -75,6 +74,7 @@ func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuer
 			Text:            "Не удалось определить страницу",
 		})
 	}
+
 	page, err := strconv.Atoi(data[1])
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
@@ -100,6 +100,7 @@ func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuer
 			Text:        "Ошибка получения отчетов: " + err.Error(),
 			ReplyMarkup: menu.BackMarkup,
 		})
+
 		return err
 	}
 
@@ -143,6 +144,7 @@ func (h *AdminHandler) SelectReport(ctx *th.Context, query telego.CallbackQuery)
 			Text:            "Не удалось получить информацию об отчете",
 		})
 	}
+
 	rpInf.ID = repInf.ID
 
 	mark := getMarkupForReport(rpInf, repInf.PageFrom)
@@ -158,6 +160,7 @@ func (h *AdminHandler) ResendSelectReport(ctx *th.Context, query telego.Callback
 			Text:            "Не удалось определить отчет",
 		})
 	}
+
 	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
 	}); err != nil {
@@ -215,6 +218,7 @@ func (h *AdminHandler) GenerateSelectedReport(
 			Text:        "Не удалось запустить отчет",
 			ReplyMarkup: menu.BackMarkup,
 		})
+
 		return err
 	}
 
@@ -241,6 +245,7 @@ func (h *AdminHandler) ManageUsers(ctx *th.Context, query telego.CallbackQuery) 
 
 func (h *AdminHandler) AddUser(ctx *th.Context, query telego.CallbackQuery) error {
 	h.state.set(query.Message.GetChat().ID, addUserState)
+
 	return editOrSend(
 		ctx,
 		query,
@@ -251,6 +256,7 @@ func (h *AdminHandler) AddUser(ctx *th.Context, query telego.CallbackQuery) erro
 
 func (h *AdminHandler) RemoveUser(ctx *th.Context, query telego.CallbackQuery) error {
 	h.state.set(query.Message.GetChat().ID, removeUserState)
+
 	return editOrSend(
 		ctx,
 		query,
@@ -324,6 +330,7 @@ func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) e
 		}})
 
 		mkp := telego.InlineKeyboardMarkup{InlineKeyboard: rows}
+
 		return editOrSend(ctx, query, "Выберите пользователя для удаления", &mkp)
 	}
 
@@ -362,6 +369,7 @@ func (h *AdminHandler) ShowUser(ctx *th.Context, query telego.CallbackQuery) err
 		user.TelegramID,
 		user.Role,
 	)
+
 	return editOrSend(ctx, query, text, nil)
 }
 
@@ -371,6 +379,7 @@ func (h *AdminHandler) AddChat(ctx *th.Context, message telego.Message) error {
 			ChatID: telego.ChatID{ID: message.Chat.ID},
 			Text:   "Добавление чата возможно только группе.",
 		})
+
 		return err
 	}
 
@@ -386,6 +395,7 @@ func (h *AdminHandler) AddChat(ctx *th.Context, message telego.Message) error {
 	defer cancel()
 
 	err := h.chatService.Add(tctx, dto)
+
 	return err
 }
 
@@ -418,6 +428,7 @@ func (h *AdminHandler) ListChats(ctx *th.Context, query telego.CallbackQuery) er
 	}})
 
 	mkp := telego.InlineKeyboardMarkup{InlineKeyboard: rows}
+
 	return editOrSend(ctx, query, "Список чатов", &mkp)
 }
 
@@ -454,6 +465,7 @@ func (h *AdminHandler) ConfirmDeleteChat(ctx *th.Context, query telego.CallbackQ
 	if len(parts) != 2 {
 		return editOrSend(ctx, query, "Не удалось определить чат", menu.BackMarkup)
 	}
+
 	title := parts[1]
 
 	tctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
@@ -499,6 +511,7 @@ func (h *AdminHandler) ShowChat(ctx *th.Context, query telego.CallbackQuery) err
 				tu.InlineKeyboard([]telego.InlineKeyboardButton{menu.Back}),
 			)
 		}
+
 		return editOrSend(ctx, query, "Не удалось получить информацию о чатах"+err.Error(), nil)
 	}
 
@@ -509,6 +522,7 @@ func (h *AdminHandler) ShowChat(ctx *th.Context, query telego.CallbackQuery) err
 		chat.Type,
 		chat.IsActive,
 	)
+
 	return editOrSend(ctx, query, text, &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
@@ -534,7 +548,7 @@ func (h *AdminHandler) ManageCrons(ctx *th.Context, query telego.CallbackQuery) 
 	return editOrSend(ctx, query, "Управляйте автоматическими рассылками отчётов.", &mkp)
 }
 
-// Back button: return to admin main menu
+// Back button: return to admin main menu.
 func (h *AdminHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 	_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
 
@@ -565,6 +579,7 @@ func (h *AdminHandler) SwitchCronStatus(ctx *th.Context, query telego.CallbackQu
 
 func (h *AdminHandler) StartJobs(ctx *th.Context, query telego.CallbackQuery) error {
 	h.report.Start()
+
 	return editOrSend(
 		ctx,
 		query,
@@ -575,6 +590,7 @@ func (h *AdminHandler) StartJobs(ctx *th.Context, query telego.CallbackQuery) er
 
 func (h *AdminHandler) StopJobs(ctx *th.Context, query telego.CallbackQuery) error {
 	h.report.Stop()
+
 	return editOrSend(
 		ctx,
 		query,

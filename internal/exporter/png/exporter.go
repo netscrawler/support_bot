@@ -11,11 +11,10 @@ import (
 	"math"
 	"strings"
 
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
-
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct {
@@ -366,6 +365,7 @@ func splitMeta(records []map[string]any) (
 	for _, record := range records {
 		if m, ok := record["_meta"].(map[string]any); ok {
 			meta = m
+
 			continue
 		}
 

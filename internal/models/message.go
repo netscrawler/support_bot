@@ -117,6 +117,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
+
 				continue
 			}
 

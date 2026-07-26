@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"support_bot/internal/models"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/service"
-
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
 	tu "github.com/mymmrac/telego/telegoutil"
+	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/service"
 )
 
 type UserHandler struct {
@@ -71,7 +70,6 @@ func (u *UserHandler) Start(ctx *th.Context, message telego.Message) error {
 
 func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
 	// u.log.Info("User help command from %s", message.From.Username)
-
 	_, err := ctx.Bot().SendMessage(ctx.Context(), &telego.SendMessageParams{
 		ChatID: tu.ID(message.Chat.ID),
 		Text:   helpMsg,
@@ -85,7 +83,7 @@ func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
 	return nil
 }
 
-// Back returns user to main user menu when "back" callback is pressed
+// Back returns user to main user menu when "back" callback is pressed.
 func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 	_ = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
 
@@ -108,6 +106,7 @@ func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuer
 			Text:            "Не удалось определить страницу",
 		})
 	}
+
 	page, err := strconv.Atoi(data[1])
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
@@ -132,6 +131,7 @@ func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuer
 			MessageID: query.Message.GetMessageID(),
 			Text:      "Ошибка получения отчетов: " + err.Error(),
 		})
+
 		return err
 	}
 
@@ -160,6 +160,7 @@ func (h *UserHandler) GenerateSelectedReport(
 			CallbackQueryID: query.ID,
 			Text:            "Не удалось определить отчет",
 		})
+
 		return err
 	}
 
@@ -188,6 +189,7 @@ func (h *UserHandler) GenerateSelectedReport(
 			MessageID: query.Message.Message().MessageID,
 			Text:      "Не удалось запустить отчёт. Повторите попытку позже.",
 		})
+
 		return err
 	}
 
