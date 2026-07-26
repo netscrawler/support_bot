@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
 	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
@@ -96,6 +96,7 @@ func mapReportRPLToAdminMarkup(rp models.LoadReportRPL) telego.InlineKeyboardMar
 	}
 
 	rows = append(rows, navRow)
+	rows = append(rows, []telego.InlineKeyboardButton{menu.Back})
 
 	return telego.InlineKeyboardMarkup{
 		InlineKeyboard: rows,
