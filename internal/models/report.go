@@ -80,6 +80,7 @@ func (c Card) ToString(baseUrl string) string {
 
 func (c Card) GetFullURL(baseUrl string) string {
 	bUrl := strings.TrimRight(baseUrl, "/")
+
 	return fmt.Sprintf("%s/public/question/%s", bUrl, c.CardUUID)
 }
 
@@ -89,7 +90,9 @@ type Evaluator interface {
 
 func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
 	var params map[string]string
+
 	c.Params = make(map[string]string)
+
 	err := json.Unmarshal(c.RawParams, &params)
 	if err != nil {
 		return err
@@ -102,6 +105,7 @@ func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
 		if err != nil {
 			evErr = errors.Join(evErr, err)
 		}
+
 		c.Params[k] = q
 	}
 

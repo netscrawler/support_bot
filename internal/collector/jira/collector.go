@@ -37,12 +37,14 @@ func (c *Collector) Fetch(
 
 	q := u.Query()
 	q.Set("jql", jql)
+
 	for k, v := range params {
 		q.Set(k, v)
 	}
+
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +78,7 @@ func (c *Collector) do(req *http.Request) (*http.Response, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
+
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 

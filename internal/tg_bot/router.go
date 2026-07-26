@@ -4,11 +4,10 @@ import (
 	"context"
 	"log/slog"
 
-	"support_bot/internal/tg_bot/handlers"
-	"support_bot/internal/tg_bot/middlewares"
-
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
+	"support_bot/internal/tg_bot/handlers"
+	"support_bot/internal/tg_bot/middlewares"
 )
 
 type Router struct {
@@ -90,6 +89,7 @@ func (r *Router) Start() {
 
 	go func() {
 		slog.Debug("start routing")
+
 		err := r.handler.Start()
 		slog.Debug("stop routing", slog.Any("err", err))
 	}()

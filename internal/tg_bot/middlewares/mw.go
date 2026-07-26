@@ -4,9 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"support_bot/internal/models"
-
 	"github.com/mymmrac/telego"
+	"support_bot/internal/models"
 )
 
 type UserProvider interface {
@@ -42,6 +41,7 @@ func (mw Mw) AdminFilter(ctx context.Context, update telego.Update) bool {
 	role, err := mw.userPr.IsAllowed(ctx, userID)
 	if err != nil || role == models.Denied || role == models.UserRole {
 		mw.l.ErrorContext(ctx, "unautorized admin access attempt", slog.Any("user", userID))
+
 		return false
 	}
 
@@ -63,13 +63,14 @@ func (mw Mw) UserFilter(ctx context.Context, update telego.Update) bool {
 	role, err := mw.userPr.IsAllowed(ctx, userID)
 	if err != nil || role == models.Denied {
 		mw.l.ErrorContext(ctx, "unautorized user access attempt", slog.Any("user", userID))
+
 		return false
 	}
 
 	return role == models.AdminRole || role == models.PrimaryAdminRole || role == models.UserRole
 }
 
-//func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
+// func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 //	return func(c telebot.Context) error {
 //		var user *telebot.User
 //
@@ -107,7 +108,7 @@ func (mw Mw) UserFilter(ctx context.Context, update telego.Update) bool {
 //	}
 //}
 //
-//func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
+// func (mw *Mw) AdminAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {
 //	return func(c telebot.Context) error {
 //		var user *telebot.User
 //

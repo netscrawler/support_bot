@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
-
 	"github.com/mymmrac/telego"
 	"golang.org/x/time/rate"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 )
 
 type ChatAdaptor struct {
@@ -73,12 +72,14 @@ func (ca *ChatAdaptor) SendText(
 					Text:            msg,
 					ParseMode:       telego.ModeHTML,
 				})
+
 				return err
 			}),
 		)
 		if retryErr != nil {
 			return nil, err
 		}
+
 		return nil, fmt.Errorf("error send text message: %w", err)
 	}
 
@@ -119,12 +120,14 @@ func (ca *ChatAdaptor) SendRichText(
 					MessageThreadID: chat.ThreadID,
 					RichMessage:     telego.InputRichMessage{HTML: msg},
 				})
+
 				return err
 			}),
 		)
 		if retryErr != nil {
 			return nil, err
 		}
+
 		return nil, fmt.Errorf("error send text message: %w", err)
 	}
 
@@ -168,6 +171,7 @@ func (ca *ChatAdaptor) SendMedia(
 	})
 	if err != nil {
 		l.ErrorContext(ctx, "Error send media", slog.Any("error", err))
+
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("%d", chat.ChatID), func(_ context.Context) error {
 				_, err := ca.bot.SendMediaGroup(ctx, &telego.SendMediaGroupParams{
@@ -175,6 +179,7 @@ func (ca *ChatAdaptor) SendMedia(
 					MessageThreadID: chat.ThreadID,
 					Media:           album,
 				})
+
 				return err
 			}),
 		)
@@ -208,7 +213,6 @@ func (ca *ChatAdaptor) SendDocument(
 	var retMsg []models.SentMessage
 
 	for _, f := range doc {
-
 		if err := ca.rl.Wait(ctx); err != nil {
 			return nil, err
 		}
@@ -244,6 +248,7 @@ func (ca *ChatAdaptor) SendDocument(
 							File: f,
 						},
 					})
+
 					return err
 				}),
 			)
@@ -286,5 +291,6 @@ func (ca *ChatAdaptor) DeleteMsg(ctx context.Context, message models.SentMessage
 			}),
 		)
 	}
+
 	return err
 }

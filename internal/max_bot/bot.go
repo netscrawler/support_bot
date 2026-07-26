@@ -10,6 +10,7 @@ import (
 
 func New(ctx context.Context, cfg Config, log *slog.Logger) (*maxcli.Api, error) {
 	var opts []maxcli.Opt
+
 	l := log.WithGroup("max")
 
 	if cfg.BotPoll != 0 {
@@ -34,6 +35,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*maxcli.Api, error)
 	info, err := api.Bots.GetMyInfo(ctx)
 	if err != nil {
 		l.ErrorContext(ctx, "creating bot: getting bot info", slog.Any("error", err))
+
 		return nil, fmt.Errorf("creating bot: get bot info: %w", err)
 	}
 

@@ -65,6 +65,7 @@ func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error)
 	} else {
 		return expression, nil
 	}
+
 	ast, issues := e.env.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return expression, issues.Err()
@@ -175,7 +176,7 @@ func ResultString(v ref.Val) (string, error) {
 		return strconv.FormatBool(bool(x)), nil
 
 	case types.Timestamp:
-		return x.Time.Format(time.RFC3339Nano), nil
+		return x.Format(time.RFC3339Nano), nil
 
 	case types.Duration:
 		return time.Duration(x.Duration).String(), nil
@@ -184,13 +185,15 @@ func ResultString(v ref.Val) (string, error) {
 		return "", nil
 
 	case traits.Lister:
-		native, _ := v.ConvertToNative(reflect.TypeOf([]any{}))
+		native, _ := v.ConvertToNative(reflect.TypeFor[[]any]())
 		b, _ := json.Marshal(native)
+
 		return string(b), nil
 
 	case traits.Mapper:
-		native, _ := v.ConvertToNative(reflect.TypeOf(map[string]any{}))
+		native, _ := v.ConvertToNative(reflect.TypeFor[map[string]any]())
 		b, _ := json.Marshal(native)
+
 		return string(b), nil
 	}
 
@@ -198,15 +201,15 @@ func ResultString(v ref.Val) (string, error) {
 		return s.String(), nil
 	}
 
-	if native, err := v.ConvertToNative(reflect.TypeOf("")); err == nil {
+	if native, err := v.ConvertToNative(reflect.TypeFor[string]()); err == nil {
 		return native.(string), nil
 	}
 
-	if native, err := v.ConvertToNative(reflect.TypeOf([]byte{})); err == nil {
+	if native, err := v.ConvertToNative(reflect.TypeFor[[]byte]()); err == nil {
 		return string(native.([]byte)), nil
 	}
 
-	if native, err := v.ConvertToNative(reflect.TypeOf((*any)(nil)).Elem()); err == nil {
+	if native, err := v.ConvertToNative(reflect.TypeFor[any]()); err == nil {
 		b, err := json.Marshal(native)
 		if err == nil {
 			return string(b), nil

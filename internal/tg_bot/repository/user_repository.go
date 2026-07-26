@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/models"
-
 	"github.com/jmoiron/sqlx"
+	"support_bot/internal/models"
 )
 
 type UserRepository struct {

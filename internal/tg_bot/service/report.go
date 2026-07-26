@@ -6,12 +6,11 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/models"
 	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/repository"
-
-	"github.com/robfig/cron/v3"
 )
 
 type Report struct {

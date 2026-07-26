@@ -1,10 +1,10 @@
 package config
 
 import (
-	"support_bot/internal/collector/jira"
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	maxbot "support_bot/internal/max_bot"

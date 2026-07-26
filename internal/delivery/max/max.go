@@ -54,8 +54,10 @@ func (ca *Adaptor) SendText(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg = maxMsg.SetText(msg).SetChat(chat.ChatID).SetFormat(maxModel.FormatHTML)
+
 	if err := ca.rl.Wait(ctx); err != nil {
 		return nil, err
 	}
@@ -65,6 +67,7 @@ func (ca *Adaptor) SendText(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -86,6 +89,7 @@ func (ca *Adaptor) SendMedia(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
@@ -106,7 +110,6 @@ func (ca *Adaptor) SendMedia(
 		}
 
 		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
-
 	}
 
 	if err := ca.rl.Wait(ctx); err != nil {
@@ -118,6 +121,7 @@ func (ca *Adaptor) SendMedia(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -139,6 +143,7 @@ func (ca *Adaptor) SendDocument(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
@@ -159,7 +164,6 @@ func (ca *Adaptor) SendDocument(
 		}
 
 		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
-
 	}
 
 	if err := ca.rl.Wait(ctx); err != nil {
@@ -171,6 +175,7 @@ func (ca *Adaptor) SendDocument(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -188,6 +193,7 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 	if !ca.active {
 		return ErrMaxAdaptorInactive
 	}
+
 	if err := ca.rl.Wait(context.Background()); err != nil {
 		return err
 	}
@@ -207,6 +213,7 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 		if retryErr != nil {
 			return errors.Join(err, retryErr)
 		}
+
 		return err
 	}
 
@@ -219,8 +226,10 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 
 func deRef[T any](t *T) T {
 	var tt T
+
 	if t == nil {
 		return tt
 	}
+
 	return *t
 }
