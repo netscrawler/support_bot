@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/menu"
 
@@ -113,7 +114,7 @@ func getMarkupForReport(r models.ReportInfo, pageFrom int) telego.InlineKeyboard
 				},
 				{
 					Text:         "▶️ Запустить",
-					CallbackData: fmt.Sprintf("report_resend;%s;%s", r.ID, r.Name),
+					CallbackData: fmt.Sprintf("report_resend;%s;%s;%d", r.ID, r.Name, pageFrom),
 				},
 				{
 					Text:         "📤 Получить",
