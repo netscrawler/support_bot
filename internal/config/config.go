@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
@@ -14,9 +16,6 @@ import (
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	tgbot "support_bot/internal/tg_bot"
-
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
 )
 
 type Config struct {

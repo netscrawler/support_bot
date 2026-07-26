@@ -39,14 +39,17 @@ func (c *Collector) Fetch(
 	target string,
 	params map[string]string,
 ) ([]map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
+
 	q := req.URL.Query()
+
 	for k, v := range params {
 		q.Set(k, v)
 	}
+
 	req.URL.RawQuery = q.Encode()
 
 	c.log.Debug("making request", "url", req.URL.String())
@@ -56,6 +59,7 @@ func (c *Collector) Fetch(
 		return nil, err
 	}
 	defer raw.Body.Close()
+
 	c.log.Debug("parsing response", raw.Status)
 
 	mediaType, _, err := mime.ParseMediaType(raw.Header.Get("Content-Type"))
@@ -78,7 +82,7 @@ func (c *Collector) GetApplications(ctx context.Context) ([]SupportedApplication
 		ctx,
 		http.MethodGet,
 		"https://api.appmetrica.yandex.ru/management/v1/applications",
-		nil,
+		http.NoBody,
 	)
 	if err != nil {
 		return nil, err
@@ -122,6 +126,7 @@ func (c *Collector) do(req *http.Request) (*http.Response, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
+
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
@@ -181,6 +186,7 @@ func (c *Collector) processCSVResponse(resp *http.Response) ([]map[string]any, e
 	if err == io.EOF {
 		return []map[string]any{}, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}

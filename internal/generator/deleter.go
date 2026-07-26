@@ -99,6 +99,7 @@ func (d *Deleter) delete(ctx context.Context) {
 
 	for _, m := range msg {
 		var del msgDeleter
+
 		switch m.ChType {
 		case models.ChatTypeMax:
 			del = d.maxDel
@@ -108,6 +109,7 @@ func (d *Deleter) delete(ctx context.Context) {
 			if m.MessageID != 0 {
 				del = d.tgDel
 			}
+
 			if m.MessageIDStr != nil {
 				del = d.maxDel
 			}

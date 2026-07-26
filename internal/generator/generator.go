@@ -108,6 +108,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
 	var queries []models.Card
+
 	for _, q := range report.Queries {
 		err := q.ResolveParams(ctx, g.eval)
 		if err != nil {
@@ -118,6 +119,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 				slog.Any("query", q),
 			)
 		}
+
 		queries = append(queries, q)
 	}
 
@@ -184,6 +186,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		slog.Any("report", report.Name),
 		slog.Any("message", resMsg),
 	)
+
 	err = g.sentMsgRepo.saveTgMsg(ctx, msg.ReportName, resMsg)
 	if err != nil {
 		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))

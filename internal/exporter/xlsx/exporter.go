@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xuri/excelize/v2"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
-
-	"github.com/xuri/excelize/v2"
 )
 
 type Exporter struct {
@@ -214,6 +213,7 @@ func splitMeta(records []map[string]any) (
 	for _, record := range records {
 		if m, ok := record["_meta"].(map[string]any); ok {
 			meta = m
+
 			continue
 		}
 

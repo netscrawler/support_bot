@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/pkg"
-
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
+	"support_bot/internal/pkg"
 )
 
 func NewTelegramBot(
@@ -23,10 +22,12 @@ func NewTelegramBot(
 			"proxy addr not empty, creating bot with system proxy",
 			slog.Any("proxy addr", cfg.Proxy),
 		)
+
 		client, err := pkg.BuildHTTPClient(cfg.Proxy)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		opts = append(opts, telego.WithHTTPClient(client))
 	}
 

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
@@ -30,9 +32,6 @@ import (
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
-
-	"github.com/mymmrac/telego"
-	th "github.com/mymmrac/telego/telegohandler"
 )
 
 const (
@@ -165,10 +164,10 @@ func (r *reportApp) stop(_ context.Context) {
 func (b *telegramBot) start() {
 	slog.Info("starting bot polling")
 
-	//go func() {
+	// go func() {
 	//	err := b..Start()
 	//	panic(err)
-	//}()
+	// }()
 	b.Router.Start()
 }
 
@@ -215,6 +214,7 @@ func (a *app) init(ctx context.Context) error {
 	mb := metabase.New(cfg.MetabaseDomain)
 	appM := appmetrica.NewCollector(&cfg.AppMetrica, log)
 	jiraColl := jira.New(cfg.Jira)
+
 	sup, err := appM.GetApplications(ctx)
 	if err != nil {
 		log.ErrorContext(
@@ -229,6 +229,7 @@ func (a *app) init(ctx context.Context) error {
 			slog.Any("apps", sup),
 		)
 	}
+
 	clct := collector.NewCollector(parallel, mb, appM, jiraColl, log)
 
 	retr := retry.New(retry.Config{

@@ -49,7 +49,7 @@ func addDays(args ...ref.Val) ref.Val {
 	days := int(args[1].(types.Int))
 
 	return types.Timestamp{
-		Time: t.Time.AddDate(0, 0, days),
+		Time: t.AddDate(0, 0, days),
 	}
 }
 
@@ -58,7 +58,7 @@ func addMonths(args ...ref.Val) ref.Val {
 	months := int(args[1].(types.Int))
 
 	return types.Timestamp{
-		Time: t.Time.AddDate(0, months, 0),
+		Time: t.AddDate(0, months, 0),
 	}
 }
 
@@ -67,7 +67,7 @@ func addYears(args ...ref.Val) ref.Val {
 	years := int(args[1].(types.Int))
 
 	return types.Timestamp{
-		Time: t.Time.AddDate(years, 0, 0),
+		Time: t.AddDate(years, 0, 0),
 	}
 }
 
@@ -76,7 +76,7 @@ func addDuration(args ...ref.Val) ref.Val {
 
 	d, err := time.ParseDuration(string(args[1].(types.String)))
 	if err != nil {
-		return types.NewErr(err.Error())
+		return types.NewErr("%s", err.Error())
 	}
 
 	return types.Timestamp{
@@ -88,15 +88,15 @@ func formatDate(args ...ref.Val) ref.Val {
 	t := args[0].(types.Timestamp)
 	layout := string(args[1].(types.String))
 
-	return types.String(t.Time.Format(layout))
+	return types.String(t.Format(layout))
 }
 
 func unix(args ...ref.Val) ref.Val {
-	return types.Int(args[0].(types.Timestamp).Time.Unix())
+	return types.Int(args[0].(types.Timestamp).Unix())
 }
 
 func unixMilli(args ...ref.Val) ref.Val {
-	return types.Int(args[0].(types.Timestamp).Time.UnixMilli())
+	return types.Int(args[0].(types.Timestamp).UnixMilli())
 }
 
 func uuidFunc(args ...ref.Val) ref.Val {
@@ -105,28 +105,33 @@ func uuidFunc(args ...ref.Val) ref.Val {
 
 func envFunc(args ...ref.Val) ref.Val {
 	name := string(args[0].(types.String))
+
 	return types.String(os.Getenv(name))
 }
 
 func sha256Func(args ...ref.Val) ref.Val {
 	s := string(args[0].(types.String))
 	sum := sha256.Sum256([]byte(s))
+
 	return types.String(hex.EncodeToString(sum[:]))
 }
 
 func md5Func(args ...ref.Val) ref.Val {
 	s := string(args[0].(types.String))
 	sum := md5.Sum([]byte(s))
+
 	return types.String(hex.EncodeToString(sum[:]))
 }
 
 func base64Func(args ...ref.Val) ref.Val {
 	s := string(args[0].(types.String))
+
 	return types.String(base64.StdEncoding.EncodeToString([]byte(s)))
 }
 
 func urlEncode(args ...ref.Val) ref.Val {
 	s := string(args[0].(types.String))
+
 	return types.String(url.QueryEscape(s))
 }
 
