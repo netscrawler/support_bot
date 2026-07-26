@@ -1,6 +1,7 @@
 package config
 
 import (
+	"support_bot/internal/collector/jira"
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
@@ -22,8 +23,13 @@ func Default() *Config {
 		},
 		MetabaseDomain: "https://metabase.domain",
 		AppMetrica: appmetrica.Config{
-			OAuthToken: "bhdsafmibhhjadskbjinkja",
+			OAuthToken: "auth token for appmetrica",
 			Timeout:    5 * time.Minute,
+		},
+		Jira: jira.Config{
+			AuthToken: "auth token from jira",
+			JiraHost:  "https://your-jira-instance.atlassian.net",
+			Timeout:   5 * time.Minute,
 		},
 		Database: postgres.Config{
 			Port:            5432,
