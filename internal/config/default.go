@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	maxbot "support_bot/internal/max_bot"
@@ -22,8 +23,13 @@ func Default() *Config {
 		},
 		MetabaseDomain: "https://metabase.domain",
 		AppMetrica: appmetrica.Config{
-			OAuthToken: "bhdsafmibhhjadskbjinkja",
+			OAuthToken: "auth token for appmetrica",
 			Timeout:    5 * time.Minute,
+		},
+		Jira: jira.Config{
+			AuthToken: "auth token from jira",
+			JiraHost:  "https://your-jira-instance.atlassian.net",
+			Timeout:   5 * time.Minute,
 		},
 		Database: postgres.Config{
 			Port:            5432,

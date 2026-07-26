@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"support_bot/internal/pkg/retry"
-
 	"github.com/netscrawler/metabase-public-api"
+	"support_bot/internal/pkg/retry"
 )
 
 type Metabase struct {

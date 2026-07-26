@@ -34,8 +34,8 @@ type ReportDataResponse struct {
 	} `json:"query"`
 	Data []struct {
 		Dimensions []struct {
-			Name    string      `json:"name"`
-			Comment interface{} `json:"comment"`
+			Name    string `json:"name"`
+			Comment any    `json:"comment"`
 		} `json:"dimensions"`
 		Metrics []float64 `json:"metrics"`
 	} `json:"data"`
@@ -54,25 +54,25 @@ type ReportDataResponse struct {
 
 type GetMyApplicationResponse struct {
 	Applications []struct {
-		Name                                 string        `json:"name"`
-		TimeZoneName                         string        `json:"time_zone_name"`
-		OrganizationId                       int           `json:"organization_id"`
-		HideAddress                          bool          `json:"hide_address"`
-		GdprAgreementAccepted                bool          `json:"gdpr_agreement_accepted"`
-		Category                             int           `json:"category,omitempty"`
-		UseUniversalLinks                    bool          `json:"use_universal_links"`
-		PartialExportEnabled                 bool          `json:"partial_export_enabled"`
-		RedownloadExclusionWindowSeconds     int           `json:"redownload_exclusion_window_seconds"`
-		RedownloadInactivityWindowSeconds    int           `json:"redownload_inactivity_window_seconds"`
-		ReattributionEnabled                 bool          `json:"reattribution_enabled"`
-		ReattributionInactivityWindowSeconds int           `json:"reattribution_inactivity_window_seconds"`
-		ReengagementInactivityWindowSeconds  int           `json:"reengagement_inactivity_window_seconds"`
-		MetrikaCounters                      []interface{} `json:"metrika_counters"`
-		Id                                   int           `json:"id"`
-		Uid                                  int           `json:"uid"`
-		OwnerLogin                           string        `json:"owner_login"`
-		Permission                           string        `json:"permission"`
-		Features                             []string      `json:"features"`
+		Name                                 string   `json:"name"`
+		TimeZoneName                         string   `json:"time_zone_name"`
+		OrganizationId                       int      `json:"organization_id"`
+		HideAddress                          bool     `json:"hide_address"`
+		GdprAgreementAccepted                bool     `json:"gdpr_agreement_accepted"`
+		Category                             int      `json:"category,omitempty"`
+		UseUniversalLinks                    bool     `json:"use_universal_links"`
+		PartialExportEnabled                 bool     `json:"partial_export_enabled"`
+		RedownloadExclusionWindowSeconds     int      `json:"redownload_exclusion_window_seconds"`
+		RedownloadInactivityWindowSeconds    int      `json:"redownload_inactivity_window_seconds"`
+		ReattributionEnabled                 bool     `json:"reattribution_enabled"`
+		ReattributionInactivityWindowSeconds int      `json:"reattribution_inactivity_window_seconds"`
+		ReengagementInactivityWindowSeconds  int      `json:"reengagement_inactivity_window_seconds"`
+		MetrikaCounters                      []any    `json:"metrika_counters"`
+		Id                                   int      `json:"id"`
+		Uid                                  int      `json:"uid"`
+		OwnerLogin                           string   `json:"owner_login"`
+		Permission                           string   `json:"permission"`
+		Features                             []string `json:"features"`
 		OrganizationFeatures                 []struct {
 			Name string `json:"name"`
 		} `json:"organization_features"`
