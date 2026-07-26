@@ -42,12 +42,11 @@ func NewRouter(
 	user.HandleCallbackQuery(userH.IgnoreReportPage, th.CallbackDataContains("ignore"))
 	user.HandleCallbackQuery(userH.GenerateSelectedReport, th.CallbackDataContains("report_gen"))
 	// Generic back handler to allow returning to previous user menu
-	user.HandleCallbackQuery(userH.Back, th.CallbackDataEqual("back"))
+	user.HandleCallbackQuery(userH.Back, th.CallbackDataEqual("user_back"))
 
 	admin := base.Group(mw.AdminFilter)
 
 	admin.HandleMessage(adminH.Start, th.CommandEqual("admin"))
-	admin.HandleMessage(adminH.HandleTextMessage, th.AnyMessageWithText())
 	admin.HandleCallbackQuery(adminH.IgnoreReportPage, th.CallbackDataContains("ignore"))
 	admin.HandleCallbackQuery(adminH.ListReports, th.CallbackDataEqual("admin_reports_show_list"))
 	admin.HandleCallbackQuery(adminH.SelectReport, th.CallbackDataContains("admin_report_select"))
@@ -61,12 +60,14 @@ func NewRouter(
 	admin.HandleCallbackQuery(adminH.DeleteUser, th.CallbackDataContains("delete_user"))
 	admin.HandleCallbackQuery(adminH.RemoveUser, th.CallbackDataEqual("remove_user"))
 	admin.HandleCallbackQuery(adminH.ShowUser, th.CallbackDataContains("show_user"))
-	admin.HandleCallbackQuery(adminH.ManageChats, th.CallbackDataEqual("manage_chats"))
-	admin.HandleCallbackQuery(adminH.ListChats, th.CallbackDataEqual("list_chats"))
-	admin.HandleCallbackQuery(adminH.AddChat, th.CallbackDataEqual("add_chat"))
-	admin.HandleCallbackQuery(adminH.DeleteChats, th.CallbackDataContains("delete_chat"))
-	admin.HandleCallbackQuery(adminH.RemoveChat, th.CallbackDataEqual("remove_chat"))
-	admin.HandleCallbackQuery(adminH.ShowChats, th.CallbackDataContains("show_chat"))
+	admin.HandleCallbackQuery(adminH.ListChats, th.CallbackDataEqual("manage_chats"))
+	admin.HandleMessage(adminH.AddChat, th.CommandEqual("add"))
+	admin.HandleCallbackQuery(adminH.DeleteChat, th.CallbackDataContains("delete_chat"))
+	admin.HandleCallbackQuery(
+		adminH.ConfirmDeleteChat,
+		th.CallbackDataContains("confirm_delete_chat"),
+	)
+	admin.HandleCallbackQuery(adminH.ShowChat, th.CallbackDataContains("show_chat"))
 	admin.HandleCallbackQuery(adminH.ManageCrons, th.CallbackDataEqual("manage_cron"))
 	admin.HandleCallbackQuery(adminH.ListCrons, th.CallbackDataEqual("list_cron"))
 	admin.HandleCallbackQuery(adminH.StartJobs, th.CallbackDataEqual("start_cron"))
