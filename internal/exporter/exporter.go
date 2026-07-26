@@ -59,7 +59,7 @@ func Export(
 
 		return []models.Data{*r}, nil
 	case models.ReportFormatText:
-		r, err := text.New(data, exp.Template.TemplateText).Export()
+		r, err := text.New(data, exp.Template.TemplateText, exp.Template.Type).Export()
 		if err != nil {
 			return nil, err
 		}

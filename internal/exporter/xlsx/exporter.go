@@ -55,6 +55,8 @@ func (e *Exporter) createXlsxBook(
 			continue
 		}
 
+		_, data := splitMeta(records)
+
 		var order []string
 		if o, ok := e.order[unit]; ok {
 			order = o
@@ -62,7 +64,7 @@ func (e *Exporter) createXlsxBook(
 			order = nil
 		}
 
-		sortedRecords := pkg.ConvertSortedRows(records, order)
+		sortedRecords := pkg.ConvertSortedRows(data, order)
 
 		sheetName := sanitizeSheetName(unit)
 		f.NewSheet(sheetName)
@@ -200,4 +202,23 @@ func getAutoWidth(records [][]any, colIdx int) float64 {
 	}
 
 	return maxWidth
+}
+
+func splitMeta(records []map[string]any) (
+	meta map[string]any,
+	data []map[string]any,
+) {
+	data = make([]map[string]any, 0)
+
+	for _, record := range records {
+		if m, ok := record["_meta"].(map[string]any); ok {
+			meta = m
+
+			continue
+		}
+
+		data = append(data, record)
+	}
+
+	return
 }

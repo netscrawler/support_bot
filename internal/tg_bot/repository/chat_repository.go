@@ -21,8 +21,8 @@ func NewChatRepository(db *sqlx.DB, log *slog.Logger) *ChatRepository {
 }
 
 func (c *ChatRepository) Create(ctx context.Context, chat *models.TgChatDTO) error {
-	const query = `INSERT INTO chats (chat_id, title, type, description, is_active) 
-	VALUES ( $1,$2,$3,$4,$5 );`
+	const query = `INSERT INTO chats (chat_id, title, type, description, is_active, ch_type) 
+	VALUES ( $1,$2,$3,$4,$5,$6 );`
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("chat repository create: %w", err)
@@ -36,6 +36,7 @@ func (c *ChatRepository) Create(ctx context.Context, chat *models.TgChatDTO) err
 		chat.Type,
 		chat.Description,
 		chat.IsActive,
+		chat.ChType,
 	)
 	if err != nil {
 		return fmt.Errorf("creating chat : %w", err)
@@ -64,7 +65,7 @@ lIMIT 1;`
 }
 
 func (c *ChatRepository) GetAll(ctx context.Context) ([]models.TgChatDTO, error) {
-	const query = "SELECT * FROM chats;"
+	const query = "SELECT * FROM chats where is_active =false;"
 
 	err := ctx.Err()
 	if err != nil {

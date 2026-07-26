@@ -2,34 +2,37 @@ package handlers
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	tele "gopkg.in/telebot.v4"
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
+	tu "github.com/mymmrac/telego/telegoutil"
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
 )
 
 type UserHandler struct {
-	bot         *tele.Bot
+	bot         *telego.Bot
 	chatService *service.Chat
 	userService *service.User
 	report      *service.Report
 	state       *State
+
+	log *slog.Logger
 }
 
 func NewUserHandler(
-	bot *tele.Bot,
+	bot *telego.Bot,
 	chatService *service.Chat,
 	userService *service.User,
 	reportService *service.Report,
 	state *State,
-) *UserHandler {
-	return &UserHandler{
+) UserHandler {
+	return UserHandler{
 		bot:         bot,
 		chatService: chatService,
 		userService: userService,
@@ -38,119 +41,41 @@ func NewUserHandler(
 	}
 }
 
-func (h *UserHandler) processUserInput(c tele.Context) error {
-	userID := c.Sender().ID
-	state := h.state.get(userID)
+func showUserMenu(bot *telego.Bot, message telego.Message) error {
+	rmkp := tu.InlineKeyboard(
+		tu.InlineKeyboardCols(1, menu.ShowReports)...)
 
-	switch state {
-	case menuState:
-		return h.LoadReports(c)
-	// case SendNotificationState:
-	//	return h.ProcessSendNotification(c)
-	// case ConfirmNotificationState:
-	//	return h.ConfirmSendNotification(c)
-	// case CancelNotificationState:
-	//	return h.CancelSendNotification(c)
-	default:
-		return nil
-	}
-}
-
-func (h *UserHandler) StartUser(c tele.Context) error {
-	if c.Chat().Type != tele.ChatPrivate {
-		return nil
-	}
-
-	menu.UserMenu.Reply(
-		menu.UserMenu.Row(menu.LoadAndShowReportUser),
+	_, err := bot.SendMessage(
+		context.Background(),
+		&telego.SendMessageParams{
+			ChatID:      message.Chat.ChatID(),
+			Text:        "Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.",
+			ReplyMarkup: rmkp,
+		},
 	)
-	//nolint:errcheck
-	c.Delete()
-	h.state.set(c.Sender().ID, menuState)
 
-	return c.Send("Добро пожаловать!", menu.UserMenu)
+	return err
 }
 
-func (h *UserHandler) RegisterUser(c tele.Context) error {
-	//nolint:errcheck
-	c.Delete()
+const helpMsg = `
+Вот что можно сделать:
+• /start — открыть главное меню
+• Нажмите «📊 Выбрать отчёт» и выберите нужный вариант
+• После запуска отчёт будет отправлен в этот чат
+`
 
-	if c.Chat().Type != tele.ChatPrivate {
-		return nil
-	}
-
-	ctx := context.Background()
-	snd := models.NewUser(
-		c.Sender().ID,
-		c.Sender().Username,
-		c.Sender().FirstName,
-		&c.Sender().LastName,
-		false,
-	)
-	err := h.userService.AddUserComplete(ctx, &snd)
-	// formatedString := fmt.Sprintf(
-	//	"Пользователь с ником @%s успешно прошел регистрацию",
-	//	c.Sender().Username,
-	//)
-	//nolint:errcheck
-	// h.notify.SendAdminNotify(ctx, formatedString)
-
-	if err == nil {
-		return c.Send("Вы успешно прошли регистрацию!\n напишите /start чтобы начать работу")
-	}
-
-	return nil
+func (u *UserHandler) Start(ctx *th.Context, message telego.Message) error {
+	return showUserMenu(ctx.Bot(), message)
 }
 
-func (h *UserHandler) LoadReports(c tele.Context) error {
-	h.state.set(c.Sender().ID, loadReportState)
-	//nolint:errcheck
-	// c.Delete()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	rpl, err := h.report.LoadReportsWithPagination(ctx)
+func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
+	// u.log.Info("User help command from %s", message.From.Username)
+	_, err := ctx.Bot().SendMessage(ctx.Context(), &telego.SendMessageParams{
+		ChatID: tu.ID(message.Chat.ID),
+		Text:   helpMsg,
+	})
 	if err != nil {
-		return c.Send("Ошибка получения отчетов: " + err.Error())
-	}
-
-	mark := mapReportRPLToMarkup(rpl)
-
-	return c.Send(menu.MsgHelloReport, &mark)
-}
-
-func (h *UserHandler) LoadReportsPage(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
-	}
-
-	page, err := strconv.Atoi(c.Data())
-	if err != nil {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить страницу"})
-	}
-
-	if err := c.Respond(); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	rpl, err := h.report.LoadReportByPage(ctx, page)
-	if err != nil {
-		return c.Edit("Ошибка получения отчетов: " + err.Error())
-	}
-
-	mark := mapReportRPLToMarkup(rpl)
-
-	h.state.set(userID, loadReportState)
-
-	if err := c.Edit(menu.MsgHelloReport, &mark); err != nil {
-		if isMessageNotModified(err) {
-			return nil
-		}
+		u.log.Error("Error", slog.Any("error", err))
 
 		return err
 	}
@@ -158,149 +83,142 @@ func (h *UserHandler) LoadReportsPage(c tele.Context) error {
 	return nil
 }
 
-func (h *UserHandler) IgnoreReportPage(c tele.Context) error {
-	return c.Respond()
+// Back returns user to main user menu when "back" callback is pressed.
+func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
+	_ = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+
+	rmkp := tu.InlineKeyboard(
+		tu.InlineKeyboardCols(1, menu.ShowReports)...)
+
+	return editOrSend(
+		ctx,
+		query,
+		"Здравствуйте! Я помогу быстро получить нужные отчёты.\n\nНажмите кнопку ниже, чтобы выбрать отчёт и отправить его в этот чат.",
+		rmkp,
+	)
 }
 
-func (h *UserHandler) GenerateSelectedReport(c tele.Context) error {
-	userID := c.Sender().ID
-	if h.state.get(userID) != loadReportState {
-		return c.Edit("Время на выбор отчета истекло, начните заново")
+func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuery) error {
+	data := strings.Split(query.Data, ";")
+	if len(data) != 2 {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить страницу",
+		})
 	}
 
-	_, reportName, ok := strings.Cut(c.Data(), ";")
-	if !ok || reportName == "" {
-		return c.Respond(&tele.CallbackResponse{Text: "Не удалось определить отчет"})
+	page, err := strconv.Atoi(data[1])
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить страницу",
+		})
 	}
 
-	if err := c.Respond(); err != nil {
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
+	rpl, err := h.report.LoadReportByPage(tctx, page)
+	if err != nil {
+		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
+			MessageID: query.Message.GetMessageID(),
+			Text:      "Ошибка получения отчетов: " + err.Error(),
+		})
+
+		return err
+	}
+
+	mark := mapReportRPLToMarkup(rpl)
+
+	err = editOrSend(ctx, query, menu.MsgHelloReport, &mark)
+
+	return err
+}
+
+func (h *UserHandler) IgnoreReportPage(ctx *th.Context, query telego.CallbackQuery) error {
+	err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
+
+	return err
+}
+
+func (h *UserHandler) GenerateSelectedReport(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	data := strings.Split(query.Data, ";")
+	if len(data) < 2 {
+		err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить отчет",
+		})
+
+		return err
+	}
+
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
+		return err
+	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	title := query.Message.Message().Chat.FirstName
 
 	chat := &models.Chat{
-		ChatID:   c.Chat().ID,
-		Title:    &c.Chat().FirstName,
-		Type:     string(c.Chat().Type),
+		ChatID:   query.Message.GetChat().ID,
+		Title:    &title,
+		Type:     query.Message.GetChat().Type,
 		IsActive: true,
+		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateReportByName(ctx, reportName, chat); err != nil {
-		return c.Edit("Не удалось запустить отчет: " + err.Error())
-	}
-
-	h.state.set(userID, menuState)
-
-	if err := c.Edit("Отчет запущен. Результат придет в этот чат."); err != nil {
-		if errors.Is(err, tele.ErrMessageNotModified) {
-			return nil
-		}
+	if err := h.report.GenerateReportByName(tctx, data[2], chat); err != nil {
+		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
+			MessageID: query.Message.Message().MessageID,
+			Text:      "Не удалось запустить отчёт. Повторите попытку позже.",
+		})
 
 		return err
 	}
 
-	return nil
-}
-
-func isMessageNotModified(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "message is not modified")
-}
-
-func (h *UserHandler) processSendNotification(c tele.Context) error {
-	if h.state.get(c.Sender().ID) != sendNotificationState {
-		return c.Edit("Время на отправку истекло, начните заново")
-	}
-
-	msg := c.Text()
-	if msg == "" {
-		return c.Send(pleaseSendMessage)
-	}
-
-	h.state.setMsgData(c.Sender().ID, msg)
-
-	confirmBtn := menu.Selector.Data(
-		"✅ Отправить",
-		"confirm_user_notification",
-	)
-	cancelBtn := menu.Selector.Data("❌ Отменить", "cancel_user_notification")
-	menu.Selector.Inline(
-		menu.Selector.Row(cancelBtn, confirmBtn),
-	)
-
-	h.state.set(c.Sender().ID, confirmNotificationState)
-
-	conf := "Вы уверены, что хотите отправить это уведомление?\n\n"
-	formated := fmt.Sprintf("%s```\n%s```", conf, msg)
-
-	// Отправляем сообщение с клавиатурой
-	return c.Send(
-		formated,
-		menu.Selector,
-		tele.ModeMarkdownV2,
+	return editOrSend(
+		ctx,
+		query,
+		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.",
+		nil,
 	)
 }
 
-// func (h *UserHandler) ConfirmSendNotification(c tele.Context) error {
-//	ctx := context.Background()
-//
-//	msg, ok := h.state.GetMsgData(c.Sender().MessageID)
-//	if h.state.Get(c.Sender().MessageID) != ConfirmNotificationState || !ok {
-//		return c.Edit("Время на подтверждение истекло")
-//	}
-//
-//	resp, err := h.notify.BroadcastToChats(ctx, msg)
-//	if err != nil {
-//		if errors.Is(err, errorz.ErrNotFound) {
-//			return c.Edit(UnableCauseNotFound)
-//		}
-//
-//		if errors.Is(err, errorz.ErrInternal) {
-//			return c.Edit(UnableCauseInternal)
-//		}
-//
-//		return c.Edit(UnableSendMessages + err.Error())
-//	}
-//
-//	userString := fmt.Sprintf("Пользователь @%s разослал уведомление:", c.Sender().Username)
-//	formString := fmt.Sprintf(
-//		"%s\n<pre><code>%s</code></pre>",
-//		userString, msg,
-//	)
-//	//nolint:errcheck
-//	go h.notify.SendAdminNotify(ctx, formString)
-//
-//	h.state.Set(c.Sender().MessageID, MenuState)
-//
-//	return c.Edit(resp, tele.ModeMarkdownV2)
-//}
-//
-// func (h *UserHandler) CancelSendNotification(c tele.Context) error {
-//	h.state.Set(c.Sender().MessageID, MenuState)
-//
-//	return c.Edit("❌ Отправка уведомления отменена.")
-//}
-
-func (h *UserHandler) userAuthMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
-	return func(c tele.Context) error {
-		ctx := context.Background()
-		// Получаем username пользователя
-		username := c.Sender().Username
-		if username == "" {
-			return nil
-		}
-
-		// Проверяем пользователя в базе
-		user, err := h.userService.GetByUsername(ctx, username)
-		//nolint:nilerr
-		if err != nil {
-			return nil
-		}
-
-		// Сохраняем пользователя в context
-		c.Set("user", user)
-
-		return next(c)
+func (h *UserHandler) LoadReports(ctx *th.Context, query telego.CallbackQuery) error {
+	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	}); err != nil {
+		return err
 	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	rpl, err := h.report.LoadReportsWithPagination(tctx)
+	if err != nil {
+		return editOrSend(ctx, query, "Ошибка получения отчетов", nil)
+	}
+
+	mark := mapReportRPLToMarkup(rpl)
+
+	err = editOrSend(ctx, query, menu.MsgHelloReport, &mark)
+
+	return err
 }

@@ -97,7 +97,7 @@ func (smb *SMB) Upload(
 		return fmt.Errorf("smb conn inactive from config")
 	}
 
-	remotePath := filepath.Join(remote, data.Name)
+	remotePath := filepath.Join(remote, data.FileName)
 
 	f, err := smb.fs.Create(remotePath)
 	if err != nil {

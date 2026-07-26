@@ -1,31 +1,79 @@
 package menu
 
-import "gopkg.in/telebot.v4"
-
-var (
-	AdminMenu = &telebot.ReplyMarkup{ResizeKeyboard: true}
-	UserMenu  = &telebot.ReplyMarkup{ResizeKeyboard: true}
-	Selector  = &telebot.ReplyMarkup{}
+import (
+	"github.com/mymmrac/telego"
 )
 
-var LoadAndShowReportUser = UserMenu.Text("Отчеты")
-
 var (
-	ManageUsers = AdminMenu.Text("👥 Управление пользователями")
-	ManageChats = AdminMenu.Text("💬 Управление чатами")
-	ManageCron  = AdminMenu.Text("🔄 Управление рассылками")
-	StartCron   = AdminMenu.Text("🔄 Перезапустить рассылки")
-	StopCron    = AdminMenu.Text("🔄 Выключить рассылку")
+	ManageUsers = telego.InlineKeyboardButton{
+		Text:         "👥 Управление пользователями",
+		CallbackData: "manage_users",
+	}
 
-	ListUser   = AdminMenu.Text("📋 Список пользователей")
-	AddUser    = AdminMenu.Text("➕ Добавить пользователя")
-	RemoveUser = AdminMenu.Text("➖ Удалить пользователя")
+	ManageChats = telego.InlineKeyboardButton{
+		Text:         "💬 Управление чатами",
+		CallbackData: "manage_chats",
+	}
 
-	ListChats  = AdminMenu.Text("📋 Список чатов")
-	RemoveChat = AdminMenu.Text("➖ Удалить чат")
+	ManageCron = telego.InlineKeyboardButton{
+		Text:         "🔄 Управление рассылками",
+		CallbackData: "manage_cron",
+	}
 
-	Back = AdminMenu.Text("🔙 Назад")
+	StartCron = telego.InlineKeyboardButton{
+		Text:         "▶️ Запустить рассылки",
+		CallbackData: "start_cron",
+	}
+
+	StopCron = telego.InlineKeyboardButton{
+		Text:         "⏹ Остановить рассылки",
+		CallbackData: "stop_cron",
+	}
+
+	ListUser = telego.InlineKeyboardButton{
+		Text:         "📋 Список пользователей",
+		CallbackData: "list_user",
+	}
+
+	AddUser = telego.InlineKeyboardButton{
+		Text:         "➕ Добавить пользователя",
+		CallbackData: "add_user",
+	}
+
+	RemoveUser = telego.InlineKeyboardButton{
+		Text:         "➖ Удалить пользователя",
+		CallbackData: "remove_user",
+	}
+
+	ListChats = telego.InlineKeyboardButton{
+		Text:         "📋 Список чатов",
+		CallbackData: "list_chats",
+	}
+
+	RemoveChat = telego.InlineKeyboardButton{
+		Text:         "➖ Удалить чат",
+		CallbackData: "remove_chat",
+	}
+
+	Back = telego.InlineKeyboardButton{
+		Text:         "⬅️ Назад",
+		CallbackData: "back",
+	}
+
+	ShowReports = telego.InlineKeyboardButton{
+		Text:         "📊 Выбрать отчёт",
+		CallbackData: "reports_show_list",
+	}
+
+	ShowReportsAdmin = telego.InlineKeyboardButton{
+		Text:         "📊 Отчёты",
+		CallbackData: "admin_reports_show_list",
+	}
 )
+
+var BackMarkup = &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{
+	{Back},
+}}
 
 var (
 	StartCommand    = "/admin"
@@ -36,4 +84,4 @@ var (
 	RegisterCommand = "/register"
 )
 
-var MsgHelloReport = `Выберите нужный отчет и он придет в данный чат`
+var MsgHelloReport = `Выберите отчёт из списка ниже. Я запущу его и отправлю результат в этот чат.`

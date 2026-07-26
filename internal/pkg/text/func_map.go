@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	htmltmpl "html/template"
+	"reflect"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -786,4 +788,170 @@ var FuncMap = template.FuncMap{
 	"code": func(s string) string {
 		return "<code>" + s + "</code>"
 	},
+
+	"timeSeries": func(
+		rows []map[string]any,
+		dateField string,
+		dateLayout string,
+		totalField string,
+		totalValue any,
+		zeroFields []any,
+		copyFields []any,
+	) (TimeSeriesResult, error) {
+		return PrepareTimeSeries(rows, TimeSeriesOptions{
+			DateField:  dateField,
+			DateLayout: dateLayout,
+			TotalField: totalField,
+			TotalValue: totalValue,
+			Step:       TimeSeriesDay,
+			ZeroFields: zeroFields,
+			CopyFields: copyFields,
+		})
+	},
+	"list": func(v ...any) []any {
+		return v
+	},
+}
+
+type TimeSeriesStep int
+
+const (
+	TimeSeriesDay TimeSeriesStep = iota
+	TimeSeriesWeek
+	TimeSeriesMonth
+	TimeSeriesYear
+)
+
+type TimeSeriesOptions struct {
+	DateField  string
+	DateLayout string
+
+	TotalField string
+	TotalValue any
+
+	Step TimeSeriesStep
+
+	ZeroFields []any
+	CopyFields []any
+}
+
+type TimeSeriesResult struct {
+	Rows  []map[string]any
+	Total map[string]any
+}
+
+func PrepareTimeSeries(rows []map[string]any, opts TimeSeriesOptions) (TimeSeriesResult, error) {
+	result := TimeSeriesResult{}
+
+	if len(rows) == 0 {
+		return result, nil
+	}
+
+	if opts.DateLayout == "" {
+		opts.DateLayout = "02.01.2006"
+	}
+
+	if opts.Step == 0 {
+		opts.Step = TimeSeriesDay
+	}
+
+	type item struct {
+		date time.Time
+		row  map[string]any
+	}
+
+	var (
+		items []item
+		min   time.Time
+		max   time.Time
+	)
+
+	for _, row := range rows {
+		if opts.TotalField != "" {
+			if reflect.DeepEqual(row[opts.TotalField], opts.TotalValue) {
+				result.Total = row
+
+				continue
+			}
+		}
+
+		raw, ok := row[opts.DateField]
+		if !ok {
+			continue
+		}
+
+		t, err := time.Parse(opts.DateLayout, fmt.Sprint(raw))
+		if err != nil {
+			return result, err
+		}
+
+		items = append(items, item{
+			date: t,
+			row:  row,
+		})
+
+		if min.IsZero() || t.Before(min) {
+			min = t
+		}
+
+		if max.IsZero() || t.After(max) {
+			max = t
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].date.Before(items[j].date)
+	})
+
+	index := make(map[string]map[string]any)
+
+	for _, it := range items {
+		index[it.date.Format(opts.DateLayout)] = it.row
+	}
+
+	for d := min; !d.After(max); d = nextDate(d, opts.Step) {
+		key := d.Format(opts.DateLayout)
+
+		if row, ok := index[key]; ok {
+			result.Rows = append(result.Rows, row)
+
+			continue
+		}
+
+		newRow := map[string]any{
+			opts.DateField: key,
+		}
+
+		for _, field := range opts.ZeroFields {
+			newRow[fmt.Sprintf("%v", field)] = 0
+		}
+
+		for _, field := range opts.CopyFields {
+			if len(items) > 0 {
+				if v, ok := items[0].row[fmt.Sprintf("%v", field)]; ok {
+					newRow[fmt.Sprintf("%v", field)] = v
+				}
+			}
+		}
+
+		result.Rows = append(result.Rows, newRow)
+	}
+
+	return result, nil
+}
+
+func nextDate(t time.Time, step TimeSeriesStep) time.Time {
+	switch step {
+	case TimeSeriesWeek:
+		return t.AddDate(0, 0, 7)
+
+	case TimeSeriesMonth:
+		return t.AddDate(0, 1, 0)
+
+	case TimeSeriesYear:
+		return t.AddDate(1, 0, 0)
+
+	default:
+		return t.AddDate(0, 0, 1)
+	}
 }

@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
-
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	maxModel "github.com/max-messenger/max-bot-api-client-go/v2/model"
 	"golang.org/x/time/rate"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 )
 
 var ErrMaxAdaptorInactive = errors.New("max adaptor inactive from config")
@@ -55,8 +54,10 @@ func (ca *Adaptor) SendText(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg = maxMsg.SetText(msg).SetChat(chat.ChatID).SetFormat(maxModel.FormatHTML)
+
 	if err := ca.rl.Wait(ctx); err != nil {
 		return nil, err
 	}
@@ -66,6 +67,7 @@ func (ca *Adaptor) SendText(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -87,6 +89,7 @@ func (ca *Adaptor) SendMedia(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
@@ -99,7 +102,7 @@ func (ca *Adaptor) SendMedia(
 			ctx,
 			maxModel.UploadImage,
 			i.Data,
-			i.Name,
+			i.FileName,
 			int64(i.Data.Len()),
 		)
 		if err != nil {
@@ -107,7 +110,6 @@ func (ca *Adaptor) SendMedia(
 		}
 
 		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
-
 	}
 
 	if err := ca.rl.Wait(ctx); err != nil {
@@ -119,6 +121,7 @@ func (ca *Adaptor) SendMedia(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -140,6 +143,7 @@ func (ca *Adaptor) SendDocument(
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
 	}
+
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
@@ -152,7 +156,7 @@ func (ca *Adaptor) SendDocument(
 			ctx,
 			maxModel.UploadFile,
 			i.Data,
-			i.Name,
+			i.FileName,
 			int64(i.Data.Len()),
 		)
 		if err != nil {
@@ -160,7 +164,6 @@ func (ca *Adaptor) SendDocument(
 		}
 
 		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
-
 	}
 
 	if err := ca.rl.Wait(ctx); err != nil {
@@ -172,6 +175,7 @@ func (ca *Adaptor) SendDocument(
 		retryErr := ca.retry.Submit(
 			retry.NewTask(fmt.Sprintf("max %d", chat.ChatID), func(ctx context.Context) error {
 				_, err := ca.api.Messages.Send(ctx, maxMsg)
+
 				return err
 			}),
 		)
@@ -189,6 +193,7 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 	if !ca.active {
 		return ErrMaxAdaptorInactive
 	}
+
 	if err := ca.rl.Wait(context.Background()); err != nil {
 		return err
 	}
@@ -208,6 +213,7 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 		if retryErr != nil {
 			return errors.Join(err, retryErr)
 		}
+
 		return err
 	}
 
@@ -220,8 +226,10 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 
 func deRef[T any](t *T) T {
 	var tt T
+
 	if t == nil {
 		return tt
 	}
+
 	return *t
 }

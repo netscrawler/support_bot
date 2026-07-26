@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"support_bot/internal/collector"
+	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
@@ -94,6 +96,15 @@ func configDef() {
 			Title:    "Example card 2",
 		}},
 		MetabaseBaseURL: "https://metabase.example.com",
+		Jira: jira.Config{
+			AuthToken: "token",
+			JiraHost:  "host.jira.com",
+			Timeout:   0,
+		},
+		AppMetrica: appmetrica.Config{
+			OAuthToken: "oauth_token",
+			Timeout:    0,
+		},
 	}, " ", "  ")
 	if err != nil {
 		fmt.Printf("unable create config: %s", err.Error())
@@ -111,8 +122,10 @@ func help() {
 }
 
 type config struct {
-	Cards           []models.Card `json:"cards"`
-	MetabaseBaseURL string        `json:"metabase"`
+	Cards           []models.Card     `json:"cards"`
+	MetabaseBaseURL string            `json:"metabase"`
+	Jira            jira.Config       `json:"jira"`
+	AppMetrica      appmetrica.Config `json:"appmetrica"`
 }
 
 func main() {
@@ -187,7 +200,13 @@ func main() {
 		slog.Error("error watch for templates", slog.Any("error", err))
 	}
 
-	clct := collector.NewCollector(4, metabase.New(cfg.MetabaseBaseURL), slog.Default())
+	clct := collector.NewCollector(
+		4,
+		metabase.New(cfg.MetabaseBaseURL),
+		appmetrica.NewCollector(&cfg.AppMetrica, log),
+		jira.New(cfg.Jira),
+		slog.Default(),
+	)
 
 	slog.Info("collecting data for cards")
 

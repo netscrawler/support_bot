@@ -16,6 +16,7 @@ var (
 
 type TgSender interface {
 	SendText(ctx context.Context, rcpt TgChat, s string) (*SentMessage, error)
+	SendRichText(ctx context.Context, rcpt TgChat, s string) (*SentMessage, error)
 	SendDocument(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
 	SendMedia(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
 }
@@ -46,18 +47,21 @@ type Message struct {
 
 	Recipients []Recipient
 
-	Text   []Data
-	Files  []Data
-	Images []Data
+	Text     []Data
+	RichText []Data
+	Files    []Data
+	Images   []Data
 }
 
 func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
-	var txt, fl, imgs []Data
+	var txt, rTxt, fl, imgs []Data
 
 	for _, d := range data {
 		switch d.Type {
-		case sendTextKind:
+		case SendTextKind:
 			txt = append(txt, d)
+		case SendRichTextKind:
+			rTxt = append(rTxt, d)
 		case sendFileKind:
 			fl = append(fl, d)
 		case sendImageKind:
@@ -70,6 +74,7 @@ func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
 		ReportName: rName,
 		Recipients: rcpts,
 		Text:       txt,
+		RichText:   rTxt,
 		Files:      fl,
 		Images:     imgs,
 	}
@@ -112,6 +117,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
+
 				continue
 			}
 
@@ -153,6 +159,17 @@ func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]S
 			msg, err := sender.SendText(ctx, rcpt, data.Data.String())
 			if err != nil {
 				sendErr = fmt.Errorf("sending text: %w", err)
+			} else {
+				retMsg = append(retMsg, *msg)
+			}
+		}
+	}
+
+	if m.RichText != nil {
+		for _, data := range m.RichText {
+			msg, err := sender.SendRichText(ctx, rcpt, data.Data.String())
+			if err != nil {
+				sendErr = fmt.Errorf("sending rich text: %w", err)
 			} else {
 				retMsg = append(retMsg, *msg)
 			}
@@ -289,7 +306,7 @@ func (m *Message) sendSMTP(ctx context.Context, sender SmtpSender, r Recipient) 
 	for _, f := range append(m.Files, m.Images...) {
 		mail.Attachments = append(mail.Attachments, smtp.Attachment{
 			File: f.Data,
-			Name: f.Name,
+			Name: f.FileName,
 		})
 	}
 

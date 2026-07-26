@@ -4,24 +4,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"support_bot/internal/collector/appmetrica"
 	"time"
 
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
+	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	tgbot "support_bot/internal/tg_bot"
-
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
 )
 
 type Config struct {
 	Log            logger.LogConfig  `yaml:"log"             comment:"Настройки логгирования"`
 	MetabaseDomain string            `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
-	AppMetrica     appmetrica.Config `yaml:"appmetrica" env:"APP_METRICA"`
+	AppMetrica     appmetrica.Config `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
+	Jira           jira.Config       `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
 	Database       postgres.Config   `yaml:"database"        comment:"Настройки подключения к Postgres"`
 	TgBot          tgbot.Config      `yaml:"telegram"        comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout           `yaml:"timeout"         comment:"Настройка таймаутов"`
