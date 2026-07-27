@@ -67,11 +67,11 @@ const (
 )
 
 type Card struct {
-	CardUUID  string `json:"card_uuid"`
-	Title     string `json:"title"`
-	RawParams json.RawMessage
+	CardUUID  string          `json:"card_uuid"`
+	Title     string          `json:"title"`
+	RawParams json.RawMessage `json:"rawParams"`
 	Params    map[string]string
-	Type      string
+	Type      string `json:"type"`
 }
 
 func (c Card) ToString(baseUrl string) string {
