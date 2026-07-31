@@ -1,6 +1,7 @@
 package config
 
 import (
+	"support_bot/internal/processor/lua"
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
@@ -30,6 +31,18 @@ func Default() *Config {
 			AuthToken: "auth token from jira",
 			JiraHost:  "https://your-jira-instance.atlassian.net",
 			Timeout:   5 * time.Minute,
+		},
+		Lua: lua.Config{
+			ExecutionTimeout: 5 * time.Minute,
+			MaxMemoryMB:      256,
+			AllowedModules: []string{
+				"json",    // JSON кодирование/декодирование
+				"http",    // HTTP запросы
+				"url",     // парсинг URL
+				"time",    // работа со временем
+				"strings", // строковые операции
+				"inspect", // отладка
+			},
 		},
 		Database: postgres.Config{
 			Port:            5432,

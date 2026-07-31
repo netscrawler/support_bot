@@ -1,5 +1,3 @@
-git
-github
 bin
 config
 db
@@ -10,7 +8,6 @@ vendor
 *.toml
 *.yml
 *.yaml
-Makefile
 *.md
 *.log
 *.json

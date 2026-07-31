@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/mymmrac/telego"
-	th "github.com/mymmrac/telego/telegohandler"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
@@ -26,12 +24,20 @@ import (
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
+	"support_bot/internal/processor"
+	"support_bot/internal/processor/lua"
+	luastd "support_bot/internal/processor/lua/stdlib"
+	"support_bot/internal/processor/pipeline"
+	repository2 "support_bot/internal/repository"
 	"support_bot/internal/sheduler"
 	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
+
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
 )
 
 const (
@@ -281,14 +287,35 @@ func (a *app) init(ctx context.Context) error {
 		return err
 	}
 
+	luaStdColl := luastd.NewCollector(map[string]luastd.DirectCollector{
+		"jira":       jiraColl,
+		"mb":         mb,
+		"appmetrica": appM,
+	})
+
+	scriptRepo := lua.NewRepository(rdb.GetConn())
+
+	luaManager := lua.NewManager(
+		&cfg.Lua,
+		scriptRepo,
+		luastd.NewSTD(luaStdColl, luastd.DatabasePlugin{}, luastd.RateLimit{}),
+	)
+
+	runnerReg := processor.NewReg()
+	luaRunner := pipeline.NewLuaRunner(luaManager)
+	runnerReg.Register("lua", luaRunner)
+	runnerReg.Register("sql", &pipeline.SqlRunner{})
+
+	proc := processor.NewProcessor(runnerReg, log)
+
 	snd := models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
 
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
-	gen := generator.New(reportChan, clct, *snd, *delRepo, eval, 4, log)
+	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
 
-	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
+	orchRepo := repository2.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)
 	report := &reportApp{
 		ScheduleC:    sheduleEvents,

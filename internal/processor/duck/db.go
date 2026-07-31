@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"support_bot/internal/models"
+
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -17,16 +19,16 @@ type DB struct {
 	schema map[string]map[string]string
 }
 
-func New() (DB, error) {
+func New() (*DB, error) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return DB{}, fmt.Errorf("duckdb: error opening db: %w", err)
+		return nil, fmt.Errorf("duckdb: error opening db: %w", err)
 	}
 
-	return DB{db: db, schema: make(map[string]map[string]string)}, nil
+	return &DB{db: db, schema: make(map[string]map[string]string)}, nil
 }
 
-func (d *DB) LoadDataFromMapSlice(ctx context.Context, sample map[string][]map[string]any) error {
+func (d *DB) LoadDataFromMapSlice(ctx context.Context, sample models.Dataset) error {
 	for table, data := range sample {
 		err := d.createTableFromMap(ctx, table, data)
 		if err != nil {
