@@ -17,17 +17,37 @@ GOOS = linux
 GOARCH = amd64
 
 BUILD_FLAGS = -ldflags "\
-			  -s -w \
-			  -X main.Version=$(VERSION) \
-			  -X main.Commit=$(COMMIT) \
-			  -X main.BuildTime=$(BUILD_TIME)"
+				-linkmode external \
+				-extldflags '-static' \
+				-s -w \
+				-X main.Version=$(VERSION) \
+				-X main.Commit=$(COMMIT) \
+				-X main.BuildTime=$(BUILD_TIME)"
 
 .PHONY: all build run clean
 
 all: build
 
 build:
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
+	CC=musl-gcc CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod=mod $(BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
+
+docker-build:
+	docker build \
+		-f build.Dockerfile \
+		-t support_bot-builder .
+
+docker-run: docker-build
+	docker create \
+		--name support_bot-builder-tmp \
+		support_bot-builder
+
+	mkdir -p bin
+
+	docker cp \
+		support_bot-builder-tmp:/out/sbot \
+		./bin/sbot
+
+	docker rm support_bot-builder-tmp
 
 run: build
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go run $(BUILD_FLAGS) $(MAIN_PACKAGE) --config=$(CONFIG_PATH)
