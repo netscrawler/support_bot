@@ -11,16 +11,17 @@ import (
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
+	"support_bot/internal/processor"
 )
 
 type Collector interface {
-	Collect(ctx context.Context, cards ...models.Card) (map[string][]map[string]any, error)
+	Collect(ctx context.Context, cards ...models.Card) (models.Dataset, error)
 }
 
 type Evaluator interface {
 	Evaluate(
 		ctx context.Context,
-		data map[string][]map[string]any,
+		data models.Dataset,
 		expr string,
 	) (bool, error)
 	EvalStr(ctx context.Context, expr string) (string, error)
@@ -35,6 +36,8 @@ type Generator struct {
 
 	snd models.SenderProvider
 
+	proc *processor.Processor
+
 	numWorkers uint8
 
 	sentMsgRepo SentMsgRepository
@@ -47,6 +50,7 @@ func New(
 	clct Collector,
 	snd models.SenderProvider,
 	sendRepo SentMsgRepository,
+	proc *processor.Processor,
 	eval Evaluator,
 	workers uint8,
 	log *slog.Logger,
@@ -65,6 +69,7 @@ func New(
 		log:         l,
 		numWorkers:  workers,
 		sentMsgRepo: sendRepo,
+		proc:        proc,
 	}
 }
 
@@ -128,6 +133,27 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 
 		return err
+	}
+
+	if report.Pipeline != nil {
+		l.InfoContext(
+			ctx,
+			"start pipeline for report",
+			slog.Any("pipeline", report.Pipeline.Name),
+			slog.Any("report", report.Name),
+		)
+
+		processed, err := g.proc.Process(ctx, data, report.Pipeline)
+		if err != nil {
+			l.ErrorContext(
+				ctx,
+				"pipeline execution error, stop generate report",
+				slog.Any("error", err),
+			)
+
+			return err
+		}
+		data = processed
 	}
 
 	approve, err := g.eval.Evaluate(ctx, data, report.Evaluation)

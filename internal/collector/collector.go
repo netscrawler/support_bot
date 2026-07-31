@@ -53,7 +53,7 @@ func NewCollector(
 func (c *Collector) Collect(
 	ctx context.Context,
 	cards ...models.Card,
-) (map[string][]map[string]any, error) {
+) (models.Dataset, error) {
 	start := time.Now()
 
 	c.log.InfoContext(ctx, "Start collecting data")
@@ -72,7 +72,7 @@ func (c *Collector) Collect(
 		return nil, ErrEmtyCard
 	}
 
-	collected := make(map[string][]map[string]any)
+	collected := make(models.Dataset)
 
 	var wg sync.WaitGroup
 
