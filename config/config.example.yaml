@@ -20,6 +20,20 @@ jira:
     auth_token: auth token from jira
     jira_host: https://your-jira-instance.atlassian.net
     timeout: 5m0s
+# Настройки Lua-процессора.
+lua:
+    # Таймаут для выполнения плагина.
+    execution_timeout: 5m0s
+    # Лимит памяти для 1 плагина в MB
+    max_memory_mb: 256
+    # Разрешенные луа модули
+    allowed_modules:
+        - json
+        - http
+        - url
+        - time
+        - strings
+        - inspect
 # Настройки подключения к Postgres
 database:
     # Порт для подключения к базе
