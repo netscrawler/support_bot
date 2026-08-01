@@ -15,11 +15,14 @@ type Report struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
 
-	Queries    []Card      `json:"queries"`
-	Recipients []Recipient `json:"recipients"`
-	Exports    []Export    `json:"exports"`
-	Pipeline   *Pipeline   `json:"pipeline,omitempty"`
-	Evaluation string      `json:"evaluation"`
+	Queries      []Card      `json:"queries"`
+	Recipients   []Recipient `json:"recipients"`
+	Exports      []Export    `json:"exports"`
+	Pipeline     *Pipeline   `json:"pipeline,omitempty"`
+	Evaluation   string      `json:"evaluation"`
+	Active       bool        `json:"active"`
+	AccessFromLK bool        `json:"access_from_lk"`
+	Crons        []Cron      `json:"crons,omitempty"`
 }
 
 type Pipeline struct {
@@ -195,6 +198,14 @@ type Template struct {
 	Title        string `json:"title"`
 	Type         string `json:"type"`
 	TemplateText string `json:"template_text"`
+}
+
+type Cron struct {
+	Name        string `json:"name"`
+	Cron        string `json:"cron"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"is_active"`
+	EventType   int    `json:"event_type"`
 }
 type Export struct {
 	Format   reportFormat        `json:"format"`
