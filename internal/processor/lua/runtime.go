@@ -31,6 +31,7 @@ func DefaultRuntimeConfig() *RuntimeConfig {
 			"time",    // работа со временем
 			"strings", // строковые операции
 			"inspect", // отладка
+			"crypto",  // криптография
 		},
 		CallStackSize: 256, // увеличен для сложных операций
 		RegistrySize:  256, // стандартный размер

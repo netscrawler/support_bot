@@ -1,5 +1,3 @@
-# example config
-# Создайте файл config.yaml и поместите туда, заменив значения на свои
 # Настройки логгирования
 log:
     # Профиль логирования (debug - уровень DEBUG|prod - Уровень INFO|test - Уровень DEBUG + add source)
@@ -125,10 +123,9 @@ max:
     max_token: max_bot_token
     # CleanUpTime — интервал очистки временных данных бота
     # (кэш, состояния диалогов, временные сообщения и т.п.).
-    clean_up_time: 0s
+    clean_up_time: 10m0s
     # BotPoll — интервал long-polling запросов к Max API.
-    bot_poll: 0s
+    bot_poll: 30s
     api_proxy: ""
     # Флаг активации бота, false по умолчанию. Отвечает за то включать бота или нет
     max_enabled: false
-

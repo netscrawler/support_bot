@@ -1,267 +1,167 @@
 # Support TgBot
 
 <!-- TOC -->
-* [Support TgBot](#support-bot)
+* [Support TgBot](#support-tgbot)
   * [Что умеет сервис](#что-умеет-сервис)
   * [Основной пайплайн](#основной-пайплайн)
   * [Требования](#требования)
-  * [Конфигурация](#конфигурация)
-  * [Запуск локально](#запуск-локально)
-  * [Запуск через Docker Compose](#запуск-через-docker-compose)
-  * [База данных](#база-данных)
+  * [CLI и Конфигурация](#cli-и-конфигурация)
+    * [Конфигурация](#конфигурация)
+    * [Запуск приложения](#запуск-приложения)
+  * [Управление данными (CTL)](#управление-данными-ctl)
   * [Telegram-бот](#telegram-бот)
-  * [Отчеты](#отчеты)
+  * [Отчеты и Обработка](#отчеты-и-обработка)
+    * [Источники (Queries)](#источники-queries)
+    * [Процессоры (Pipeline)](#процессоры-pipeline)
+    * [Шаблоны](#шаблоны)
   * [Live preview шаблонов](#live-preview-шаблонов)
   * [Структура проекта](#структура-проекта)
   * [Разработка](#разработка)
   * [Примечания](#примечания)
 <!-- TOC -->
 
-Support TgBot — сервис для автоматической генерации отчетов по данным Metabase и доставки результатов в Telegram, email и SMB-шару.
+Support TgBot — сервис для автоматической генерации отчетов по данным из различных источников (Metabase, Jira, AppMetrica) и доставки результатов в Telegram, Max Messenger, email и SMB-шару.
 
-Приложение состоит из двух CLI:
-
-- `cmd/bot` — основной Telegram-бот и фоновый пайплайн отчетов.
-- `cmd/live-server` — dev-сервер для предпросмотра HTML/text-шаблонов отчетов на данных из Metabase.
+Приложение предоставляет мощный CLI интерфейс для управления конфигурацией, отчетами и скриптами обработки данных.
 
 ## Что умеет сервис
 
-- Загружает расписания из PostgreSQL и запускает задачи через cron.
-- Получает данные из Metabase по UUID карточек.
-- Проверяет условия отправки через CEL-выражения.
-- Формирует отчеты в форматах `text`, `html`, `png`, `pdf`, `csv`, `xlsx`.
-- Отправляет результаты в Telegram-чаты, на email через SMTP и в SMB-шару.
-- Позволяет администраторам управлять пользователями, чатами и расписаниями из Telegram.
-- Позволяет пользователям запускать доступные отчеты вручную из Telegram.
-- Сохраняет отправленные Telegram-сообщения и может удалять их по событию.
+- **Сбор данных**: Поддержка Metabase (по UUID карточек), Jira и AppMetrica.
+- **Обработка данных**:
+    - Использование CEL-выражений для условий отправки.
+    - **Pipeline процессоры**: обработка данных с помощью **Lua-скриптов** или **SQL-запросов (DuckDB)**.
+- **Планировщик**: Запуск задач по расписанию (cron) из PostgreSQL.
+- **Форматы отчетов**: `text`, `html`, `png`, `pdf`, `csv`, `xlsx`.
+- **Доставка**: Telegram, Max Messenger, SMTP (email) и SMB-шары.
+- **Управление**:
+    - Административное и пользовательское меню в Telegram.
+    - CLI для экспорта/импорта отчетов и управления Lua-плагинами.
+- **Надежность**: Сохранение состояния отправленных сообщений и возможность их удаления.
 
 ## Основной пайплайн
 
-1. Scheduler читает активные записи из таблицы `crons`.
-2. По cron-событию EventCreator находит связанные отчеты.
-3. Orchestrator загружает описание отчета, получателей, шаблоны и форматы экспорта.
-4. Generator собирает данные из Metabase, проверяет `evaluate.expr`, генерирует файлы и отправляет сообщение.
-5. Результаты отправки Telegram сохраняются в `sent_messages`.
+1. **Scheduler** читает активные записи из таблицы `crons`.
+2. По cron-событию **EventCreator** находит связанные отчеты.
+3. **Orchestrator** загружает описание отчета, получателей, шаблоны и форматы экспорта.
+4. **Generator** собирает данные из источников, пропускает их через **Pipeline** (Lua/SQL), проверяет условия `evaluate.expr`, генерирует файлы и отправляет сообщение через **SenderProvider**.
+5. Результаты отправки сохраняются в БД.
 
 ## Требования
 
 - Go `1.25.6`.
-- PostgreSQL. В `docker-compose.yaml` используется `postgres:9.6`.
+- PostgreSQL (используется для хранения настроек, отчетов и логов).
 - Telegram bot token от `@BotFather`.
-- Доступ к Metabase.
-- `wkhtmltopdf` для PDF-экспорта.
-- Docker и Docker Compose, если запуск идет в контейнерах.
+- Доступы к источникам данных (Metabase, Jira, AppMetrica).
+- `wkhtmltopdf` для генерации PDF.
+- Docker и Docker Compose (опционально).
 
-## Конфигурация
+## CLI и Конфигурация
 
-Конфиг загружается в таком порядке:
+Основной бинарник — `sbot` (собирается из `cmd/bot`).
 
-1. флаг `--config`;
+### Конфигурация
+
+Порядок загрузки конфига:
+1. флаг `--config` (для команды `run`);
 2. переменная окружения `CONFIG_PATH`;
 3. файл `./config.yaml`;
-4. переменные окружения и `.env`, если файл конфигурации не найден.
+4. переменные окружения и `.env`.
 
-Пример YAML находится в `config/config.example.yaml`, пример env-файла — в `config/example.env`.
-
+**Управление конфигурацией через CLI:**
 ```bash
-cp config/config.example.yaml config/local.yaml
+# Проверить существующий конфиг
+./sbot config validate -config config.yaml
+
+# Создать пример конфигурации (YAML или ENV)
+./sbot config create -format yaml -out config.yaml
+./sbot config create -format env -out .env
+
+# Обновить/нормализовать структуру конфига
+./sbot config update -config config.yaml
 ```
 
-Минимально нужны:
-
-- `metabase_domain` — адрес Metabase;
-- `database` — подключение к PostgreSQL;
-- `bot.telegram_token` — токен Telegram-бота;
-- `smtp` — SMTP-доступ, если используются email-получатели;
-- `smb` — SMB-доступ, если используются SMB-получатели.
-
-SMB можно отключить через `smb.active: false`.
-
-## Запуск локально
+### Запуск приложения
 
 ```bash
-make build
-make run
+# Основной запуск
+./sbot run -config config.yaml
+
+# Упрощенный запуск (совместимость)
+./sbot -config config.yaml
 ```
 
-`make run` запускает `cmd/bot` с конфигом `config/local.yaml`. Имя файла можно поменять в `Makefile` через `CONFIG_NAME`.
+## Управление данными (CTL)
 
-Можно запустить напрямую:
+Команда `ctl` позволяет управлять отчетами и скриптами в базе данных.
 
 ```bash
-go run ./cmd/bot --config=./config/local.yaml
+# Экспорт всех отчетов из БД в JSON-файлы
+./sbot ctl export -config config.yaml -out ./exported_reports
+
+# Проверка JSON-файлов отчетов перед загрузкой
+./sbot ctl validate -report "reports/*.json"
+
+# Загрузка отчетов из файлов в БД
+./sbot ctl apply -config config.yaml -report "reports/*.json"
+
+# Работа с Lua-скриптами (плагинами)
+./sbot ctl script create -out plugin.lua
+./sbot ctl script save -config config.yaml -script plugin.lua
 ```
-
-Полезные флаги основного приложения:
-
-```bash
-go run ./cmd/bot -h
-go run ./cmd/bot -v
-go run ./cmd/bot -example-config
-go run ./cmd/bot -example-env
-```
-
-## Запуск через Docker Compose
-
-```bash
-docker compose up -d
-docker compose logs -f bottst
-docker compose down
-```
-
-Compose поднимает:
-
-- `bottst` — основной сервис;
-- `db` — PostgreSQL с инициализацией из `migrations/init.sql`;
-- `samba` — тестовая SMB-шара.
-
-Контейнер бота использует `CONFIG_PATH=/sbot/config/local_docker.yaml`, поэтому перед запуском проверьте `config/local_docker.yaml`.
-
-## База данных
-
-Схема и начальные данные лежат в `migrations/init.sql`.
-
-Ключевые сущности:
-
-- `users` — Telegram-пользователи и роли `primary`, `admin`, `user`;
-- `chats` — Telegram-чаты для доставки;
-- `crons` — расписания;
-- `reports` — отчеты;
-- `queries` — Metabase-карточки;
-- `evaluate` — CEL-условия отправки;
-- `templates` — text/html-шаблоны;
-- `export_formats` и `reports_export` — форматы и файлы экспорта;
-- `recipients` и `reports_recipients` — получатели;
-- `report_crons` — связь отчетов с расписаниями;
-- `sent_messages` — сохраненные Telegram-сообщения.
-
-Для локальной БД миграции можно применить вручную:
-
-```bash
-psql -U postgres -d bottst -f migrations/init.sql/001_create_tables.sql
-psql -U postgres -d bottst -f migrations/init.sql/002_create_report_tables.sql
-```
-
-Остальные SQL-файлы в `migrations/init.sql` добавляют стартовые настройки, cron-задачи, шаблоны, получателей и конкретные отчеты.
 
 ## Telegram-бот
 
-Поддерживаемые команды:
+Бот поддерживает разделение ролей (admin, user) и следующие команды:
 
-- `/register` — регистрация пользователя в личном чате с ботом.
-- `/start` — пользовательское меню с ручным запуском отчетов.
-- `/admin` — административное меню для пользователей с ролью администратора.
-- `/info` — информация о групповом чате: title, chat id, thread id.
-- `/add` — добавить текущий групповой чат в базу.
-- `/sub` — добавить текущий групповой чат и сразу сделать его активным.
+- `/start` — главное меню (доступные отчеты, ручной запуск).
+- `/admin` — панель управления для администраторов.
+- `/help` — справка по командам бота.
+- `/add` — добавить групповой чат в базу (только в группах).
+- `/info` — получить ID текущего чата и thread ID.
+- `/register` — регистрация в системе.
 
-Админское меню позволяет:
+## Отчеты и Обработка
 
-- добавлять и удалять пользователей;
-- выдавать роль `admin` или `user`;
-- смотреть список пользователей;
-- смотреть и удалять чаты;
-- перезапускать и останавливать cron-рассылки;
-- запускать отчеты вручную.
+### Источники (Queries)
+Отчет может собирать данные из нескольких источников. В CEL и шаблонах данные доступны по `title` запроса.
 
-Команды `/info`, `/add` и `/sub` работают только в групповых чатах. `/start`, `/admin` и `/register` рассчитаны на личный чат с ботом.
+### Процессоры (Pipeline)
+После сбора данные могут быть обработаны:
+- **SQL (DuckDB)**: Выполнение аналитических запросов над собранными данными.
+- **Lua**: Гибкая обработка данных с помощью скриптов (поддерживаются плагины).
 
-## Отчеты
-
-Отчет собирается из:
-
-- одной или нескольких Metabase-карточек из `queries`;
-- условия отправки из `evaluate`;
-- одного или нескольких экспортов;
-- списка получателей.
-
-Поддерживаемые форматы:
-
-- `text` — текст по Go `text/template`;
-- `html` — HTML по Go `html/template`;
-- `pdf` — PDF из HTML через `wkhtmltopdf`;
-- `csv` — CSV-файлы по листам данных;
-- `xlsx` — Excel-файл;
-- `png` — PNG-рендер таблиц.
-
-В шаблонах доступны функции Sprig и функции из `internal/pkg/text`: форматирование чисел, дат, строк, работа с map/list и вспомогательные функции для отчетов.
-
-Условия отправки пишутся на CEL. Доступная переменная — `report`, где ключи верхнего уровня соответствуют `queries.title`.
-
-Специальные условия:
-
-- `[*]` — всегда отправлять;
-- `[!*]` — никогда не отправлять.
-
-Пример CEL:
-
-```cel
-size(report["sheet1"]) > 0
-```
+### Шаблоны
+Используются стандартные `text/template` и `html/template` с функциями **Sprig** и кастомными фильтрами форматирования.
 
 ## Live preview шаблонов
 
-`cmd/live-server` нужен для разработки шаблонов без запуска всего бота. Он собирает данные из Metabase, рендерит локальные `.html`, `.tmpl` и `.gotmpl` файлы и обновляет страницу при изменении шаблонов.
-
-Сгенерировать пример конфига:
+Инструмент `cmd/live-server` позволяет верстать шаблоны в реальном времени.
 
 ```bash
-go run ./cmd/live-server -example-config > config.json
+go run ./cmd/live-server --config=./config.json --templates=./reports
 ```
-
-Запустить:
-
-```bash
-go run ./cmd/live-server \
-  --config=./config.json \
-  --templates=./reports
-```
-
-Сервер слушает `http://localhost:8080`.
-
-Маршруты:
-
-- `http://localhost:8080/html/<template>` — HTML-шаблон;
-- `http://localhost:8080/text/<template>` — text-шаблон, обернутый в HTML для просмотра.
 
 ## Структура проекта
 
 ```text
-cmd/bot/                 основной сервис
+cmd/bot/                 основной сервис (sbot)
 cmd/live-server/         предпросмотр шаблонов
-internal/app/            сборка зависимостей приложения
-internal/collector/      загрузка данных из Metabase
-internal/evaluator/      CEL-условия отправки
-internal/exporter/       экспортеры text/html/pdf/png/csv/xlsx
-internal/generator/      генерация и отправка отчетов
-internal/orchestrator/   маршрутизация событий к отчетам
-internal/sheduler/       cron-планировщик
-internal/tg_bot/         Telegram-роутер, меню, handlers, services
-internal/delivery/       Telegram, SMTP и SMB-доставка
-internal/postgres/       подключение к PostgreSQL
-config/                  примеры и локальные конфиги
-migrations/init.sql/     SQL-схема и стартовые данные
-reports/                 локальные шаблоны для разработки
+internal/collector/      сборщики (Metabase, Jira, AppMetrica, Zabbix)
+internal/processor/      обработка (Lua, SQL/DuckDB)
+internal/delivery/       доставка (Telegram, Max, SMTP, SMB)
+internal/generator/      генерация отчетов
+internal/sheduler/       планировщик
+internal/tg_bot/         логика Telegram-бота
+internal/cli/            реализация команд CLI
+migrations/              миграции БД
 ```
 
 ## Разработка
 
-Сборка основного бота:
-
 ```bash
-make build
-```
-
-Запуск тестов:
-
-```bash
-go test ./...
-```
-
-Очистка бинарника:
-
-```bash
-make clean
+make build   # Сборка sbot
+make test    # Запуск тестов
+make clean   # Очистка
 ```
 
 ## Примечания

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,13 +41,20 @@ type timeout struct {
 }
 
 // Load загружает конфигурацию из файла или из переменных окружения.
-func Load() (*Config, error) {
+func Load(path string) (*Config, error) {
 	var cfg Config
 
-	//nolint:errcheck //not need
-	_ = godotenv.Load()
+	configPath := fetchConfigPath(path)
 
-	configPath := fetchConfigPath()
+	ext := filepath.Ext(configPath)
+
+	if ext == ".env" {
+		_ = godotenv.Load(configPath)
+	} else {
+		_ = godotenv.Load()
+
+	}
+	//nolint:errcheck //not need
 
 	// Загрузка конфигурации
 	if configPath != "" {
@@ -71,25 +79,23 @@ func (c Config) Validate() error {
 	return c.Log.Validate()
 }
 
-var Path string
-
 // Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию.
-func fetchConfigPath() string {
-	if Path == "" {
-		Path = os.Getenv("CONFIG_PATH")
+func fetchConfigPath(path string) string {
+	if path == "" {
+		path = os.Getenv("CONFIG_PATH")
 	}
 
-	if Path == "" {
-		Path = "./config.yaml"
+	if path == "" {
+		path = "./config.yaml"
 	}
 
-	if Path != "" {
-		if _, err := os.Stat(Path); os.IsNotExist(err) {
+	if path != "" {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return ""
 		}
 	}
 
-	return Path
+	return path
 }
 
 type safeConfig Config
