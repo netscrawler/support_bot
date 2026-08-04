@@ -28,7 +28,6 @@ import (
 	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
-	repository2 "support_bot/internal/repository"
 	"support_bot/internal/sheduler"
 	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
@@ -315,7 +314,7 @@ func (a *app) init(ctx context.Context) error {
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
 	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
 
-	orchRepo := repository2.NewRepository(rdb.GetConn(), log)
+	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)
 	report := &reportApp{
 		ScheduleC:    sheduleEvents,

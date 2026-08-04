@@ -9,6 +9,10 @@ import (
 
 type ReportValidation struct{}
 
+func NewReportValidation() *ReportValidation {
+	return &ReportValidation{}
+}
+
 func (r *ReportValidation) Validate(ctx context.Context, report models.Report) error {
 	if report.Name == "" {
 		return fmt.Errorf("report name is empty")

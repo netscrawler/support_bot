@@ -5,15 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/uow"
 	"support_bot/internal/repository"
-
-	"gopkg.in/yaml.v3"
 )
 
 type ReportManager struct {
@@ -34,11 +31,27 @@ func NewReportManager(
 	}
 }
 
+func (m *ReportManager) Load(ctx context.Context) ([]models.Report, error) {
+	m.log.InfoContext(ctx, "Loading all reports")
+
+	return m.repo.Load(ctx)
+}
+
 // Create creates a report and all its components in a single transaction.
-func (m *ReportManager) Create(ctx context.Context, rep *models.Report) error {
+func (m *ReportManager) Create(ctx context.Context, repr io.Reader) error {
+	var rep models.Report
+	err := json.NewDecoder(repr).Decode(&rep)
+	if err != nil {
+		m.log.ErrorContext(
+			ctx,
+			"Failed to unmarshal JSON",
+			slog.Any("error", err),
+		)
+		return err
+	}
 	m.log.InfoContext(ctx, "Creating report", slog.String("name", rep.Name))
 
-	if err := m.val.Validate(ctx, *rep); err != nil {
+	if err := m.val.Validate(ctx, rep); err != nil {
 		return fmt.Errorf("validate report: %w", err)
 	}
 
@@ -190,80 +203,6 @@ func (m *ReportManager) Create(ctx context.Context, rep *models.Report) error {
 	}
 
 	m.log.InfoContext(ctx, "Report successfully created", slog.String("name", rep.Name))
-
-	return nil
-}
-
-// LoadDir reads all JSON and YAML files from a directory and creates reports.
-func (m *ReportManager) LoadDir(ctx context.Context, path string) error {
-	m.log.InfoContext(ctx, "Loading reports from directory", slog.String("path", path))
-
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return fmt.Errorf("read directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		ext := filepath.Ext(entry.Name())
-		if ext != ".json" && ext != ".yaml" && ext != ".yml" {
-			continue
-		}
-
-		filePath := filepath.Join(path, entry.Name())
-
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			m.log.ErrorContext(
-				ctx,
-				"Failed to read file",
-				slog.String("path", filePath),
-				slog.Any("error", err),
-			)
-
-			continue
-		}
-
-		var rep models.Report
-
-		if ext == ".json" {
-			if err := json.Unmarshal(data, &rep); err != nil {
-				m.log.ErrorContext(
-					ctx,
-					"Failed to unmarshal JSON",
-					slog.String("path", filePath),
-					slog.Any("error", err),
-				)
-
-				continue
-			}
-		} else {
-			if err := yaml.Unmarshal(data, &rep); err != nil {
-				m.log.ErrorContext(
-					ctx,
-					"Failed to unmarshal YAML",
-					slog.String("path", filePath),
-					slog.Any("error", err),
-				)
-
-				continue
-			}
-		}
-
-		if err := m.Create(ctx, &rep); err != nil {
-			m.log.ErrorContext(
-				ctx,
-				"Failed to create report from file",
-				slog.String("path", filePath),
-				slog.Any("error", err),
-			)
-
-			return err
-		}
-	}
 
 	return nil
 }
