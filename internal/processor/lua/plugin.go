@@ -2,7 +2,6 @@ package lua
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -191,24 +190,6 @@ func (p *LuaPlugin) preloadModules() {
 	if p.stdlib != nil {
 		p.stdlib.Register(p.vm)
 	}
-}
-
-func normalizeForLua(value any) (any, error) {
-	if value == nil {
-		return nil, nil
-	}
-
-	data, err := stdjson.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-
-	var normalized any
-	if err := stdjson.Unmarshal(data, &normalized); err != nil {
-		return nil, err
-	}
-
-	return normalized, nil
 }
 
 func luaToMapResult(

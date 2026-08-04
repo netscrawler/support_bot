@@ -4,6 +4,12 @@ create table evaluate
     expr text NOT NULL
 );
 
+create table pipelines
+(
+    id Serial primary key,
+    pipeline jsonb not null default '{}'
+);
+
 CREATE TABLE reports
 (
     id      SERIAL PRIMARY KEY,
@@ -21,11 +27,6 @@ alter table reports
     add constraint fk_report_pipeline foreign key (pipeline_id) references pipelines (id) on delete restrict;
 
 
-create table pipelines
-(
-    id Serial primary key,
-    pipeline jsonb not null default '{}'
-);
 
 create table lua_scripts
 (
