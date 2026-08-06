@@ -4,6 +4,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	luaEngine "github.com/yuin/gopher-lua"
 )
@@ -100,6 +101,8 @@ func GoValueToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 	}
 
 	switch x := v.(type) {
+	case time.Time:
+		return luaEngine.LNumber(x.Unix())
 	case string:
 		return luaEngine.LString(x)
 	case bool:

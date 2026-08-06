@@ -216,7 +216,7 @@ func (r *Repository) CreateRecipient(
 	recipient RecipientDBO,
 	u uow.UOW,
 ) (int64, error) {
-	const query = "insert into recipients(name, config, remote_path, chat_id, thread_id, email_id, type, need_delete_after_end_of_day) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id"
+	const query = "insert into recipients(name, config, remote_path, chat_id, thread_id, email_id, type, need_delete_after_end_of_day) values ($1, '{}', $2, $3, $4, $5, $6, $7) returning id"
 
 	var id int64
 
@@ -225,7 +225,6 @@ func (r *Repository) CreateRecipient(
 		&id,
 		query,
 		recipient.Name,
-		recipient.Cfg,
 		recipient.RemotePath,
 		recipient.ChatID,
 		recipient.ThreadID,

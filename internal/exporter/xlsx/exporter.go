@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xuri/excelize/v2"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
+
+	"github.com/xuri/excelize/v2"
 )
 
 type Exporter struct {
@@ -48,7 +49,16 @@ func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
+	f.DeleteSheet("Sheet1")
 	defer f.Close()
+
+	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy")})
+	dateTimeStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy hh:mm:ss")})
+
+	styles := map[string]int{
+		"date":     dateStyle,
+		"datetime": dateTimeStyle,
+	}
 
 	for unit, records := range dataMap {
 		if len(records) == 0 {
@@ -56,6 +66,11 @@ func (e *Exporter) createXlsxBook(
 		}
 
 		_, data := splitMeta(records)
+
+		// Игнорируем все листы начинающиеся с _ чтобы не попадали в файл
+		if strings.HasPrefix(unit, "_") {
+			continue
+		}
 
 		var order []string
 		if o, ok := e.order[unit]; ok {
@@ -72,7 +87,11 @@ func (e *Exporter) createXlsxBook(
 		for rowIdx, row := range sortedRecords {
 			for colIdx, val := range row {
 				cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
-				f.SetCellValue(sheetName, cell, detectValueType(fmt.Sprint(val)))
+				v, kind := detectValueType(fmt.Sprint(val))
+				f.SetCellValue(sheetName, cell, v)
+				if styleID, ok := styles[kind]; ok {
+					f.SetCellStyle(sheetName, cell, cell, styleID)
+				}
 			}
 		}
 
@@ -105,48 +124,54 @@ func (e *Exporter) createXlsxBook(
 		}
 	}
 
-	f.DeleteSheet("Sheet1")
-
 	return f.WriteToBuffer()
 }
 
-// detectValueType определяет тип значения по строке и возвращает подходящий тип.
-func detectValueType(val string) any {
+// detectValueType определяет тип значения по строке и возвращает подходящий тип и тип разметки.
+func detectValueType(val string) (any, string) {
 	if val == "<nil>" {
-		return ""
+		return "", ""
 	}
 	// int
 	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-		return i
+		return i, "int"
 	}
 
 	// float
 	if f, err := strconv.ParseFloat(val, 64); err == nil {
-		return f
+		return f, "float"
 	}
 
 	// bool
 	if b, err := strconv.ParseBool(val); err == nil {
-		return b
+		return b, "bool"
 	}
 
 	// time (несколько форматов)
-	layouts := []string{
-		time.RFC3339,                       // 2025-09-23T19:45:29+03:00
-		"2006-01-02T15:04:05.999999-07:00", // 2025-09-23T19:45:29.754093+03:00
-		time.DateOnly,                      // 2025-09-23
-		time.DateTime,                      // 2025-09-23 19:45:29
-		"02.01.2006",                       // 23.09.2025
-		"02.01.2006 15:04:05",              // 23.09.2025 19:45:29
+	type timeLayout struct {
+		layout string
+		kind   string
 	}
-	for _, layout := range layouts {
-		if t, err := time.Parse(layout, val); err == nil {
-			return t
+	layouts := []timeLayout{
+		{time.RFC3339, "datetime"},                       // 2025-09-23T19:45:29+03:00
+		{"2006-01-02T15:04:05.999999-07:00", "datetime"}, // 2025-09-23T19:45:29.754093+03:00
+		{time.DateOnly, "date"},                          // 2025-09-23
+		{time.DateTime, "datetime"},                      // 2025-09-23 19:45:29
+		{"02.01.2006", "date"},                           // 23.09.2025
+		{"02.01.2006 15:04:05", "datetime"},              // 23.09.2025 19:45:29
+	}
+	for _, l := range layouts {
+		if t, err := time.Parse(l.layout, val); err == nil {
+			return t, l.kind
 		}
 	}
 
 	// строка по умолчанию
-	return val
+	return val, ""
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
 
 func sanitizeSheetName(name string) string {

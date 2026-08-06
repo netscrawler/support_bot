@@ -59,7 +59,7 @@ func setupDB(ctx context.Context, cfgPath string) (*postgres.DB, *config.Config,
 
 	db, err := postgres.New(ctx, cfg.Database, slog.Default())
 	if err != nil {
-		return nil, nil, fmt.Errorf("create database connection: %w", err)
+		return nil, nil, fmt.Errorf("create db connection: %w", err)
 	}
 
 	return db, cfg, nil
@@ -310,8 +310,13 @@ func saveScript(args []string) error {
 		return err
 	}
 
-	if *scriptPath == "" {
-		return fmt.Errorf("script path is required")
+	patterns := append([]string{}, fs.Args()...)
+	if *scriptPath != "" {
+		patterns = append([]string{*scriptPath}, patterns...)
+	}
+
+	if len(patterns) == 0 {
+		return fmt.Errorf("no script path provided")
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -323,18 +328,28 @@ func saveScript(args []string) error {
 	}
 	defer db.Stop(ctx)
 
-	scriptName := filepath.Base(*scriptPath)
-
-	script, err := os.ReadFile(*scriptPath)
+	files, err := ResolveFiles(patterns...)
 	if err != nil {
-		return fmt.Errorf("read script file: %w", err)
+		return err
 	}
 
 	mng := service.NewScriptManager(repository.NewScript(db.GetConn()))
 
-	err = mng.Save(ctx, scriptName, string(script))
-	if err != nil {
-		return fmt.Errorf("save script: %w", err)
+	for _, f := range files {
+		scriptName := filepath.Base(f)
+
+		script, err := os.ReadFile(f)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to read script file %s: %v\n", f, err)
+			continue
+		}
+
+		err = mng.Save(ctx, scriptName, string(script))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read script file: %w\n", err)
+			continue
+		}
+		fmt.Fprintf(os.Stdout, "Script %s saved successfully\n", scriptName)
 	}
 	return nil
 }
