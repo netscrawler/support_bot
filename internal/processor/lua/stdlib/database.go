@@ -53,7 +53,7 @@ func (d *DatabasePlugin) luaGC(L *lua.LState) int {
 func (d *DatabasePlugin) luaNew(L *lua.LState) int {
 	db, err := duck.New()
 	if err != nil {
-		L.RaiseError(err.Error())
+		L.RaiseError("%s", err.Error())
 		return 0
 	}
 
