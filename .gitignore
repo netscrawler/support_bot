@@ -1,10 +1,10 @@
 docker-compose.yml
 config/local.yaml
+config/private_prod.yaml
 doc/Schemas.mdj
 bin/
 private_*
 local_*
-config/prod.yaml
 tmp/
 samba_share/
 TODO.md
