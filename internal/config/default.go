@@ -1,7 +1,6 @@
 package config
 
 import (
-	"support_bot/internal/processor/lua"
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
@@ -11,16 +10,18 @@ import (
 	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	"support_bot/internal/processor/lua"
 	tgbot "support_bot/internal/tg_bot"
 )
 
 func Default() *Config {
 	return &Config{
 		Log: logger.LogConfig{
-			Level:  "prod",
-			File:   "./log.log",
-			Output: []string{"stdout"},
-			Format: "text",
+			Level:   "prod",
+			File:    "./log.log",
+			Output:  []string{"stdout"},
+			Format:  "text",
+			Exclude: []string{"time"},
 		},
 		MetabaseDomain: "https://metabase.domain",
 		AppMetrica: appmetrica.Config{
