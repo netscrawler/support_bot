@@ -9,7 +9,7 @@ import (
 func Setup(logCfg LogConfig) (*slog.Logger, error) {
 	mw, err := getWriters(logCfg)
 
-	opts := getOpts(logCfg.Level)
+	opts := getOpts(logCfg)
 
 	log := getLogger(logCfg.Format, mw, opts)
 
@@ -30,10 +30,10 @@ func getLogger(format string, writer io.Writer, opts *slog.HandlerOptions) *slog
 	)
 }
 
-func getOpts(level string) *slog.HandlerOptions {
+func getOpts(cfg LogConfig) *slog.HandlerOptions {
 	var opts *slog.HandlerOptions
 
-	switch level {
+	switch cfg.Level {
 	case debug:
 		opts = &slog.HandlerOptions{Level: slog.LevelDebug}
 	case test:
@@ -42,6 +42,18 @@ func getOpts(level string) *slog.HandlerOptions {
 		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
 	default:
 		opts = &slog.HandlerOptions{Level: slog.LevelInfo}
+	}
+
+	if len(cfg.Exclude) > 0 {
+		opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+			for _, e := range cfg.Exclude {
+				if a.Key == e && len(groups) == 0 {
+					return slog.Attr{}
+				}
+			}
+
+			return a
+		}
 	}
 
 	return opts
