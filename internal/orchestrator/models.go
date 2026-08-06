@@ -9,10 +9,11 @@ import (
 )
 
 type report struct {
-	ID    int    `db:"id"`
-	Name  string `db:"name"`
-	Title string `db:"title"`
-	Expr  string `db:"evaluation"`
+	ID         int    `db:"id"`
+	Name       string `db:"name"`
+	Title      string `db:"title"`
+	Expr       string `db:"evaluation"`
+	PipelineID *int64 `db:"pipeline_id"`
 }
 
 type card struct {

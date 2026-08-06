@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
 	"support_bot/internal/collector"
@@ -193,7 +194,16 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		return fmt.Errorf("empty targets list")
 	}
 
-	msg := models.NewMessage(report.Name, res, report.Recipients...)
+	// Достаем "_meta" лист из данных, для использования в шаблоне email
+	addMeta := make(map[string]any)
+	meta, ok := data["_meta"]
+	if ok {
+		for _, d := range meta {
+			maps.Insert(addMeta, maps.All(d))
+		}
+	}
+	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
+	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
 
 	resMsg, err := msg.Send(ctx, g.snd)
 	if err != nil {
