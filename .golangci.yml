@@ -1,282 +1,92 @@
 # supported golangci-lint version = 2.6.0
 version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+
 linters:
-  default: none
+  disable-all: true
   enable:
-    - arangolint
-    - asasalint
-    - asciicheck
-    - bidichk
     - bodyclose
-    - canonicalheader
-    - containedctx
     - copyloopvar
-    - decorder
-    - dogsled
-    - dupword
-    - durationcheck
-    - embeddedstructfieldcheck
-    - errchkjson
-    - errname
+    - errcheck
     - errorlint
-    - exptostd
-    - fatcontext
-    - funcorder
-    - gochecknoinits
-    - gochecksumtype
     - gocritic
-    - godot
-    - goheader
-    - gomoddirectives
-    - gomodguard
-    - goprintffuncname
     - gosec
-    - gosmopolitan
     - govet
-    - grouper
-    - iface
-    - importas
-    - inamedparam
     - ineffassign
-    - interfacebloat
-    - iotamixing
-    - loggercheck
-    - makezero
-    - mirror
     - misspell
+    - errname
+    - funcorder
     - modernize
     - nakedret
-    - nestif
     - nilerr
-    - nilnesserr
-    - nlreturn
-    - nosprintfhostport
-    - paralleltest
-    - predeclared
-    - promlinter
-    - protogetter
-    - reassign
-    - recvcheck
-    - revive
-    - rowserrcheck
-    - sloglint
-    - spancheck
-    - sqlclosecheck
     - staticcheck
-    - tagliatelle
-    - testableexamples
-    - testifylint
-    - thelper
-    - tparallel
     - unconvert
     - unused
-    - usestdlibvars
-    - usetesting
-    - wastedassign
-    - wsl_v5
 
-  settings:
-    gosec:
-      excludes:
-        - G104
-        - G203
-    cyclop:
-      # Default: 10
-      max-complexity: 15
-    gocritic:
-      enable-all: true
-      disabled-checks:
-        - unnamedResult
-        - assignOp
-        - commentedOutCode
-        - paramTypeCombine
-        - preferDecodeRune
-        - whyNoLint
-        - appendAssign
-        - ptrToRefParam
-        - hugeParam
-        - rangeValCopy
-        - importShadow
-    nestif:
-      min-complexity: 7
-    nolintlint:
-      allow-unused: false
-      require-explanation: true
-      require-specific: true
-    reassign:
-      patterns:
-        - .*
-    govet:
-      enable-all: true
-      disable:
-        - fieldalignment
-        - shadow # Это не всегда ошибка
-    revive:
-      enable-all-rules: true
-      rules:
-        - name: enforce-switch-style
-          disabled: true
-        - name: use-waitgroup-go
-          disabled: true
-        - name: unchecked-type-assertion
-          disabled: true
-        - name: identical-switch-branches
-          disabled: true
-        - name: cyclomatic
-          disabled: true
-        - name: unexported-return
-          disabled: true
-        - name: line-length-limit
-          disabled: true
-        - name: add-constant
-          disabled: true
-        - name: unhandled-error
-          disabled: true
-        - name: comment-spacings
-          disabled: true
-        - name: var-naming
-          disabled: true
-        - name: nested-structs
-          disabled: true
-        - name: max-public-structs
-          disabled: true
-        - name: function-length
-          disabled: true
-        - name: import-shadowing
-          disabled: true
-        - name: import-alias-naming
-          disabled: true
-        - name: empty-block
-          disabled: true
-        - name: confusing-naming
-          disabled: true
-        - name: exported
-          disabled: true
-        - name: unused-receiver
-          disabled: true
-        - name: unused-parameter
-          disabled: true
-        - name: redundant-import-alias
-          disabled: true
-        - name: confusing-results
-          disabled: true
-        - name: flag-parameter
-          disabled: true
-        - name: indent-error-flow
-          disabled: true
-        - name: unnecessary-format
-          disabled: true
-        - name: early-return
-          disabled: true
-        - name: use-any
-          disabled: true
-        - name: use-errors-new
-          disabled: true
-        - name: argument-limit
-          disabled: true
-        - name: cognitive-complexity
-          disabled: true
-        - name: confusing-naming
-          disabled: true
-        - name: deep-exit
-          disabled: true
-        - name: get-return
-          disabled: true
-        - name: package-directory-mismatch
-          disabled: true
-        - name: struct-tag # conflicts with validate user custom flags. Workaround: "validate,option1,option2"
-          disabled: true
-    unused:
-      # Mark all struct fields that have been written to as used.
-      # Default: true
-      field-writes-are-uses: true
-      # Treat IncDec statement (e.g. `i++` or `i--`) as both read and write operation instead of just write.
-      # Default: false
-      post-statements-are-reads: true
-      # Mark all exported fields as used.
-      # default: true
-      exported-fields-are-used: true
-      # Mark all function parameters as used.
-      # default: true
-      parameters-are-used: true
-      # Mark all local variables as used.
-      # default: true
-      local-variables-are-used: true
-      # Mark all identifiers inside generated files as used.
-      # Default: true
-      generated-is-used: true
-    testifylint:
-      # Enable all checkers (https://github.com/Antonboom/testifylint#checkers).
-      # Default: false
-      enable-all: true
-    usestdlibvars:
-      # Suggest the use of time.Month in time.Date.
-      # Default: false
-      time-date-month: true
-      # Suggest the use of time.Month.String().
-      # Default: false
-      time-month: true
-      # Suggest the use of time.Layout.
-      # Default: false
-      time-layout: true
-      # Suggest the use of crypto.Hash.String().
-      # Default: false
-      crypto-hash: true
-      # Suggest the use of rpc.DefaultXXPath.
-      # Default: false
-      default-rpc-path: true
-      # Suggest the use of sql.LevelXX.String().
-      # Default: false
-      sql-isolation-level: true
-      # Suggest the use of tls.SignatureScheme.String().
-      # Default: false
-      tls-signature-scheme: true
-      # Suggest the use of constant.Kind.String().
-      # Default: false
-      constant-kind: true
-    errcheck:
-      # Report about not checking of errors in type assertions: `a := b.(MyStruct)`.
-      # Such cases aren't reported by default.
-      # Default: false
-      check-type-assertions: true
-      # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
-      # Such cases aren't reported by default.
-      # Default: false
-      check-blank: true
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - whyNoLint
+      - appendAssign
+      - hugeParam
+      - rangeValCopy
+      - paramTypeCombine
+      - unnamedResult
 
-    staticcheck:
-      checks:
-        - all
-        - -S1008
-        - -ST1003 # Poorly chosen identifier. Like camel_case
-    tagliatelle:
-      case:
-        rules:
-          avro: snake
-          bson: snake
-          env: upperSnake
-          envconfig: upperSnake
-          json: snake
-          mapstructure: snake
-          toml: snake
-          whatever: snake
-          xml: snake
-          yaml: snake
+  revive:
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      - name: indent-error-flow
 
-    wsl_v5:
-      allow-first-in-block: false
+  gosec:
+    excludes:
+      - G104
+      - G203
 
-  exclusions:
-    presets:
-      - comments
-      - common-false-positives
+  staticcheck:
+    checks: ["all", "-ST1003"]
+
+  unused:
+    field-writes-are-uses: true
+    exported-fields-are-used: true
+
+  errcheck:
+    exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprint
+        - fmt.Fprintln
+        - fmt.Printf
+        - fmt.Print
+        - fmt.Println
+        - (*log.Logger).Print
+        - (*log.Logger).Printf
+        - (*log.Logger).Println
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:
     - gofumpt
     - goimports
-    - swaggo
-    - gci
     - golines
   exclusions:
     generated: lax
@@ -284,17 +94,3 @@ formatters:
       - third_party$
       - builtin$
       - examples$
-
-issues:
-  max-same-issues: 0
-
-run:
-  # The mode used to evaluate relative paths.
-  # It's used by exclusions, Go plugins, and some linters.
-  # The value can be:
-  # - `gomod`: the paths will be relative to the directory of the `go.mod` file.
-  # - `gitroot`: the paths will be relative to the git root (the parent directory of `.git`).
-  # - `cfg`: the paths will be relative to the configuration file.
-  # - `wd` (NOT recommended): the paths will be relative to the place where golangci-lint is run.
-  # Default: cfg
-  relative-path-mode: gomod

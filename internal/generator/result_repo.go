@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-
-	"github.com/jmoiron/sqlx"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/uow"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type SentMsgRepository struct {

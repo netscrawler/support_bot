@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"html/template"
 	"maps"
-
-	"github.com/Masterminds/sprig/v3"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 type Exporter struct {

@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
 	"sync"
 	"time"
-
-	"support_bot/internal/models"
 )
 
 type event struct {

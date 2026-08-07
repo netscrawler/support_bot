@@ -113,6 +113,9 @@ func validateExcluded(field string) error {
 	case fieldTime, fieldSource, fieldLevel, fieldMSG:
 		return nil
 	default:
-		return fmt.Errorf("invalid excluded field: %s, available fields:(time, level, msg, source)", field)
+		return fmt.Errorf(
+			"invalid excluded field: %s, available fields:(time, level, msg, source)",
+			field,
+		)
 	}
 }

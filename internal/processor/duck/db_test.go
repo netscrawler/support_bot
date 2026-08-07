@@ -1,9 +1,8 @@
 package duck_test
 
 import (
-	"testing"
-
 	"support_bot/internal/processor/duck"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

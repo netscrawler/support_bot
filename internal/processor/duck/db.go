@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
-
 	"support_bot/internal/models"
+	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 )

@@ -2,7 +2,6 @@ package models
 
 import (
 	"bytes"
-
 	"support_bot/internal/pkg/text"
 )
 

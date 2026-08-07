@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-
 	"support_bot/internal/pkg/retry"
 )
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-
 	"support_bot/internal/models"
 	"support_bot/internal/processor/pipeline"
 )

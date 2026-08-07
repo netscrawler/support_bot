@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
 	"support_bot/internal/config"
 	"support_bot/internal/pkg"
 

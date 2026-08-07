@@ -3,14 +3,14 @@ package processor_test
 import (
 	"context"
 	"log/slog"
-	"testing"
-	"time"
-
 	"support_bot/internal/models"
 	"support_bot/internal/processor"
 	"support_bot/internal/processor/lua"
-	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
+	"testing"
+	"time"
+
+	luastd "support_bot/internal/processor/lua/stdlib"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

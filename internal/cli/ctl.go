@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-
 	"support_bot/internal/config"
 	"support_bot/internal/models"
 	"support_bot/internal/postgres"

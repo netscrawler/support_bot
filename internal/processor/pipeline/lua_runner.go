@@ -3,7 +3,6 @@ package pipeline
 import (
 	"context"
 	"fmt"
-
 	"support_bot/internal/models"
 	"support_bot/internal/processor/lua"
 )

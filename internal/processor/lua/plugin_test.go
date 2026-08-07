@@ -1,10 +1,10 @@
 package lua_test
 
 import (
+	"support_bot/internal/processor/lua/stdlib"
 	"testing"
 
 	plugins "support_bot/internal/processor/lua"
-	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/stretchr/testify/require"
 )

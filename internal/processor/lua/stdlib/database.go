@@ -2,9 +2,9 @@ package stdlib
 
 import (
 	"context"
+	"support_bot/internal/processor/duck"
 
 	luapkg "support_bot/internal/pkg/lua"
-	"support_bot/internal/processor/duck"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -23,7 +23,7 @@ func (d DatabasePlugin) Register(L *lua.LState) {
 	L.SetField(mt, "__index",
 		L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 			"query": d.luaQuery,
-			//"exec":     d.luaExec,
+			// "exec":     d.luaExec,
 			"loadData": d.luaLoadData,
 			"close":    d.luaClose,
 		}),

@@ -3,11 +3,11 @@ package tgbot
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/tg_bot/handlers"
+	"support_bot/internal/tg_bot/middlewares"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
-	"support_bot/internal/tg_bot/handlers"
-	"support_bot/internal/tg_bot/middlewares"
 )
 
 type Router struct {

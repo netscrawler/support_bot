@@ -1,16 +1,17 @@
 package config
 
 import (
-	"time"
-
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
-	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
+	"time"
+
+	maxbot "support_bot/internal/max_bot"
+
 	tgbot "support_bot/internal/tg_bot"
 )
 

@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
 	"sync"
 	"time"
-
-	"support_bot/internal/models"
 )
 
 const defaultParallelCollectors = 32

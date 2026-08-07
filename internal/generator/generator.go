@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"time"
-
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/processor"
+	"time"
 )
 
 type Collector interface {
