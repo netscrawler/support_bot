@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
-	"support_bot/internal/models"
 )
 
 type ReportRepository struct {

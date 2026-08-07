@@ -12,7 +12,6 @@ import (
 	"mime"
 	"net/http"
 	"strings"
-
 	"support_bot/internal/pkg/retry"
 )
 
@@ -92,6 +91,7 @@ func (c *Collector) GetApplications(ctx context.Context) ([]SupportedApplication
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	var appResp GetMyApplicationResponse
 

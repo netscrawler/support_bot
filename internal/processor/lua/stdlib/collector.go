@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"support_bot/internal/pkg/lua"
+	luapkg "support_bot/internal/pkg/lua"
 
 	lua "github.com/yuin/gopher-lua"
 )

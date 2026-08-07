@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"support_bot/internal/pkg/retry"
 	"time"
 
 	"github.com/netscrawler/metabase-public-api"
-	"support_bot/internal/pkg/retry"
 )
 
 type Metabase struct {

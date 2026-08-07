@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"net"
 	"path/filepath"
+	"support_bot/internal/models"
 
 	"github.com/hirochachacha/go-smb2"
-	"support_bot/internal/models"
 )
 
 type SMB struct {

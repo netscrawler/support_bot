@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/text"
 )

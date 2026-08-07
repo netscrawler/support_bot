@@ -3,10 +3,9 @@ package orchestrator
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/models"
 	"sync"
 	"time"
-
-	"support_bot/internal/models"
 )
 
 type ReportLoader interface {
