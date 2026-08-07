@@ -7,6 +7,7 @@ import (
 	"strings"
 	"support_bot/internal/models"
 	"support_bot/internal/processor/pipeline"
+	"time"
 )
 
 type RunnerRegistry struct {
@@ -55,12 +56,17 @@ func (p *Processor) Process(
 		slog.Any("pipeline_name", pipeline.Name),
 		slog.Any("steps_count", len(pipeline.Steps)),
 	)
+	now := time.Now()
 
-	defer p.log.InfoContext(
-		ctx,
-		"finish pipeline",
-		slog.Any("pipeline_name", pipeline.Name),
-	)
+	defer func() {
+		dur := time.Since(now)
+		p.log.InfoContext(
+			ctx,
+			"finish pipeline",
+			slog.Any("pipeline_name", pipeline.Name),
+			slog.Any("duration", dur),
+		)
+	}()
 
 	for _, step := range pipeline.Steps {
 		if err := ctx.Err(); err != nil {
@@ -70,10 +76,26 @@ func (p *Processor) Process(
 		if err != nil {
 			return nil, fmt.Errorf("failed to get runner for step %s: %w", step.Type, err)
 		}
+
+		stepStart := time.Now()
+		p.log.DebugContext(
+			ctx,
+			"start process step",
+			slog.Any("step_id", step.ID),
+			slog.Any("step_type", step.Type),
+		)
+
 		out, err := rn.Run(ctx, step, data)
 		if err != nil {
 			return nil, fmt.Errorf("failed pipeline on step %s: %w", step.ID, err)
 		}
+		p.log.DebugContext(
+			ctx,
+			"stop process step",
+			slog.Any("step_id", step.ID),
+			slog.Any("step_type", step.Type),
+			slog.Any("duration", time.Since(stepStart)),
+		)
 		data = out
 	}
 

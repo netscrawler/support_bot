@@ -48,7 +48,6 @@ func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
-	f.DeleteSheet("Sheet1")
 	defer f.Close()
 
 	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy")})
@@ -122,6 +121,7 @@ func (e *Exporter) createXlsxBook(
 			f.SetColWidth(sheetName, colRange, colRange, getAutoWidth(sortedRecords, colIdx))
 		}
 	}
+	f.DeleteSheet("Sheet1")
 
 	return f.WriteToBuffer()
 }
