@@ -4,21 +4,16 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
-
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
-	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
-	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
-	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/pkg/logger"
@@ -26,14 +21,23 @@ import (
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor"
 	"support_bot/internal/processor/lua"
-	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
 	"support_bot/internal/sheduler"
-	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
+	"time"
+
+	maxadp "support_bot/internal/delivery/max"
+
+	eventcreator "support_bot/internal/event_creator"
+
+	maxbot "support_bot/internal/max_bot"
+
+	luastd "support_bot/internal/processor/lua/stdlib"
+
+	tgbot "support_bot/internal/tg_bot"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"

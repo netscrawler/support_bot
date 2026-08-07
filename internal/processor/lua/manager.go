@@ -3,9 +3,8 @@ package lua
 import (
 	"context"
 	"fmt"
-	"sync"
-
 	"support_bot/internal/processor/lua/stdlib"
+	"sync"
 )
 
 type PluginProvider interface {

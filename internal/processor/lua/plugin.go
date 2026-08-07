@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"support_bot/internal/models"
+	"support_bot/internal/processor/lua/stdlib"
 	"sync"
 	"time"
 
 	luapkg "support_bot/internal/pkg/lua"
-	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/cjoudrey/gluahttp"
 	"github.com/cjoudrey/gluaurl"

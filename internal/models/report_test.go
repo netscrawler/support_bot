@@ -2,9 +2,8 @@ package models_test
 
 import (
 	"encoding/json"
-	"testing"
-
 	"support_bot/internal/models"
+	"testing"
 )
 
 func TestReportJSON(t *testing.T) {

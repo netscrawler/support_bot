@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -64,13 +65,7 @@ func TestSetup_ExcludeFields(t *testing.T) {
 			output := buf.String()
 
 			for _, field := range []string{"time", "level", "msg"} {
-				excluded := false
-				for _, e := range tt.expectedExcluded {
-					if e == field {
-						excluded = true
-						break
-					}
-				}
+				excluded := slices.Contains(tt.expectedExcluded, field)
 
 				var found bool
 				if tt.config.Format == "json" {
@@ -83,7 +78,11 @@ func TestSetup_ExcludeFields(t *testing.T) {
 					t.Errorf("field %s should be excluded but found in output: %s", field, output)
 				}
 				if !excluded && !found {
-					t.Errorf("field %s should be present but not found in output: %s", field, output)
+					t.Errorf(
+						"field %s should be present but not found in output: %s",
+						field,
+						output,
+					)
 				}
 			}
 		})

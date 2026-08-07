@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
 	"github.com/mymmrac/telego/telegoutil"
-	"support_bot/internal/models"
-	"support_bot/internal/tg_bot/menu"
 )
 
 func mapReportRPLToMarkup(rp models.LoadReportRPL) telego.InlineKeyboardMarkup {

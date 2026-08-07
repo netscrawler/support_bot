@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-
 	"support_bot/internal/cli"
 )
 

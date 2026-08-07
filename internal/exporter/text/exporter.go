@@ -3,11 +3,11 @@ package text
 import (
 	"bytes"
 	"maps"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/text"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/text"
 )
 
 type Exporter struct {

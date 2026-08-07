@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-
 	"support_bot/internal/models"
 )
 
