@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
-	"support_bot/internal/models"
 )
 
 type ChatRepository struct {

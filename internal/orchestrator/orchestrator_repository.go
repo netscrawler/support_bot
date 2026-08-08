@@ -3,11 +3,12 @@ package orchestrator
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
-	"support_bot/internal/models"
 )
 
 type Repository struct {
@@ -121,7 +122,7 @@ func (o *Repository) loadReports(ctx context.Context, tx *sqlx.Tx) ([]report, er
 		return nil, fmt.Errorf("orchestrator load reports: %w", ctx.Err())
 	}
 
-	const query = `select r.id, r.name, r.title, e.expr as evaluation
+	const query = `select r.id, r.name, r.title, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.active = true
@@ -147,7 +148,7 @@ func (o *Repository) loadActiveReportByName(
 		return report{}, fmt.Errorf("orchestrator load report by name: %w", ctx.Err())
 	}
 
-	const query = `select r.id, r.name, r.title, e.expr as evaluation
+	const query = `select r.id, r.name, r.title, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
@@ -173,7 +174,7 @@ func (o *Repository) loadAnyReportByName(
 		return report{}, fmt.Errorf("orchestrator load report by name: %w", ctx.Err())
 	}
 
-	const query = `select r.id, r.name, r.title, e.expr as evaluation
+	const query = `select r.id, r.name, r.title, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1
@@ -324,12 +325,36 @@ func (o *Repository) getReportByID(
 		return nil, err
 	}
 
+	// Pipeline
+	var pipe *models.Pipeline
+
+	if r.PipelineID != nil {
+		const queryPipeline = `select pipeline from pipelines where id = $1`
+
+		var pipeData json.RawMessage
+
+		err = tx.GetContext(ctx, &pipeData, queryPipeline, *r.PipelineID)
+		if err != nil {
+			o.log.ErrorContext(ctx, "error loading pipeline", slog.Any("error", err))
+
+			return nil, fmt.Errorf("load pipeline: %w", err)
+		}
+
+		err = json.Unmarshal(pipeData, &pipe)
+		if err != nil {
+			o.log.ErrorContext(ctx, "error unmarshal pipeline", slog.Any("error", err))
+
+			return nil, fmt.Errorf("unmarshal pipeline: %w", err)
+		}
+	}
+
 	return &models.Report{
 		Name:       r.Name,
 		Title:      r.Title,
 		Queries:    mCrds,
 		Recipients: mRcpts,
 		Exports:    mExprt,
+		Pipeline:   pipe,
 		Evaluation: r.Expr,
 	}, nil
 }

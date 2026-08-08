@@ -1,11 +1,11 @@
 package models_test
 
 import (
+	"support_bot/internal/models"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"support_bot/internal/models"
 )
 
 func TestNewCron(t *testing.T) {

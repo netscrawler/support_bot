@@ -4,18 +4,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
-
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/joho/godotenv"
+	"path/filepath"
+	"strings"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
-	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	"support_bot/internal/processor/lua"
+	"time"
+
+	maxbot "support_bot/internal/max_bot"
+
 	tgbot "support_bot/internal/tg_bot"
+
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -23,6 +28,7 @@ type Config struct {
 	MetabaseDomain string            `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
 	AppMetrica     appmetrica.Config `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
 	Jira           jira.Config       `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
+	Lua            lua.Config        `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
 	Database       postgres.Config   `yaml:"database"        comment:"Настройки подключения к Postgres"`
 	TgBot          tgbot.Config      `yaml:"telegram"        comment:"\nНастройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout           `yaml:"timeout"         comment:"Настройка таймаутов"`
@@ -36,13 +42,19 @@ type timeout struct {
 }
 
 // Load загружает конфигурацию из файла или из переменных окружения.
-func Load() (*Config, error) {
+func Load(path string) (*Config, error) {
 	var cfg Config
 
-	//nolint:errcheck //not need
-	_ = godotenv.Load()
+	configPath := fetchConfigPath(path)
 
-	configPath := fetchConfigPath()
+	ext := filepath.Ext(configPath)
+
+	if ext == ".env" {
+		_ = godotenv.Load(configPath)
+	} else {
+		_ = godotenv.Load()
+	}
+	//nolint:errcheck //not need
 
 	// Загрузка конфигурации
 	if configPath != "" {
@@ -67,36 +79,36 @@ func (c Config) Validate() error {
 	return c.Log.Validate()
 }
 
-var Path string
-
 // Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию.
-func fetchConfigPath() string {
-	if Path == "" {
-		Path = os.Getenv("CONFIG_PATH")
+func fetchConfigPath(path string) string {
+	if path == "" {
+		path = os.Getenv("CONFIG_PATH")
 	}
 
-	if Path == "" {
-		Path = "./config.yaml"
+	if path == "" {
+		path = "./config.yaml"
 	}
 
-	if Path != "" {
-		if _, err := os.Stat(Path); os.IsNotExist(err) {
+	if path != "" {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return ""
 		}
 	}
 
-	return Path
+	return path
 }
 
 type safeConfig Config
 
 func (c Config) LogValue() slog.Value {
-	c.Database.Password = "***"
-	c.TgBot.TelegramToken = "***"
-	c.MaxBot.Token = "***"
+	c.Database.Password = strings.Repeat("*", len(c.Database.Password))
+	c.TgBot.TelegramToken = strings.Repeat("*", len(c.TgBot.TelegramToken))
+	c.MaxBot.Token = strings.Repeat("*", len(c.MaxBot.Token))
 	c.Database.DSN = "postgres://***"
-	c.SMB.Password = "***"
-	c.SMTP.Password = "***"
+	c.SMB.Password = strings.Repeat("*", len(c.SMB.Password))
+	c.SMTP.Password = strings.Repeat("*", len(c.SMTP.Password))
+	c.Jira.AuthToken = strings.Repeat("*", len(c.Jira.AuthToken))
+	c.AppMetrica.OAuthToken = strings.Repeat("*", len(c.AppMetrica.OAuthToken))
 
 	return slog.AnyValue(safeConfig(c))
 }

@@ -1,0 +1,62 @@
+version: '3'
+
+vars:
+  BINARY_NAME: sbot
+  BIN_DIR: bin
+  VERSION:
+    sh: git describe --tags --dirty --always
+  COMMIT:
+    sh: git rev-parse --short HEAD
+  BUILD_TIME:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  CONFIG_NAME: '{{default "local.yaml" .CONFIG_NAME}}'
+  CONFIG_PATH: '{{.USER_WORKING_DIR}}/config/{{.CONFIG_NAME}}'
+  MAIN_PACKAGE: ./cmd/bot/main.go
+  GOOS: linux
+  GOARCH: amd64
+  BUILD_FLAGS: >-
+    -ldflags "-linkmode external -extldflags '-static' -s -w 
+    -X main.Version={{.VERSION}} 
+    -X main.Commit={{.COMMIT}} 
+    -X main.BuildTime={{.BUILD_TIME}}"
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  build:
+    desc: Build the binary
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CC=musl-gcc CGO_ENABLED=1 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -mod=mod {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.BINARY_NAME}} {{.MAIN_PACKAGE}}
+
+  run:
+    desc: Run the bot
+    cmds:
+      - go run {{.BUILD_FLAGS}} {{.MAIN_PACKAGE}} --config={{.CONFIG_PATH}}
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f ./{{.BIN_DIR}}/{{.BINARY_NAME}}
+
+  docker-build:
+    desc: Build docker image
+    cmds:
+      - docker build -f build.Dockerfile -t support_bot-builder .
+
+  docker-run:
+    desc: Build and extract binary from docker
+    deps: [docker-build]
+    cmds:
+      - docker create --name support_bot-builder-tmp support_bot-builder
+      - mkdir -p bin
+      - docker cp support_bot-builder-tmp:/out/sbot ./bin/sbot
+      - docker rm support_bot-builder-tmp
+
+  deploy:
+    desc: Deploy the bot
+    deps: [build]
+    cmds:
+      - scp {{.BIN_DIR}}/{{.BINARY_NAME}} ${RELEASE_USER}@${RELEASE_SRV}:${RELEASE_PATH}/support_bot_new
