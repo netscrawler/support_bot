@@ -12,22 +12,6 @@ CREATE TABLE users
     role        user_role     NOT NULL DEFAULT 'user'
 );
 
-create table evaluate
-(
-    id   serial primary key,
-    expr text NOT NULL
-);
-
-CREATE TABLE reports
-(
-    id      SERIAL PRIMARY KEY,
-    name    VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
-    active  BOOLEAN      NOT NULL DEFAULT FALSE,
-    title   TEXT         NOT NULL,
-    eval_id bigint       NOT NULL,
-    CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate (id) ON DELETE RESTRICT
-);
-
 -- Таблица чатов для уведомлений
 CREATE TABLE chats
 (
@@ -36,31 +20,66 @@ CREATE TABLE chats
     title       VARCHAR(255),
     type        VARCHAR(50)   NOT NULL, -- 'private', 'group', 'supergroup', 'channel'
     description TEXT,
-    is_active   BOOLEAN       NOT NULL DEFAULT true
+    is_active   BOOLEAN       NOT NULL DEFAULT true,
+    ch_type     varchar(50)   NOT NULL default 'tg'
+);
+create table evaluate
+(
+    id   serial primary key,
+    expr text NOT NULL
+);
+
+create table pipelines
+(
+    id       Serial primary key,
+    pipeline jsonb not null default '{}'
+);
+
+CREATE TABLE reports
+(
+    id             SERIAL PRIMARY KEY,
+    name           VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
+    active         BOOLEAN      NOT NULL DEFAULT FALSE,
+    title          TEXT         NOT NULL,
+    eval_id        bigint       NOT NULL,
+    access_from_lk boolean      not null default true,
+    pipeline_id    bigint,
+    constraint fk_report_pipeline foreign key (pipeline_id) references pipelines (id) on delete restrict,
+    CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate (id) ON DELETE RESTRICT
+);
+
+
+create table lua_scripts
+(
+    id     serial primary key,
+    name   varchar(255) unique not null,
+    script TEXT                not null
 );
 
 create table email_templates
 (
     id      serial PRIMARY KEY,
-    Dest    text[] NOT NULL,
-    Copy    text[],
-    Subject text   NOT NULL,
-    Body    text
+    dest    text[] NOT NULL,
+    copy    text[],
+    subject text   NOT NULL,
+    body    text
 );
 
 create table recipients
 (
-    id          serial PRIMARY KEY,
-    name        text not null,
-    config      jsonb DEFAULT '{}',
-    remote_path text,
-    chat_id     int,
-    thread_id   int,
-    email_id    int,
-    type        text,
+    id                           serial PRIMARY KEY,
+    name                         text not null,
+    config                       jsonb DEFAULT '{}',
+    remote_path                  text,
+    chat_id                      int,
+    thread_id                    int,
+    email_id                     int,
+    type                         text,
+    need_delete_after_end_of_day bool  default false,
     CONSTRAINT fk_recipient_chat FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE RESTRICT,
     CONSTRAINT fk_recipient_email FOREIGN KEY (email_id) REFERENCES email_templates (id) ON DELETE RESTRICT
 );
+
 
 
 CREATE TABLE reports_recipients
@@ -75,8 +94,10 @@ CREATE TABLE reports_recipients
 CREATE TABLE queries
 (
     id        SERIAL PRIMARY KEY,
-    card_uuid TEXT NOT NULL,
-    title     TEXT NOT NULL
+    card_uuid TEXT  NOT NULL,
+    title     TEXT  NOT NULL,
+    q_type    text  not null default 'mb',
+    params    jsonb not null default '{}'
 );
 
 CREATE TABLE templates
@@ -91,9 +112,24 @@ CREATE TABLE crons
 (
     id          SERIAL PRIMARY KEY,
     cron        TEXT NOT NULL,
-    name        TEXT NOT NULL,
+    name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    is_active   bool NOT NULL DEFAULT FALSE
+    is_active   bool NOT NULL DEFAULT FALSE,
+    event_type  INT  NOT NULL DEFAULT 0
+);
+
+create table sent_messages
+(
+    id             serial primary key,
+    chat_id        bigint       not null,
+    thread_id      int          not null default 0,
+    message_id     bigint       not null,
+    title          text         not null,
+    sent_at        timestamptz  not null default now(),
+    deleted        bool         not null default false,
+    report_name    text         not null,
+    message_id_str varchar(250),
+    ch_type        varchar(250) not null default 'tg'
 );
 
 CREATE TABLE report_crons
@@ -114,10 +150,10 @@ create table export_formats
 
 create table reports_export
 (
-    report_id int,
-    format_id int,
-    file_name text,
-    order     jsonb,
+    report_id  int,
+    format_id  int,
+    file_name  text,
+    sort_order jsonb DEFAULT '{}',
     CONSTRAINT fk_report_export_report FOREIGN KEY (report_id) REFERENCES reports (id) ON DELETE CASCADE,
     CONSTRAINT fk_report_export_export FOREIGN KEY (format_id) REFERENCES export_formats (id) ON DELETE CASCADE
 );
@@ -141,24 +177,4 @@ CREATE TABLE report_queries
     CONSTRAINT fk_notify_queries_notify FOREIGN KEY (report_id) REFERENCES reports (id) ON DELETE CASCADE,
     CONSTRAINT fk_notify_queries_query FOREIGN KEY (query_id) REFERENCES queries (id) ON DELETE CASCADE
 );
-
-
--- Триггер: при удалении чата уведомления становятся неактивными
-create or replace function deactivate_notify_on_chat_delete()
-    returns trigger
-as
-$$
-BEGIN
-    UPDATE reports SET active = FALSE WHERE chat_id = OLD.id;
-    RETURN OLD;
-END;
-$$
-    language plpgsql
-;
-
-CREATE TRIGGER trg_deactivate_notify_on_chat_delete
-    BEFORE DELETE
-    ON chats
-    FOR EACH ROW
-EXECUTE FUNCTION deactivate_notify_on_chat_delete();
 

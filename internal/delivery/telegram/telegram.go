@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 
 	"github.com/mymmrac/telego"
 	"golang.org/x/time/rate"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
 )
 
 type ChatAdaptor struct {

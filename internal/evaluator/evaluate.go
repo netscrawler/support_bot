@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"support_bot/internal/models"
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -86,7 +87,7 @@ func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error)
 
 func (e *Engine) Evaluate(
 	ctx context.Context,
-	data map[string][]map[string]any,
+	data models.Dataset,
 	expr string,
 ) (bool, error) {
 	switch expr {

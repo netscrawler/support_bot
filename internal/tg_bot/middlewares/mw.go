@@ -3,9 +3,9 @@ package middlewares
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/models"
 
 	"github.com/mymmrac/telego"
-	"support_bot/internal/models"
 )
 
 type UserProvider interface {

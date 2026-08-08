@@ -4,34 +4,43 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
-
-	"github.com/mymmrac/telego"
-	th "github.com/mymmrac/telego/telegohandler"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/config"
-	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
-	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/generator"
-	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
+	"support_bot/internal/processor"
+	"support_bot/internal/processor/lua"
+	"support_bot/internal/processor/pipeline"
 	"support_bot/internal/sheduler"
-	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
+	"time"
+
+	maxadp "support_bot/internal/delivery/max"
+
+	eventcreator "support_bot/internal/event_creator"
+
+	maxbot "support_bot/internal/max_bot"
+
+	luastd "support_bot/internal/processor/lua/stdlib"
+
+	tgbot "support_bot/internal/tg_bot"
+
+	"github.com/mymmrac/telego"
+	th "github.com/mymmrac/telego/telegohandler"
 )
 
 const (
@@ -281,12 +290,33 @@ func (a *app) init(ctx context.Context) error {
 		return err
 	}
 
+	luaStdColl := luastd.NewCollector(map[string]luastd.DirectCollector{
+		"jira":       jiraColl,
+		"mb":         mb,
+		"appmetrica": appM,
+	})
+
+	scriptRepo := lua.NewRepository(rdb.GetConn())
+
+	luaManager := lua.NewManager(
+		&cfg.Lua,
+		scriptRepo,
+		luastd.NewSTD(luaStdColl, luastd.DatabasePlugin{}, luastd.RateLimit{}),
+	)
+
+	runnerReg := processor.NewReg()
+	luaRunner := pipeline.NewLuaRunner(luaManager)
+	runnerReg.Register("lua", luaRunner)
+	runnerReg.Register("sql", &pipeline.SqlRunner{})
+
+	proc := processor.NewProcessor(runnerReg, log)
+
 	snd := models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
 
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
-	gen := generator.New(reportChan, clct, *snd, *delRepo, eval, 4, log)
+	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)

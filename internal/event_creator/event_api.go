@@ -2,7 +2,6 @@ package eventcreator
 
 import (
 	"context"
-
 	"support_bot/internal/models"
 )
 
