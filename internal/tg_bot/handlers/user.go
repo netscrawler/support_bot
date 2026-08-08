@@ -5,14 +5,14 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/menu"
+	"support_bot/internal/tg_bot/service"
 	"time"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
 	tu "github.com/mymmrac/telego/telegoutil"
-	"support_bot/internal/models"
-	"support_bot/internal/tg_bot/menu"
-	"support_bot/internal/tg_bot/service"
 )
 
 type UserHandler struct {

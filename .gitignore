@@ -1,5 +1,6 @@
 docker-compose.yml
 config/local.yaml
+config/private_prod.yaml
 doc/Schemas.mdj
 bin/
 private_*
@@ -15,3 +16,4 @@ docker.env
 config.json
 .idea
 migrations/*
+reports

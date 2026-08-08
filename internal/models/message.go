@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
+	"log/slog"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/text"
 )
@@ -45,6 +45,8 @@ type senderProvider interface {
 type Message struct {
 	ReportName string
 
+	Meta map[string]any
+
 	Recipients []Recipient
 
 	Text     []Data
@@ -53,7 +55,12 @@ type Message struct {
 	Images   []Data
 }
 
-func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
+func NewMessage(
+	rName string,
+	data []Data,
+	additionalInfo map[string]any,
+	rcpts ...Recipient,
+) *Message {
 	var txt, rTxt, fl, imgs []Data
 
 	for _, d := range data {
@@ -77,6 +84,7 @@ func NewMessage(rName string, data []Data, rcpts ...Recipient) *Message {
 		RichText:   rTxt,
 		Files:      fl,
 		Images:     imgs,
+		Meta:       additionalInfo,
 	}
 }
 
@@ -281,13 +289,14 @@ func (m *Message) sendSMTP(ctx context.Context, sender SmtpSender, r Recipient) 
 		return errEmptyRecipient
 	}
 
-	subj, err := text.ExecuteTemplate(rcpt.Subject, nil)
+	subj, err := text.ExecuteTemplate(rcpt.Subject, m.Meta)
 	if err != nil {
 		subj = rcpt.Subject
 	}
 
-	body, err := text.ExecuteTemplate(deRef(rcpt.Body, ""), nil)
+	body, err := text.ExecuteTemplate(deRef(rcpt.Body, ""), m.Meta)
 	if err != nil {
+		slog.Default().Error("email body template", slog.Any("error", err))
 		if len(m.Text) > 0 {
 			body = m.Text[0].Data.String()
 		} else {

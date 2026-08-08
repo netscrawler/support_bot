@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"log/slog"
-
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/repository"

@@ -1,5 +1,3 @@
-# example config
-# Создайте файл config.yaml и поместите туда, заменив значения на свои
 # Настройки логгирования
 log:
     # Профиль логирования (debug - уровень DEBUG|prod - Уровень INFO|test - Уровень DEBUG + add source)
@@ -20,6 +18,20 @@ jira:
     auth_token: auth token from jira
     jira_host: https://your-jira-instance.atlassian.net
     timeout: 5m0s
+# Настройки Lua-процессора.
+lua:
+    # Таймаут для выполнения плагина.
+    execution_timeout: 5m0s
+    # Лимит памяти для 1 плагина в MB
+    max_memory_mb: 256
+    # Разрешенные луа модули
+    allowed_modules:
+        - json
+        - http
+        - url
+        - time
+        - strings
+        - inspect
 # Настройки подключения к Postgres
 database:
     # Порт для подключения к базе
@@ -111,10 +123,9 @@ max:
     max_token: max_bot_token
     # CleanUpTime — интервал очистки временных данных бота
     # (кэш, состояния диалогов, временные сообщения и т.п.).
-    clean_up_time: 0s
+    clean_up_time: 10m0s
     # BotPoll — интервал long-polling запросов к Max API.
-    bot_poll: 0s
+    bot_poll: 30s
     api_proxy: ""
     # Флаг активации бота, false по умолчанию. Отвечает за то включать бота или нет
     max_enabled: false
-

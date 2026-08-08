@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-
 	"support_bot/internal/models"
 )
 

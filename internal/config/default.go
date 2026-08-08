@@ -1,25 +1,28 @@
 package config
 
 import (
-	"time"
-
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
-	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
+	"support_bot/internal/processor/lua"
+	"time"
+
+	maxbot "support_bot/internal/max_bot"
+
 	tgbot "support_bot/internal/tg_bot"
 )
 
 func Default() *Config {
 	return &Config{
 		Log: logger.LogConfig{
-			Level:  "prod",
-			File:   "./log.log",
-			Output: []string{"stdout"},
-			Format: "text",
+			Level:   "prod",
+			File:    "./log.log",
+			Output:  []string{"stdout"},
+			Format:  "text",
+			Exclude: []string{"time"},
 		},
 		MetabaseDomain: "https://metabase.domain",
 		AppMetrica: appmetrica.Config{
@@ -30,6 +33,18 @@ func Default() *Config {
 			AuthToken: "auth token from jira",
 			JiraHost:  "https://your-jira-instance.atlassian.net",
 			Timeout:   5 * time.Minute,
+		},
+		Lua: lua.Config{
+			ExecutionTimeout: 5 * time.Minute,
+			MaxMemoryMB:      256,
+			AllowedModules: []string{
+				"json",    // JSON кодирование/декодирование
+				"http",    // HTTP запросы
+				"url",     // парсинг URL
+				"time",    // работа со временем
+				"strings", // строковые операции
+				"inspect", // отладка
+			},
 		},
 		Database: postgres.Config{
 			Port:            5432,

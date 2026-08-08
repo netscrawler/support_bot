@@ -5,9 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"time"
-
 	"support_bot/internal/models"
+	"time"
 )
 
 type msgDeleter interface {

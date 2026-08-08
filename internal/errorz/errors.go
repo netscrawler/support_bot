@@ -4,6 +4,6 @@ import "errors"
 
 var (
 	ErrNotFound     = errors.New("ErrNotFound")
-	errInternal     = errors.New("InternalError")
-	errAlreadyExist = errors.New("AlreadyExist")
+	ErrInternal     = errors.New("ErrInternal")
+	ErrAlreadyExist = errors.New("ErrAlreadyExist")
 )

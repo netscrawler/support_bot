@@ -3,9 +3,9 @@ package sheduler
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/models"
 
 	"github.com/jmoiron/sqlx"
-	"support_bot/internal/models"
 )
 
 type SheduleRepo struct {

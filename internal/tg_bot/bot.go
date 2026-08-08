@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/pkg"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
-	"support_bot/internal/pkg"
 )
 
 func NewTelegramBot(

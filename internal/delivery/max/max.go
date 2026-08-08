@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	maxModel "github.com/max-messenger/max-bot-api-client-go/v2/model"
 	"golang.org/x/time/rate"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
 )
 
 var ErrMaxAdaptorInactive = errors.New("max adaptor inactive from config")

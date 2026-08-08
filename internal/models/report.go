@@ -12,13 +12,30 @@ import (
 )
 
 type Report struct {
-	Name  string
-	Title string
+	Name  string `json:"name"`
+	Title string `json:"title"`
 
-	Queries    []Card
-	Recipients []Recipient
-	Exports    []Export
-	Evaluation string
+	Queries      []Card      `json:"queries"`
+	Recipients   []Recipient `json:"recipients"`
+	Exports      []Export    `json:"exports"`
+	Pipeline     *Pipeline   `json:"pipeline,omitempty"`
+	Evaluation   string      `json:"evaluation"`
+	Active       bool        `json:"active"`
+	AccessFromLK bool        `json:"access_from_lk"`
+	Crons        []Cron      `json:"crons,omitempty"`
+}
+
+type Pipeline struct {
+	Name  string `json:"name"`
+	Steps []Step `json:"steps"`
+}
+
+type Step struct {
+	ID         string         `json:"id,omitempty"`
+	Type       string         `json:"type"`
+	Script     string         `json:"script,omitempty"`
+	ScriptName string         `json:"script_name,omitempty"`
+	Params     map[string]any `json:"params,omitempty"`
 }
 
 type ReportInfo struct {
@@ -67,11 +84,11 @@ const (
 )
 
 type Card struct {
-	CardUUID  string `json:"card_uuid"`
-	Title     string `json:"title"`
-	RawParams json.RawMessage
-	Params    map[string]string
-	Type      string
+	CardUUID  string            `json:"card_uuid"`
+	Title     string            `json:"title"`
+	RawParams json.RawMessage   `json:"-"`
+	Params    map[string]string `json:"params"`
+	Type      string            `json:"type"`
 }
 
 func (c Card) ToString(baseUrl string) string {
@@ -122,15 +139,15 @@ const (
 )
 
 type Recipient struct {
-	Name       string
-	Config     json.RawMessage
-	RemotePath *string
-	Chat       *Chat
-	ThreadID   *int
-	Email      *EmailTemplate
-	Type       RecipientType
+	Name       string          `json:"name"`
+	Config     json.RawMessage `json:"config"`
+	RemotePath *string         `json:"remote_path,omitempty"`
+	Chat       *Chat           `json:"chat,omitempty"`
+	ThreadID   *int            `json:"thread_id,omitempty"`
+	Email      *EmailTemplate  `json:"email,omitempty"`
+	Type       RecipientType   `json:"type"`
 
-	NeedDeleteAfterEndOfDay bool
+	NeedDeleteAfterEndOfDay bool `json:"need_delete_after_end_of_day"`
 }
 
 func (r Recipient) String() string {
@@ -157,10 +174,10 @@ func (r Recipient) String() string {
 }
 
 type EmailTemplate struct {
-	Dest    []string
-	Copy    []string
-	Subject string
-	Body    *string
+	Dest    []string `json:"dest"`
+	Copy    []string `json:"copy"`
+	Subject string   `json:"subject"`
+	Body    *string  `json:"body,omitempty"`
 }
 
 const (
@@ -169,24 +186,32 @@ const (
 )
 
 type Chat struct {
-	ChatID      int64
-	Title       *string
-	Type        string
-	Description *string
-	IsActive    bool
-	ChType      string
+	ChatID      int64   `json:"chat_id"`
+	Title       *string `json:"title,omitempty"`
+	Type        string  `json:"type"`
+	Description *string `json:"description,omitempty"`
+	IsActive    bool    `json:"is_active"`
+	ChType      string  `json:"ch_type"`
 }
 type Template struct {
-	ID           int
-	Title        string
-	Type         string
-	TemplateText string
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	Type         string `json:"type"`
+	TemplateText string `json:"template_text"`
+}
+
+type Cron struct {
+	Name        string `json:"name"`
+	Cron        string `json:"cron"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"is_active"`
+	EventType   int    `json:"event_type"`
 }
 type Export struct {
-	Format   reportFormat
-	Template *Template
-	FileName *string
-	Order    map[string][]string
+	Format   reportFormat        `json:"format"`
+	Template *Template           `json:"template,omitempty"`
+	FileName *string             `json:"file_name,omitempty"`
+	Order    map[string][]string `json:"order,omitempty"`
 }
 
 func (e Export) String() string {
