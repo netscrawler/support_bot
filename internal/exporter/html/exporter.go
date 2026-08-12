@@ -30,6 +30,7 @@ func (e *Exporter) Export() (*models.Data, error) {
 
 	t, err := template.New("html_tmpl").
 		Funcs(allFuncs).
+		Funcs(chartFuncMap).
 		Parse(e.template)
 	if err != nil {
 		return nil, err
