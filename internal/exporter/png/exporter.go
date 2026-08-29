@@ -20,6 +20,12 @@ import (
 type Exporter struct{}
 
 func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	// Если есть Layout — используем его для рендеринга табличных блоков в PNG
+	if format.Layout != nil {
+		return e.exportFromLayout(data, *format.Layout, format)
+	}
+
+	// Legacy режим
 	var err error
 
 	var id []models.Data
@@ -52,6 +58,53 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 	}
 
 	return id, nil
+}
+
+func (e Exporter) exportFromLayout(data models.Dataset, layout models.Layout, format models.Export) ([]models.Data, error) {
+	var outputs []models.Data
+
+	for _, block := range layout.Blocks {
+		if block.Type != models.BlockTypeTable {
+			continue
+		}
+
+		if block.Table == nil || block.Dataset == "" {
+			continue
+		}
+
+		rows, ok := data[block.Dataset]
+		if !ok || len(rows) == 0 {
+			continue
+		}
+
+		// Формируем порядок колонок из блока
+		var ordering []string
+		for _, col := range block.Table.Columns {
+			ordering = append(ordering, col.Field)
+		}
+
+		mtx := pkg.ConvertSortedRows(rows, ordering)
+
+		title := block.ID
+		img, err := createImageFromMatrix(mtx, &title)
+		if err != nil {
+			return nil, fmt.Errorf("create image for block %q: %w", block.ID, err)
+		}
+
+		filename := *format.FileName + "_" + block.ID + ".png"
+		dt, err := models.NewImageData(img, filename)
+		if err != nil {
+			return nil, fmt.Errorf("create image data for block %q: %w", block.ID, err)
+		}
+
+		outputs = append(outputs, dt)
+	}
+
+	if len(outputs) == 0 {
+		return nil, errors.New("no table blocks found in layout")
+	}
+
+	return outputs, nil
 }
 
 const (

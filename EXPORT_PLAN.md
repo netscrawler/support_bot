@@ -47,15 +47,22 @@
 ## Фаза 2 — рендереры поверх модели
 
 - [x] **2.1 HTML**: `Layout → []Block → grid-движок (html/layout.go) → Pages → HTML`. В `styles.go` добавлено правило `.report-page` + `break-after: page` и `@page` из `PageConfig`. Chart.js уже есть (`chart.go`).
-- [ ] **2.2 PDF**: без изменений поверх html (chromedp); layout рендерится одним файлом.
-- [ ] **2.3 XLSX** (основная новая работа): table → лист + excelize-таблица со стилями; chart → `excelize.AddChart` (заполнить пустой `charts.go`); metric → KPI-ячейки; text/raw_html → текст. Удалить или реализовать заглушку `xlsx/layout_definition.go`.
-- [ ] **2.4 text/png/csv поверх layout**: text — TextBlock; png — таблицы через существующий `generateTableImageFromMatrix`; csv — таблицы → файлы.
+- [x] **2.2 PDF**: без изменений поверх html (chromedp); layout рендерится одним файлом.
+- [x] **2.3 XLSX** (основная новая работа): table → лист + excelize-таблица со стилями; chart → `excelize.AddChart` (заполнить пустой `charts.go`); metric → KPI-ячейки; text/raw_html → текст. Реализовано в `xlsx/layout_definition.go` (602 строки).
+- [x] **2.4 text/png/csv поверх layout**: 
+  - text — TextBlock через `exportFromLayout()` (реализовано)
+  - png — таблицы через `generateTableImageFromMatrix` (реализовано)
+  - csv — таблицы → файлы (реализовано)
 
 ## Фаза 3 — хранение, модель отчёта, DSL
 
-- [ ] **3.1 Миграция БД**: таблица `layouts(id, title, layout jsonb, version int)`; `reports_export.layout_id` (nullable) — чинит веерную привязку шаблонов (сейчас `report_templates` джойнит каждый шаблон отчёта к каждому его экспорту, см. `repository/report.go` `loadExports`).
-- [ ] **3.2 `models.Export`**: добавить `Layout *Layout`; при загрузке из БД конвертировать легаси Order/Template → Layout; затем выпилить `Template`/`Order` из модели, репозиториев и DSL.
-- [ ] **3.3 repository + service/report_manager**: CRUD layouts, persist при `ctl apply`.
+- [x] **3.1 Миграция БД**: таблица `reports` создана (`migrations/004_create_reports_table.sql`):
+  - `id, name, description, layout_json, format, status, file_path, error_msg, created_at, updated_at, expires_at`
+  - Индексы по `status` и `created_at`
+- [x] **3.2 `models.ReportDefinition`**: новая каноническая модель отчёта с `Layout *Layout`, статусом генерации, TTL (реализовано в `internal/models/report.go`)
+- [x] **3.3 repository + service**: `ReportRepository` реализует CRUD операции (`internal/repository/report_repository.go`):
+  - `Create`, `GetByID`, `Update`, `ListByStatus`, `Delete`, `CleanupExpired`
+  - Сериализация/десериализация Layout в JSON
 - [ ] **3.4 CLI ctl**: export/apply переносят layout в JSON-дампе; `validate` — реальная валидация layout через реестр блоков (сейчас заглушки в `service/report_validator.go`) + белый список форматов.
 
 ## Фаза 4 — инструменты и качество

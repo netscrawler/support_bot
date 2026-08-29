@@ -9,8 +9,36 @@ import (
 	"html"
 	"strings"
 	"text/template"
+	"time"
 )
 
+// ReportStatus represents the current state of a report generation job
+type ReportStatus string
+
+const (
+	ReportStatusPending    ReportStatus = "pending"
+	ReportStatusProcessing ReportStatus = "processing"
+	ReportStatusCompleted  ReportStatus = "completed"
+	ReportStatusFailed     ReportStatus = "failed"
+)
+
+// ReportDefinition represents a generated or scheduled report with its layout configuration
+// This is the new canonical model for reports (Phase 3 of EXPORT_PLAN)
+type ReportDefinition struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Layout      *Layout      `json:"layout,omitempty"` // Canonical layout configuration
+	Format      string       `json:"format"`           // Target format: html, pdf, xlsx, csv, png, text
+	Status      ReportStatus `json:"status"`           // Current processing status
+	FilePath    string       `json:"file_path,omitempty"`
+	ErrorMsg    string       `json:"error_msg,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	ExpiresAt   *time.Time   `json:"expires_at,omitempty"`
+}
+
+// Legacy Report structure (kept for backward compatibility)
 type Report struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`

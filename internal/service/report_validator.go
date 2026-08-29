@@ -3,8 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
+
+	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
 )
+
+// AllowedExportFormats defines the whitelist of supported export formats
+var AllowedExportFormats = []string{"html", "pdf", "xlsx", "csv", "png", "text"}
 
 type ReportValidation struct{}
 
@@ -63,6 +69,18 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		if exp.Format == "" {
 			return fmt.Errorf("export format is empty in report %s", report.Name)
 		}
+
+		// Validate export format against whitelist
+		if !isValidExportFormat(string(exp.Format)) {
+			return fmt.Errorf("export format %q is not allowed (allowed: %v)", exp.Format, AllowedExportFormats)
+		}
+
+		// Validate Layout if present (Phase 3.4)
+		if exp.Layout != nil {
+			if err := r.validateLayout(*exp.Layout, report); err != nil {
+				return fmt.Errorf("export layout validation failed: %w", err)
+			}
+		}
 	}
 
 	seenCrons := make(map[string]bool)
@@ -96,6 +114,27 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 	}
 
 	return nil
+}
+
+// validateLayout validates a Layout using the block registry (Phase 3.4)
+func (r *ReportValidation) validateLayout(layout models.Layout, report models.Report) error {
+	// Collect dataset keys from report queries
+	datasetKeys := make([]string, 0, len(report.Queries))
+	for _, q := range report.Queries {
+		datasetKeys = append(datasetKeys, q.Title)
+	}
+
+	// Use the layout registry to validate (package-level function)
+	if err := layoutpkg.Validate(layout, datasetKeys); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// isValidExportFormat checks if the format is in the whitelist
+func isValidExportFormat(format string) bool {
+	return slices.Contains(AllowedExportFormats, format)
 }
 
 func (r *ReportValidation) validateReport(ctx context.Context, report models.Report) error {

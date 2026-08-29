@@ -3,12 +3,9 @@ package xlsx
 import (
 	"bytes"
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
 	texttemplate "text/template"
 	"support_bot/internal/models"
-	"support_bot/internal/pkg/funcs"
+	"support_bot/internal/pkg"
 	textfuncs "support_bot/internal/pkg/text"
 
 	"github.com/xuri/excelize/v2"
@@ -253,11 +250,11 @@ func renderLayoutTable(
 		col := startCol + idx
 		width := column.Width
 		if width <= 0 {
-			width = getAutoWidth(matrix, idx)
+			width = int(getAutoWidth(matrix, idx))
 		}
 
 		colName, _ := excelize.ColumnNumberToName(col)
-		if err := f.SetColWidth(sheet, colName, colName, width); err != nil {
+		if err := f.SetColWidth(sheet, colName, colName, float64(width)); err != nil {
 			return fmt.Errorf("set column width: %w", err)
 		}
 	}
@@ -503,9 +500,13 @@ func writeChartData(
 }
 
 func renderTextTemplate(templateText string, data models.Dataset) (string, error) {
+	funcMap := make(map[string]any)
+	for k, v := range textfuncs.FuncMap {
+		funcMap[k] = v
+	}
+
 	t, err := texttemplate.New("layout_text").
-		Funcs(texttemplate.FuncMap(textfuncs.FuncMap)).
-		Funcs(funcs.MapJoin(texttemplate.FuncMap{}, texttemplate.FuncMap{})).
+		Funcs(funcMap).
 		Parse(templateText)
 	if err != nil {
 		return "", err
@@ -597,13 +598,5 @@ func chartHeight(h int) uint {
 	}
 
 	return uint(80 * h)
-}
-
-func (s models.Series) TitleOrField() string {
-	if strings.TrimSpace(s.Title) != "" {
-		return s.Title
-	}
-
-	return s.Field
 }
 

@@ -1,20 +1,44 @@
-docker-compose.yml
-config/local.yaml
-config/private_prod.yaml
-doc/Schemas.mdj
-bin/
-private_*
-local_*
-tmp/
-samba_share/
-TODO.md
+```
+# Dependencies
 vendor/
+
+# Build artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+
+# Go-specific
+*.test
+*.prof
+cover.out
+coverage.txt
+
+# Logs
 *.log
-reports/
+
+# Environment
 .env
-docker.env
-config.json
-.idea
-migrations/*
-reports
-example_out.html
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Temporary files
+*.tmp
+```

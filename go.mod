@@ -234,5 +234,3 @@ require (
 	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-tool github.com/go-task/task/v3/cmd/task
