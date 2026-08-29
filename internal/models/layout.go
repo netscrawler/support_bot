@@ -1,5 +1,7 @@
 package models
 
+import "strings"
+
 type Layout struct {
 	Version int        `json:"version"`
 	Page    PageConfig `json:"page"`
@@ -88,6 +90,13 @@ type Series struct {
 	Field string `json:"field"`
 	Title string `json:"title,omitempty"`
 	Color string `json:"color,omitempty"`
+}
+
+func (s Series) TitleOrField() string {
+	if strings.TrimSpace(s.Title) != "" {
+		return s.Title
+	}
+	return s.Field
 }
 
 type ChartBlock struct {
