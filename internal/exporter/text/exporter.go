@@ -2,7 +2,7 @@ package text
 
 import (
 	"bytes"
-	"maps"
+	"fmt"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 	"text/template"
@@ -10,37 +10,28 @@ import (
 	"github.com/Masterminds/sprig/v3"
 )
 
-type Exporter struct {
-	data     any
-	template string
-	eType    string
-}
+type Exporter struct{}
 
-func New(data any, template string, eType string) *Exporter {
-	return &Exporter{
-		data:     data,
-		template: template,
-		eType:    eType,
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	if format.Template == nil || format.Template.TemplateText == "" {
+		return nil, fmt.Errorf("text export %q: template is required", *format.FileName)
 	}
-}
-
-func (e *Exporter) Export() (*models.Data, error) {
-	allFuncs := sprig.TxtFuncMap()
-	maps.Copy(allFuncs, text.FuncMap)
 
 	t, err := template.New("text_templ").
-		Funcs(allFuncs).
-		Parse(e.template)
+		Funcs(sprig.TxtFuncMap()).
+		Funcs(textMap).
+		Funcs(text.FuncMap).
+		Parse(format.Template.TemplateText)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, e.data); err != nil {
+	if err := t.Execute(&buf, data); err != nil {
 		return nil, err
 	}
 
-	dt := models.NewTextData(&buf, e.eType)
+	dt := models.NewTextData(&buf, format.Template.Type)
 
-	return &dt, nil
+	return []models.Data{dt}, nil
 }

@@ -17,3 +17,4 @@ config.json
 .idea
 migrations/*
 reports
+example_out.html

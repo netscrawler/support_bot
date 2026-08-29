@@ -1,6 +1,6 @@
 module support_bot
 
-go 1.25.10
+go 1.26
 
 require github.com/jackc/pgx/v5 v5.8.0
 
@@ -68,6 +68,7 @@ require (
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/cheggaaa/pb/v3 v3.0.5 // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
@@ -89,6 +90,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/geoffgarside/ber v1.2.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
@@ -96,6 +98,9 @@ require (
 	github.com/go-task/task/v3 v3.52.0 // indirect
 	github.com/go-task/template v0.2.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -178,7 +183,7 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260610154732-fb80ec83bdd9 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
@@ -200,6 +205,8 @@ require (
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
+	github.com/chromedp/cdproto v0.0.0-20260804232424-e85f50dbfd32
+	github.com/chromedp/chromedp v0.16.0
 	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
 	github.com/cjoudrey/gluaurl v0.0.0-20161028222611-31cbb9bef199
 	github.com/duckdb/duckdb-go/v2 v2.10505.0

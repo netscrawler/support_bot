@@ -1,0 +1,55 @@
+{{/*
+Example report template demonstrating usage of the html exporter helpers:
+- styles
+- chartJS
+- reportGrid / endReportGrid
+- chart(..., (chartOptions ...))
+- table(rows, columns, (tableOptions ...))
+
+Column/series definitions use the "field:Title" convention. When a template
+is rendered by the exporter, dataset values come from models.Dataset; sprig's
+`splitList` is used here to build []string arguments inline.
+*/}}
+
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Report example</title>
+
+    {{/* global CSS and Chart.js runtime */}}
+    {{ styles }}
+    {{ chartJS }}
+</head>
+<body>
+
+{{ reportGrid }}
+
+    {{/* Line chart: two series, half-width (w=6) */}}
+    {{ chart "line"
+        .LineRows
+        "date"
+        (splitList "," "accepted:Принято,rejected:Отклонено")
+        (chartOptions "title" "Переводы" "w" 6 "h" 4)
+    }}
+
+
+    {{/* Bar chart: single series, half-width (w=6) */}}
+    {{ chart "bar"
+        .BarRows
+        "country"
+        (splitList "," "count:Количество")
+        (chartOptions "title" "По странам" "w" 6 "h" 4)
+    }}
+
+    {{/* Full-width table (will be collected and laid out by the engine) */}}
+    {{ table
+        .TableRows
+        (splitList "," "status:Статус,count:Количество")
+        (tableOptions "w" 12)
+    }}
+
+{{ endReportGrid }}
+
+</body>
+</html>

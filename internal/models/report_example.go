@@ -69,8 +69,42 @@ var ReportExample = Report{
 		{
 			Format:   "xlsx",
 			FileName: ptr("report.xlsx"),
-			Order: map[string][]string{
-				"sheet1": {"example_mb", "example appmetrica query"},
+			Layout: &Layout{
+				Version: 1,
+				Page: PageConfig{
+					Format:      "A4",
+					Orientation: "portrait",
+					PaddingMM:   16,
+					Header: &PageSection{
+						Text: "Example layout",
+					},
+				},
+				Blocks: []Block{
+					{
+						ID:      "example-table",
+						Type:    BlockTypeTable,
+						Dataset: "example_mb",
+						Pos: GridPosition{
+							X: 0,
+							Y: 0,
+							W: 12,
+							H: 0,
+						},
+						Table: &TableBlock{
+							Columns: []Column{
+								{
+									Field: "status",
+									Title: "Status",
+								},
+								{
+									Field: "count",
+									Title: "Count",
+									Align: ColumnAlignRight,
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	},

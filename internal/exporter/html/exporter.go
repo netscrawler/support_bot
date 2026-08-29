@@ -3,48 +3,36 @@ package html
 import (
 	"bytes"
 	"html/template"
-	"maps"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 
 	"github.com/Masterminds/sprig/v3"
 )
 
-type Exporter struct {
-	data     any
-	template string
-	name     string
-}
+type Exporter struct{}
 
-func New(data any, template string, name string) *Exporter {
-	return &Exporter{
-		data:     data,
-		template: template,
-		name:     name,
-	}
-}
-
-func (e *Exporter) Export() (*models.Data, error) {
-	allFuncs := sprig.FuncMap()
-	maps.Copy(allFuncs, text.FuncMap)
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	grid := newGridState()
 
 	t, err := template.New("html_tmpl").
-		Funcs(allFuncs).
+		Funcs(sprig.FuncMap()).
+		Funcs(grid.funcMap()).
 		Funcs(chartFuncMap).
-		Parse(e.template)
+		Funcs(text.FuncMap).
+		Parse(format.Template.TemplateText)
 	if err != nil {
 		return nil, err
 	}
 
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, e.data); err != nil {
+	if err := t.Execute(&buf, data); err != nil {
 		return nil, err
 	}
 
-	fd, err := models.NewFileData(&buf, e.name+".html")
+	fd, err := models.NewFileData(&buf, *format.FileName+".html")
 	if err != nil {
 		return nil, err
 	}
 
-	return &fd, nil
+	return []models.Data{fd}, nil
 }

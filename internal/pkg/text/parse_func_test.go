@@ -32,7 +32,14 @@ func TestExecuteTemplate(t *testing.T) {
 
 		tmpl := `Отчёт за {{ now | lastMonth | formatRuMonthYear}}`
 
-		want := "Отчёт за декабрь 2025"
+		// month names as produced by formatRuMonthYear
+		months := []string{
+			"январь", "февраль", "март", "апрель", "май", "июнь",
+			"июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+		}
+
+		last := time.Now().AddDate(0, -1, 0)
+		want := fmt.Sprintf("Отчёт за %s %d", months[int(last.Month())-1], last.Year())
 
 		got, err := text.ExecuteTemplate(tmpl, nil)
 

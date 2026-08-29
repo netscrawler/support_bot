@@ -139,6 +139,10 @@ func (d *DatabasePlugin) luaLoadData(L *lua.LState) int {
 func (d *DatabasePlugin) luaClose(L *lua.LState) int {
 	db := checkDB(L)
 
+	if db ==nil{
+		return 0
+	}
+
 	if db.DB != nil {
 		_ = db.DB.Close()
 		db.DB = nil
@@ -146,7 +150,6 @@ func (d *DatabasePlugin) luaClose(L *lua.LState) int {
 
 	return 0
 }
-
 // queryResultToLua converts query results to Lua table format.
 func queryResultToLua(L *lua.LState, results []map[string]any) *lua.LTable {
 	arr := L.NewTable()

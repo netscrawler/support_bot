@@ -1,3 +1,5 @@
+//go:build duckdb
+
 package duck_test
 
 import (

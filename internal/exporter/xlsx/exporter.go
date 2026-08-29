@@ -12,46 +12,40 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-type Exporter struct {
-	buf   map[string][]map[string]any
-	order map[string][]string
-	name  string
-}
+type Exporter struct{}
 
-func New(
-	data map[string][]map[string]any,
-	name string,
-	order map[string][]string,
-) *Exporter {
-	return &Exporter{
-		buf:   data,
-		order: order,
-		name:  name,
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	var (
+		buf *bytes.Buffer
+		err error
+	)
+
+	if format.Layout != nil {
+		buf, err = e.createXlsxBookFromLayout(data, *format.Layout)
+	} else {
+		buf, err = e.createXlsxBook(data, format.Order)
 	}
-}
-
-func (e *Exporter) Export() (*models.Data, error) {
-	buf, err := e.createXlsxBook(e.buf)
 	if err != nil {
 		return nil, err
 	}
 
-	fd, err := models.NewFileData(buf, e.name+".xlsx")
+	fd, err := models.NewFileData(buf, *format.FileName+".xlsx")
 	if err != nil {
 		return nil, err
 	}
 
-	return &fd, nil
+	return []models.Data{fd}, nil
 }
 
 func (e *Exporter) createXlsxBook(
 	dataMap map[string][]map[string]any,
+	ordering map[string][]string,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy")})
-	dateTimeStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy hh:mm:ss")})
+	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: new("dd.mm.yyyy")})
+	dateTimeStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: new("dd.mm.yyyy hh:mm:ss")})
 
 	styles := map[string]int{
 		"date":     dateStyle,
@@ -71,7 +65,7 @@ func (e *Exporter) createXlsxBook(
 		}
 
 		var order []string
-		if o, ok := e.order[unit]; ok {
+		if o, ok := ordering[unit]; ok {
 			order = o
 		} else {
 			order = nil
@@ -123,6 +117,11 @@ func (e *Exporter) createXlsxBook(
 	}
 	f.DeleteSheet("Sheet1")
 
+	f.SetAppProps(&excelize.AppProperties{
+		Application: "SendyStats",
+		Company:     "Sendy",
+	})
+
 	return f.WriteToBuffer()
 }
 
@@ -167,10 +166,6 @@ func detectValueType(val string) (any, string) {
 
 	// строка по умолчанию
 	return val, ""
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
 
 func sanitizeSheetName(name string) string {

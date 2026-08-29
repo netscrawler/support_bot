@@ -13,6 +13,7 @@ import (
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
+	"support_bot/internal/exporter"
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
@@ -254,6 +255,7 @@ func (a *app) init(ctx context.Context) error {
 		Silent: false,
 	})
 
+	// BUG: Один retry передается по ссылке, и в каждом из адапторов ставится ratelimit. Из-за чего используется только один rl который поставлен позже. На 1 адаптер должен быть свой rl или свой retry механизм
 	tg := telegram.NewChatAdaptor(tgBot, retr, log)
 	maxAdp := maxadp.New(maxBot, retr, a.cfg.MaxBot.Enabled, log)
 
@@ -316,7 +318,8 @@ func (a *app) init(ctx context.Context) error {
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
-	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
+	expEngine := exporter.NewEngine(cfg.ChromePath, nil)
+	gen := generator.New(reportChan, clct, expEngine, *snd, *delRepo, proc, eval, 4, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)

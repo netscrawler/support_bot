@@ -9,33 +9,21 @@ import (
 	"support_bot/internal/pkg"
 )
 
-type Exporter struct {
-	buf   map[string][]map[string]any
-	order map[string][]string
-	name  string
-}
+type Exporter struct{}
 
-func New(
-	data map[string][]map[string]any,
-	name string,
-	order map[string][]string,
-) *Exporter {
-	return &Exporter{
-		buf:   data,
-		order: order,
-		name:  name,
-	}
-}
-
-func (e *Exporter) Export() ([]models.Data, error) {
+func (e Exporter) Export(data models.Dataset, export models.Export) ([]models.Data, error) {
 	var fd []models.Data
+
+	if err := validateFormat(export); err != nil {
+		return nil, fmt.Errorf("validation format error: %w", err)
+	}
 
 	var err error
 
-	for k, v := range e.buf {
+	for k, v := range data {
 		var ordering []string
 
-		if o, ok := e.order[k]; ok {
+		if o, ok := export.Order[k]; ok {
 			ordering = o
 		}
 
@@ -43,7 +31,7 @@ func (e *Exporter) Export() ([]models.Data, error) {
 
 		buf := writeCsv(cBuf)
 
-		dt, eErr := models.NewFileData(buf, e.name+"_"+k+".csv")
+		dt, eErr := models.NewFileData(buf, *export.FileName+"_"+k+".csv")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
 
@@ -54,6 +42,16 @@ func (e *Exporter) Export() ([]models.Data, error) {
 	}
 
 	return fd, nil
+}
+
+func validateFormat(format models.Export) error {
+	var err error
+
+	if format.FileName == nil || *format.FileName == "" {
+		err = errors.Join(err, fmt.Errorf("format file name must not be empty"))
+	}
+
+	return err
 }
 
 func writeCsv(data [][]any) *bytes.Buffer {

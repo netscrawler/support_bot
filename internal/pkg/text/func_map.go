@@ -811,6 +811,23 @@ var FuncMap = template.FuncMap{
 	"list": func(v ...any) []any {
 		return v
 	},
+	"dataset": dataset,
+	"strList": chartList,
+}
+
+func chartList(values ...string) []string {
+	return values
+}
+
+func dataset(data map[string][]map[string]any, name string) []map[string]any {
+	if data == nil {
+		return make([]map[string]any, 0)
+	}
+	ds, ok := data[name]
+	if !ok {
+		return make([]map[string]any, 0)
+	}
+	return ds
 }
 
 type TimeSeriesStep int

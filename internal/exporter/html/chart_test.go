@@ -112,7 +112,8 @@ func TestLineChart(t *testing.T) {
 		},
 	}
 
-	result, err := lineChart(
+	result, err := newChart(
+		"line",
 		rows,
 		"date",
 		[]string{"accepted:Принято", "rejected:Отклонено"},
@@ -158,7 +159,8 @@ func TestBarChart(t *testing.T) {
 		},
 	}
 
-	result, err := barChart(
+	result, err := newChart(
+		"bar",
 		rows,
 		"country",
 		[]string{"count:Количество"},
@@ -187,7 +189,8 @@ func TestPieChart(t *testing.T) {
 		},
 	}
 
-	result, err := pieChart(
+	result, err := newChart(
+		"pie",
 		rows,
 		"status",
 		[]string{"count:Количество"},
@@ -205,7 +208,8 @@ func TestPieChart(t *testing.T) {
 }
 
 func TestPieChartRejectsMultipleSeries(t *testing.T) {
-	_, err := pieChart(
+	_, err := newChart(
+		"pie",
 		[]map[string]any{
 			{
 				"status":   "Accepted",
@@ -224,7 +228,8 @@ func TestPieChartRejectsMultipleSeries(t *testing.T) {
 }
 
 func TestChartMissingField(t *testing.T) {
-	_, err := lineChart(
+	_, err := newChart(
+		"line",
 		[]map[string]any{
 			{
 				"date": "2026-08-01",

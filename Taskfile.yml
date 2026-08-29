@@ -19,6 +19,7 @@ vars:
     -X main.Version={{.VERSION}} 
     -X main.Commit={{.COMMIT}} 
     -X main.BuildTime={{.BUILD_TIME}}"
+    -tags chromium
 
 tasks:
   default:

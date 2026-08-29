@@ -17,34 +17,18 @@ import (
 	"golang.org/x/image/font"
 )
 
-type Exporter struct {
-	data  map[string][]map[string]any
-	order map[string][]string
-	name  string
-}
+type Exporter struct{}
 
-func New(
-	data map[string][]map[string]any,
-	name string,
-	order map[string][]string,
-) *Exporter {
-	return &Exporter{
-		data:  data,
-		order: order,
-		name:  name,
-	}
-}
-
-func (e *Exporter) Export() ([]models.Data, error) {
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
 	var err error
 
 	var id []models.Data
 
-	for k, v := range e.data {
+	for k, v := range data {
 		_, pureData := splitMeta(v)
 
 		var order []string
-		if o, ok := e.order[k]; ok {
+		if o, ok := format.Order[k]; ok {
 			order = o
 		} else {
 			order = nil
@@ -59,7 +43,7 @@ func (e *Exporter) Export() ([]models.Data, error) {
 			continue
 		}
 
-		dt, eErr := models.NewImageData(img, e.name+"_"+k+".png")
+		dt, eErr := models.NewImageData(img, *format.FileName+"_"+k+".png")
 		if eErr != nil {
 			err = errors.Join(err, eErr)
 		}

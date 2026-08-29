@@ -36,6 +36,7 @@ RUN VERSION=${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || ech
            GOOS=linux \
            GOARCH=amd64 \
            go build \
+           -tags chromium \
            -ldflags "\
              -linkmode external \
              -extldflags '-static' \
@@ -50,9 +51,10 @@ RUN VERSION=${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || ech
 # Stage 2: Runtime
 FROM debian:12-slim
 
-# Установка необходимых рантайм-пакетов
+# Установка необходимых рантайм-пакетов.
+# PDF-экспорт собирается с тегом chromium и требует chrome/chromium в рантайме.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wkhtmltopdf \
+    chromium \
     ca-certificates \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*

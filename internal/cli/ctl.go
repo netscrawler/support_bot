@@ -345,7 +345,7 @@ func saveScript(args []string) error {
 
 		err = mng.Save(ctx, scriptName, string(script))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "read script file: %w\n", err)
+			fmt.Fprintf(os.Stderr, "read script file: %s\n", err)
 			continue
 		}
 		fmt.Fprintf(os.Stdout, "Script %s saved successfully\n", scriptName)

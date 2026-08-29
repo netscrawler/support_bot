@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"maps"
 	"support_bot/internal/collector"
-	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/processor"
@@ -27,6 +26,10 @@ type Evaluator interface {
 	EvalStr(ctx context.Context, expr string) (string, error)
 }
 
+type Exporter interface {
+	Export(data models.Dataset, exp models.Export) ([]models.Data, error)
+}
+
 type Generator struct {
 	c chan models.Report
 
@@ -35,6 +38,8 @@ type Generator struct {
 	eval Evaluator
 
 	snd models.SenderProvider
+
+	exporter Exporter
 
 	proc *processor.Processor
 
@@ -48,6 +53,7 @@ type Generator struct {
 func New(
 	c chan models.Report,
 	clct Collector,
+	exp Exporter,
 	snd models.SenderProvider,
 	sendRepo SentMsgRepository,
 	proc *processor.Processor,
@@ -66,6 +72,7 @@ func New(
 		clct:        clct,
 		eval:        eval,
 		snd:         snd,
+		exporter:    exp,
 		log:         l,
 		numWorkers:  workers,
 		sentMsgRepo: sendRepo,
@@ -172,7 +179,7 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 	res := make([]models.Data, 0, len(report.Exports))
 
 	for _, e := range report.Exports {
-		r, err := exporter.Export(data, e)
+		r, err := g.exporter.Export(data, e)
 		if err != nil {
 			l.ErrorContext(
 				ctx,

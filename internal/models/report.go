@@ -212,6 +212,7 @@ type Export struct {
 	Template *Template           `json:"template,omitempty"`
 	FileName *string             `json:"file_name,omitempty"`
 	Order    map[string][]string `json:"order,omitempty"`
+	Layout   *Layout             `json:"layout,omitempty"`
 }
 
 func (e Export) String() string {

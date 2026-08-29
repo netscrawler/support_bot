@@ -43,7 +43,6 @@ func (s *Sender) Send(ctx context.Context, mail Mail) error {
 
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 
-	//nolint:gosec //not need
 	tlsConfig := &tls.Config{
 		ServerName: s.cfg.Host,
 	}

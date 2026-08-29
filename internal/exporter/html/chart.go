@@ -3,12 +3,10 @@ package html
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	htmltemplate "html/template"
-	"maps"
 	"strings"
 	"support_bot/assets"
-	"support_bot/internal/models"
+	"support_bot/internal/pkg/funcs"
 	"sync/atomic"
 )
 
@@ -44,102 +42,86 @@ type chartDataset struct {
 var chartID uint64
 
 var chartFuncMap = map[string]any{
-	"lineChart":    lineChart,
-	"barChart":     barChart,
-	"pieChart":     pieChart,
-	"dataset":      dataset,
 	"chartOptions": chartOptions,
+
+	"chartJS":      chartJS,
+	"chartPalette": chartPalette,
+	"styles":       styles,
 }
 
-func dataset(data models.Dataset, name string) []map[string]any {
-	if data == nil {
-		return make([]map[string]any, 0)
-	}
-	ds, ok := data[name]
-	if !ok {
-		return make([]map[string]any, 0)
-	}
-	return ds
-}
-
-func lineChart(
+// chart renders a chart block for templates. Inside an active reportGrid the
+// block is collected for the layout engine; otherwise fallback HTML is returned.
+func (s *gridState) chart(
+	chType string,
 	rows []map[string]any,
 	xField string,
 	series []string,
 	options map[string]any,
 ) (htmltemplate.HTML, error) {
-	return renderChart(
-		chartTypeLine,
-		rows,
-		xField,
-		series,
-		options,
-	)
-}
-
-func barChart(
-	rows []map[string]any,
-	xField string,
-	series []string,
-	options map[string]any,
-) (htmltemplate.HTML, error) {
-	return renderChart(
-		chartTypeBar,
-		rows,
-		xField,
-		series,
-		options,
-	)
-}
-
-func pieChart(
-	rows []map[string]any,
-	xField string,
-	series []string,
-	options map[string]any,
-) (htmltemplate.HTML, error) {
-	if len(series) != 1 {
-		return "", fmt.Errorf(
-			"pieChart: expected exactly one series, got %d",
-			len(series),
-		)
+	if chType != string(chartTypeLine) && chType != string(chartTypeBar) &&
+		chType != string(chartTypePie) {
+		return "", fmt.Errorf("chart: invalid chart type: %s", chType)
 	}
 
-	return renderChart(
-		chartTypePie,
-		rows,
-		xField,
-		series,
-		options,
-	)
+	block, fallbackHTML, err := buildChartBlock(chartType(chType), rows, xField, series, options)
+	if err != nil {
+		return "", err
+	}
+
+	// if inside reportGrid collector - append and render nothing now
+	if len(s.stack) > 0 {
+		s.stack[len(s.stack)-1] = append(s.stack[len(s.stack)-1], block)
+
+		return "", nil
+	}
+
+	// fallback: return immediate HTML
+	return htmltemplate.HTML(fallbackHTML), nil
 }
 
-func renderChart(
+// newChart renders a chart outside a reportGrid (fallback path).
+func newChart(
+	chType string,
+	rows []map[string]any,
+	xField string,
+	series []string,
+	options map[string]any,
+) (htmltemplate.HTML, error) {
+	return newGridState().chart(chType, rows, xField, series, options)
+}
+
+func buildChartBlock(
 	chartType chartType,
 	rows []map[string]any,
 	xField string,
 	series []string,
 	options map[string]any,
-) (htmltemplate.HTML, error) {
+) (ReportBlock, string, error) {
+	var empty ReportBlock
+
 	if xField == "" {
-		return "", fmt.Errorf("chart: x field is empty")
+		return empty, "", fmt.Errorf("chart: x field is empty")
 	}
 
 	if len(series) == 0 {
-		return "", fmt.Errorf("chart: at least one series is required")
+		return empty, "", fmt.Errorf("chart: at least one series is required")
+	}
+
+	if chartType == chartTypePie && len(series) > 1 {
+		return empty, "", fmt.Errorf("chart: pie chart supports exactly one series")
 	}
 
 	parsedSeries, err := parseSeries(series)
 	if err != nil {
-		return "", err
+		return empty, "", err
 	}
 
 	if err := validateFields(rows, xField, parsedSeries); err != nil {
-		return "", err
+		return empty, "", err
 	}
 
 	if err := validateChartOptions(chartType, options); err != nil {
-		return "", err
+		return empty, "", err
 	}
 
 	labels := make([]any, 0, len(rows))
@@ -157,7 +139,6 @@ func renderChart(
 
 		for i, series := range parsedSeries {
 			value, ok := row[series.Field]
-
 			if !ok {
 				value = nil
 			}
@@ -170,21 +151,18 @@ func renderChart(
 	}
 
 	datasets := make([]chartDataset, 0, len(chartSerial))
-
 	for _, series := range chartSerial {
-		datasets = append(datasets, chartDataset{
-			Label: series.Label,
-			Data:  series.Data,
-		})
+		datasets = append(datasets, chartDataset(series))
 	}
 
 	defaultOpts := map[string]any{
 		"responsive":          true,
 		"maintainAspectRatio": false,
 		"animation":           false,
+		"colors":              chartPalettes["default"],
 	}
 
-	maps.Copy(defaultOpts, options)
+	opts := funcs.MapJoin(defaultOpts, options)
 
 	config := chartConfig{
 		Type: chartType,
@@ -192,47 +170,122 @@ func renderChart(
 			Labels:   labels,
 			Datasets: datasets,
 		},
-		Options: buildChartJSOptions(chartType, options),
+		Options: buildChartJSOptions(chartType, opts),
 	}
 
 	configJSON, err := json.Marshal(config)
 	if err != nil {
-		return "", fmt.Errorf("chart: marshal config: %w", err)
+		return empty, "", fmt.Errorf("chart: marshal config: %w", err)
 	}
 
 	id := nextChartID()
 
 	height := 300
-
 	if value, ok := options["height"].(int); ok {
 		height = value
 	}
 
-	html := fmt.Sprintf(`
-<div class="report-chart" style="position:relative;width:100%%;height:%dpx;">
-	<canvas id="%s"></canvas>
-</div>
-
-<script>
-(function () {
-	const canvas = document.getElementById(%s);
-
-	if (!canvas) {
-		throw new Error("chart canvas not found: %s");
+	// Ширина блока в 12-колоночной сетке.
+	width := 12
+	if value, ok := options["w"].(int); ok {
+		width = value
 	}
 
-	new Chart(canvas, %s);
-})();
-</script>
-`,
-		height,
-		id,
-		mustJSONQuote(id),
-		id,
-		configJSON,
+	if width < 1 || width > 12 {
+		return empty, "", fmt.Errorf("chart: option %q must be between 1 and 12", "w")
+	}
+
+	// Height in grid units
+	hGrid := 4
+	if v, ok := options["h"].(int); ok {
+		hGrid = v
+	}
+	if hGrid < 1 {
+		return empty, "", fmt.Errorf("chart: option %q must be >= 1", "h")
+	}
+
+	// build inner HTML (without grid wrapper)
+	inner := fmt.Sprintf(`
+		<div class="chart-card">
+
+		    <h3 class="chart-card-title">
+		        %s
+		    </h3>
+
+		    <div class="report-chart" style="height:%dpx;">
+		        <canvas id="%s"></canvas>
+		    </div>
+
+		    <script>
+		        (function () {
+		            const canvas = document.getElementById(%s)
+
+		            if (!canvas) {
+		                throw new Error("chart canvas not found: %s");
+		            }
+
+		            new Chart(canvas, %s)
+		        })();
+		    </script>
+
+		</div>
+	`, escapeHTML(options["title"]), height, id, mustJSONQuote(id), id, configJSON)
+
+	block := ReportBlock{
+		Type:           "chart",
+		Content:        inner,
+		Size:           BlockSize{W: width, H: hGrid},
+		ExplicitWidth:  true,
+		ExplicitHeight: true,
+		Splittable:     false,
+	}
+
+	// fallback wrapper HTML for immediate rendering outside reportGrid
+	fallback := fmt.Sprintf(
+		`<div class="report-grid-item" style="%s">%s</div>`,
+		buildGridItemStyle(width, 0, false, 0, false),
+		inner,
 	)
 
-	return htmltemplate.HTML(html), nil
+	return block, fallback, nil
+}
+
+func buildGridItemStyle(
+	width int,
+	x int,
+	hasX bool,
+	y int,
+	hasY bool,
+) string {
+	styles := []string{
+		fmt.Sprintf("grid-column: span %d", width),
+	}
+
+	if hasX {
+		styles = append(
+			styles,
+			fmt.Sprintf("grid-column-start: %d", x+1),
+		)
+	}
+
+	if hasY {
+		styles = append(
+			styles,
+			fmt.Sprintf("grid-row-start: %d", y+1),
+		)
+	}
+
+	return strings.Join(styles, "; ")
+}
+
+func escapeHTML(value any) string {
+	if value == nil {
+		return ""
+	}
+
+	return htmltemplate.HTMLEscapeString(
+		fmt.Sprint(value),
+	)
 }
 
 type seriesDefinition struct {
@@ -370,6 +423,38 @@ func validateChartOptions(
 				)
 			}
 
+		case "w":
+			width, ok := value.(int)
+			if !ok {
+				return fmt.Errorf(
+					"chart: option %q must be int",
+					key,
+				)
+			}
+
+			if width < 1 || width > 12 {
+				return fmt.Errorf(
+					"chart: option %q must be between 1 and 12",
+					key,
+				)
+			}
+
+		case "x", "y":
+			position, ok := value.(int)
+			if !ok {
+				return fmt.Errorf(
+					"chart: option %q must be int",
+					key,
+				)
+			}
+
+			if position < 0 || position >= 12 {
+				return fmt.Errorf(
+					"chart: option %q must be between 0 and 11",
+					key,
+				)
+			}
+
 		case "legend":
 			if _, ok := value.(bool); !ok {
 				return fmt.Errorf(
@@ -392,12 +477,6 @@ func validateChartOptions(
 					key,
 				)
 			}
-
-		default:
-			return fmt.Errorf(
-				"chart: unknown option %q",
-				key,
-			)
 		}
 	}
 
@@ -447,6 +526,9 @@ func buildChartJSOptions(
 			},
 		}
 	}
+	if colors, ok := options["colors"].([]string); ok {
+		result["colors"] = colors
+	}
 
 	return result
 }
@@ -475,15 +557,42 @@ func chartOptions(args ...any) (map[string]any, error) {
 	return options, nil
 }
 
-func chartJS() (template.HTML, error) {
+func chartJS() (htmltemplate.HTML, error) {
 	data, err := assets.ChartFS.ReadFile("js/chart.umd.min.js")
 	if err != nil {
 		return "", fmt.Errorf("read chart.js: %w", err)
 	}
 
-	return template.HTML(
+	return htmltemplate.HTML(
 		"<script>\n" +
 			string(data) +
 			"\n</script>",
 	), nil
+}
+
+var chartPalettes = map[string][]string{
+	"default": {
+		"#3B82F6",
+		"#10B981",
+		"#F59E0B",
+		"#EF4444",
+		"#8B5CF6",
+		"#06B6D4",
+	},
+
+	"corporate": {
+		"#0066FF",
+		"#00A86B",
+		"#FFB000",
+		"#E53935",
+	},
+}
+
+func chartPalette(name string) ([]string, error) {
+	colors, ok := chartPalettes[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown chart palette %q", name)
+	}
+
+	return colors, nil
 }

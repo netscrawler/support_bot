@@ -1,4 +1,4 @@
-# supported golangci-lint version = 2.6.0
+# supported golangci-lint version = 2.6.0+
 version: "2"
 
 run:
@@ -6,7 +6,7 @@ run:
   relative-path-mode: gomod
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - copyloopvar
@@ -26,48 +26,48 @@ linters:
     - unconvert
     - unused
 
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
-  
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - whyNoLint
-      - appendAssign
-      - hugeParam
-      - rangeValCopy
-      - paramTypeCombine
-      - unnamedResult
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
 
-  revive:
-    ignore-generated-header: true
-    severity: warning
-    rules:
-      - name: indent-error-flow
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - whyNoLint
+        - appendAssign
+        - hugeParam
+        - rangeValCopy
+        - paramTypeCombine
+        - unnamedResult
 
-  gosec:
-    excludes:
-      - G104
-      - G203
+    revive:
+      ignore-generated-header: true
+      severity: warning
+      rules:
+        - name: indent-error-flow
 
-  staticcheck:
-    checks: ["all", "-ST1003"]
+    gosec:
+      excludes:
+        - G104
+        - G203
 
-  unused:
-    field-writes-are-uses: true
-    exported-fields-are-used: true
+    staticcheck:
+      checks: ["all", "-ST1003"]
 
-  errcheck:
-    exclude-functions:
+    unused:
+      field-writes-are-uses: true
+      exported-fields-are-used: true
+
+    errcheck:
+      exclude-functions:
         - fmt.Fprintf
         - fmt.Fprint
         - fmt.Fprintln
@@ -78,8 +78,10 @@ linters-settings:
         - (*log.Logger).Printf
         - (*log.Logger).Println
 
+  exclusions:
+    generated: lax
+
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 

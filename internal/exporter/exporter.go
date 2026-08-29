@@ -9,62 +9,45 @@ import (
 	"support_bot/internal/exporter/text"
 	"support_bot/internal/exporter/xlsx"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/funcs"
 )
 
-func Export(
-	data map[string][]map[string]any,
-	exp models.Export,
-) ([]models.Data, error) {
-	switch exp.Format {
-	case models.ReportFormatCsv:
-		r, err := csv.New(data, *exp.FileName, exp.Order).Export()
-		if err != nil {
-			return nil, err
-		}
+type Exporter interface {
+	Export(data models.Dataset, exp models.Export) ([]models.Data, error)
+}
 
-		return r, nil
-	case models.ReportFormatXlsx:
-		r, err := xlsx.New(data, *exp.FileName, exp.Order).Export()
-		if err != nil {
-			return nil, err
-		}
+type Engine struct {
+	exporters map[string]Exporter
+}
 
-		return []models.Data{*r}, nil
-	case models.ReportFormatPng:
-		r, err := png.New(data, *exp.FileName, exp.Order).Export()
-		if err != nil {
-			return nil, err
-		}
-
-		return r, nil
-	case models.ReportFormatHTML:
-		r, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
-		if err != nil {
-			return nil, err
-		}
-
-		return []models.Data{*r}, nil
-
-	case models.ReportFormatPdf:
-		rh, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
-		if err != nil {
-			return nil, err
-		}
-
-		r, err := pdf.New(*exp.FileName, []models.Data{*rh}...).Export()
-		if err != nil {
-			return nil, err
-		}
-
-		return []models.Data{*r}, nil
-	case models.ReportFormatText:
-		r, err := text.New(data, exp.Template.TemplateText, exp.Template.Type).Export()
-		if err != nil {
-			return nil, err
-		}
-
-		return []models.Data{*r}, nil
-	default:
-		return nil, fmt.Errorf("undefined format: %s", exp.Format)
+// NewEngine builds an engine with default exporters plus optional custom ones.
+// path is the browser/pdf binary location used by the pdf exporter (chrome for
+// chromium builds, wkhtmltopdf for wkhtmltopdf builds).
+func NewEngine(path string, exporters map[string]Exporter) *Engine {
+	defaults := map[string]Exporter{
+		"csv":  csv.Exporter{},
+		"html": html.Exporter{},
+		"pdf":  pdf.New(path, html.Exporter{}),
+		"png":  png.Exporter{},
+		"text": text.Exporter{},
+		"xlsx": xlsx.Exporter{},
 	}
+
+	return &Engine{
+		exporters: funcs.MapJoin(defaults, exporters),
+	}
+}
+
+func (e *Engine) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	exp, ok := e.exporters[format.Format]
+	if !ok {
+		return nil, fmt.Errorf("exporter for format: %s not found", format.Format)
+	}
+
+	exportResult, err := exp.Export(data, format)
+	if err != nil {
+		return nil, fmt.Errorf("export %s error: %w", format.Format, err)
+	}
+
+	return exportResult, nil
 }
