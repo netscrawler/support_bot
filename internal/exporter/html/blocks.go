@@ -8,8 +8,9 @@ import (
 	"strings"
 
 	"support_bot/internal/exporter/render"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 const defaultChartCanvasPx = 300
@@ -42,7 +43,7 @@ const chartCardTemplate = `
 	        %s
 	    </h3>
 
-	    <div class="report-chart" style="height:%dpx;">
+	    <div class="report-chart" style="height:min(%dpx, 100%%);">
 	        <canvas id="%s"></canvas>
 	    </div>
 
@@ -88,9 +89,8 @@ func renderChartBlock(w io.Writer, rc *render.RenderContext, pb layoutpkg.Placed
 		opts["stacked"] = true
 	}
 
-	if ch.Title != "" {
-		opts["title"] = ch.Title
-	}
+	// ch.Title is rendered as the card heading below, not as a Chart.js
+	// plugins.title, so it is deliberately not added to opts.
 
 	if ch.Legend != nil {
 		opts["legend"] = *ch.Legend

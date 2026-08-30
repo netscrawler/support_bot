@@ -9,8 +9,9 @@ import (
 	texttemplate "text/template"
 
 	"support_bot/internal/exporter/render"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 type Exporter struct{}

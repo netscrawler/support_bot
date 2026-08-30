@@ -58,6 +58,7 @@ func TestExportLayoutAllBlockTypes(t *testing.T) {
 	}
 
 	name := "layout_report"
+
 	out, err := html.Exporter{}.Export(data, models.Export{Layout: &l, FileName: &name})
 	if err != nil {
 		t.Fatalf("export: %v", err)
@@ -70,10 +71,13 @@ func TestExportLayoutAllBlockTypes(t *testing.T) {
 	got := out[0].Data.String()
 	for _, want := range []string{
 		`class="report-page"`,
+		`class="report-row"`,
 		`class="report-grid-item"`,
-		`"type":"line"`,
+		`class="card metric-card"`,
 		`class="metric-value"`,
 		"Принято",
+		`"type":"line"`,
+		`class="report-table"`,
 		`class="report-text"`,
 		"rows=2",
 		`<p id="raw">hi</p>`,
@@ -86,6 +90,122 @@ func TestExportLayoutAllBlockTypes(t *testing.T) {
 
 	if !strings.HasSuffix(out[0].FileName, ".html") {
 		t.Errorf("unexpected file name %q", out[0].FileName)
+	}
+}
+
+func TestExportLayoutWrapsAndFillsRow(t *testing.T) {
+	// Two charts of w=8 and w=6 cannot share a row: the 8 stretches to full
+	// width on row 1, the 6 wraps and stretches to full width on row 2.
+	mk := func(id string, w int) models.Block {
+		return models.Block{
+			ID: id, Type: models.BlockTypeChart, Dataset: "d",
+			Pos: models.GridPosition{W: w, H: 4},
+			Chart: &models.ChartBlock{
+				Kind: models.ChartKindBar, XField: "x",
+				Series: []models.Series{{Field: "y"}},
+			},
+		}
+	}
+
+	l := models.Layout{Version: 1, Blocks: []models.Block{mk("a", 8), mk("b", 6)}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"d": {{"x": "a", "y": 1}}},
+		models.Export{Layout: &l, FileName: new("wrap")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+
+	if n := strings.Count(got, `class="report-row"`); n != 2 {
+		t.Fatalf("want 2 flow rows, got %d", n)
+	}
+
+	if n := strings.Count(got, `flex-grow: 12;`); n != 2 {
+		t.Fatalf("both wrapped blocks should fill the width (flex-grow: 12), got %d", n)
+	}
+}
+
+func TestExportLayoutTableAlignmentAndFormat(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "ch",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{Columns: []models.Column{
+			{Field: "channel", Title: "Канал", Align: models.ColumnAlignLeft},
+			{Field: "share", Title: "Доля", Align: models.ColumnAlignRight, Format: "percent"},
+		}},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"ch": {{"channel": "Веб", "share": 0.46}}},
+		models.Export{Layout: &l, FileName: new("tbl")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	for _, want := range []string{
+		`<th class="align-right">Доля</th>`,
+		`<td class="align-right">46%</td>`,
+		`<td class="align-left">Веб</td>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
+
+func TestExportLayoutMetricFormat(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "m", Type: models.BlockTypeMetric, Dataset: "kpi",
+		Pos:    models.GridPosition{W: 3, H: 2},
+		Metric: &models.MetricBlock{Field: "rate", Label: "Доля", Format: "percent"},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"kpi": {{"rate": 0.895}}},
+		models.Export{Layout: &l, FileName: new("m")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	if !strings.Contains(out[0].Data.String(), `<div class="metric-value">89.5%</div>`) {
+		t.Fatal("metric value not formatted as percent")
+	}
+}
+
+func TestExportLayoutChartSeriesColours(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "c", Type: models.BlockTypeChart, Dataset: "d",
+		Pos: models.GridPosition{W: 12, H: 4},
+		Chart: &models.ChartBlock{
+			Kind: models.ChartKindLine, XField: "x",
+			Series: []models.Series{
+				{Field: "a", Color: "#2f80ed"},
+				{Field: "b"}, // unset -> palette
+			},
+		},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"d": {{"x": "1", "a": 1, "b": 2}}},
+		models.Export{Layout: &l, FileName: new("c")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	if !strings.Contains(got, `"#2f80ed"`) {
+		t.Error("explicit series colour not applied")
+	}
+
+	if !strings.Contains(got, `"#88BF4D"`) {
+		t.Error("unset series should fall back to the palette")
 	}
 }
 
@@ -107,7 +227,11 @@ func TestExportLayoutPaginatesTallTable(t *testing.T) {
 	}
 
 	name := "pg"
-	out, err := html.Exporter{}.Export(models.Dataset{"big": rows}, models.Export{Layout: &l, FileName: &name})
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"big": rows},
+		models.Export{Layout: &l, FileName: &name},
+	)
 	if err != nil {
 		t.Fatalf("export: %v", err)
 	}
@@ -151,7 +275,7 @@ func TestExportLayoutRendersHeaderAndFooter(t *testing.T) {
 		"Отчёт за 2 дн.",
 		`<footer class="report-footer">`,
 		`<span id="pg">стр. 1</span>`,
-		"display: flex; flex-direction: column; padding: 16mm;",
+		`<div class="report-page" style="padding: 16mm;">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q", want)
@@ -215,14 +339,42 @@ func TestExportLayoutRespectsLimit(t *testing.T) {
 	}
 
 	name := "lim"
-	out, err := html.Exporter{}.Export(models.Dataset{"big": rows}, models.Export{Layout: &l, FileName: &name})
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"big": rows},
+		models.Export{Layout: &l, FileName: &name},
+	)
 	if err != nil {
 		t.Fatalf("export: %v", err)
 	}
 
 	got := out[0].Data.String()
 	// rows 0..4 present, row 5 (and up) not rendered
-	if !strings.Contains(got, ">4<") || strings.Contains(got, ">5<") {
+	if !strings.Contains(got, ">4</td>") || strings.Contains(got, ">5</td>") {
 		t.Fatalf("limit not applied: want rows 0-4 only")
+	}
+}
+
+func TestExportLayoutChartHeightPx(t *testing.T) {
+	l := models.Layout{Blocks: []models.Block{{
+		ID: "chart", Type: models.BlockTypeChart, Dataset: "daily",
+		Pos: models.GridPosition{X: 0, Y: 0, W: 12, H: 2},
+		Chart: &models.ChartBlock{
+			Kind: models.ChartKindLine, XField: "date", HeightPx: 900,
+			Series: []models.Series{{Field: "n"}},
+		},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"daily": {{"date": "2026-08-01", "n": 1}}},
+		models.Export{Layout: &l, FileName: new("chart")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	// height_px is honoured as a min-height; the card grows, nothing is clipped.
+	if !strings.Contains(out[0].Data.String(), "min-height: 900px;") {
+		t.Fatal("chart canvas does not honour height_px")
 	}
 }

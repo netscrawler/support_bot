@@ -8,8 +8,9 @@ import (
 
 	"support_bot/assets"
 	"support_bot/internal/exporter/render"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 type chartType string

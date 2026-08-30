@@ -8,11 +8,11 @@ import (
 	"maps"
 	"strconv"
 
-	"github.com/Masterminds/sprig/v3"
-
 	"support_bot/internal/layout"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 // Renderer turns a resolved, packed layout into deliverable files for one

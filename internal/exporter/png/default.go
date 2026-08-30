@@ -14,12 +14,13 @@ import (
 	"math"
 	"strings"
 
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
+
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
 
 	layoutpkg "support_bot/internal/layout"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 )
 
 // HtmlExporter matches the chromium build's constructor signature; the pure-Go

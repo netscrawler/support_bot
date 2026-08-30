@@ -21,10 +21,14 @@ type Exporter struct{}
 // Format implements render.Renderer.
 func (e Exporter) Format() string { return models.ReportFormatHTML }
 
-// Geometry implements render.Renderer: a fixed 12x12 grid whose millimetre
-// work-area is the A4 sheet net of padding and any header / footer band.
+// Geometry implements render.Renderer: the declarative-layout path uses the flow
+// packer over the A4 work-area (sheet net of padding and any header / footer
+// band).
 func (e Exporter) Geometry(page models.PageConfig) layoutpkg.PageGeometry {
-	return layoutpkg.PageGeometryFor(page)
+	geom := layoutpkg.PageGeometryFor(page)
+	geom.Flow = true
+
+	return geom
 }
 
 // Export renders one export. A declarative layout goes through the shared
@@ -60,7 +64,7 @@ func (e Exporter) Render(
 	}
 
 	buf.WriteString("<!doctype html>\n<html lang=\"ru\">\n<head>\n<meta charset=\"utf-8\">\n")
-	buf.WriteString(string(styles(doc.Page)))
+	buf.WriteString(string(layoutStyles(doc.Page)))
 	buf.WriteString("\n")
 
 	if cjs, err := chartJS(); err == nil {
@@ -70,7 +74,7 @@ func (e Exporter) Render(
 
 	buf.WriteString("</head>\n<body>\n")
 
-	if err := renderPages(&buf, rc, pages, doc.Page); err != nil {
+	if err := renderLayoutDocument(&buf, rc, pages, doc.Page); err != nil {
 		return nil, err
 	}
 
@@ -149,6 +153,7 @@ func renderPages(
 	pageStyle := fmt.Sprintf(
 		"display: flex; flex-direction: column; padding: %dmm;", pad,
 	)
+	geometry := layoutpkg.PageGeometryFor(page)
 
 	for _, p := range pages {
 		fmt.Fprintf(w, `<div class="report-page" style="%s">`+"\n", pageStyle)
@@ -159,8 +164,9 @@ func renderPages(
 
 		fmt.Fprintf(
 			w,
-			`<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr)); height: auto; flex: 1 1 auto; min-height: 0;">`+"\n",
-			layoutpkg.GridRows,
+			`<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr)); `+
+				`height: %dmm; flex: 0 0 %dmm;">`+"\n",
+			layoutpkg.GridRows, geometry.HeightMM, geometry.HeightMM,
 		)
 
 		for _, pb := range p.Blocks {

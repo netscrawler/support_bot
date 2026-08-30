@@ -11,8 +11,9 @@ import (
 	"support_bot/internal/exporter/render"
 	"support_bot/internal/exporter/text"
 	"support_bot/internal/exporter/xlsx"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 // Exporter is the legacy single-call export interface. Custom exporters passed

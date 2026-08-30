@@ -3,9 +3,10 @@ package html_test
 import (
 	"os"
 	"strings"
+	"testing"
+
 	"support_bot/internal/exporter/html"
 	"support_bot/internal/models"
-	"testing"
 )
 
 // exampleTemplateData mirrors the data used by example.gohtml.

@@ -6,8 +6,9 @@ import (
 	"html/template"
 
 	"support_bot/internal/exporter/render"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 // gridState holds per-render state for the {{ reportGrid }} / {{ chart }} /

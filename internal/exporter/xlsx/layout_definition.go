@@ -6,11 +6,13 @@ import (
 	"strings"
 	texttemplate "text/template"
 
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
+
 	"github.com/xuri/excelize/v2"
 
 	layoutpkg "support_bot/internal/layout"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
+
 	textfuncs "support_bot/internal/pkg/text"
 )
 
@@ -21,15 +23,32 @@ type layoutRenderState struct {
 
 // xlsxBlock is the per-block context passed to every block renderer.
 type xlsxBlock struct {
-	f      *excelize.File
-	sheet  string
-	data   models.Dataset
-	pb     layoutpkg.PlacedBlock
-	styles layoutStyles
-	state  *layoutRenderState
+	f             *excelize.File
+	sheet         string
+	data          models.Dataset
+	pb            layoutpkg.PlacedBlock
+	styles        layoutStyles
+	state         *layoutRenderState
+	pageRowOffset int
 }
 
-func (b xlsxBlock) block() models.Block { return b.pb.Block }
+const (
+	xlsxRowsPerGridRow  = layoutpkg.RowsPerGridRow
+	xlsxPageGapRows     = 3
+	xlsxGridColumnWidth = 12.0
+)
+
+func (b xlsxBlock) block() models.Block {
+	block := b.pb.Block
+	block.Pos = b.pb.Pos
+	block.Pos.Y = b.pb.Pos.Y*xlsxRowsPerGridRow + b.pageRowOffset
+	block.Pos.H = b.pb.Pos.H * xlsxRowsPerGridRow
+	if b.pb.RowOffset > 0 {
+		block.ID = fmt.Sprintf("%s_%d", block.ID, b.pb.RowOffset)
+	}
+
+	return block
+}
 
 func (b xlsxBlock) rows() []map[string]any {
 	end := min(b.pb.RowOffset+b.pb.RowCount, len(b.pb.Rows))
@@ -68,20 +87,26 @@ func buildLayoutWorkbook(
 
 	state := layoutRenderState{}
 
-	var placed []layoutpkg.PlacedBlock
-	if len(pages) > 0 {
-		placed = pages[0].Blocks
-	}
+	for _, page := range pages {
+		pageRowOffset := page.Index * (layoutpkg.GridRows*xlsxRowsPerGridRow + xlsxPageGapRows)
+		for _, pb := range page.Blocks {
+			fn, ok := xlsxBlockRenderers[pb.Block.Type]
+			if !ok {
+				return nil, fmt.Errorf("xlsx: no renderer for block type %q", pb.Block.Type)
+			}
 
-	for _, pb := range placed {
-		fn, ok := xlsxBlockRenderers[pb.Block.Type]
-		if !ok {
-			return nil, fmt.Errorf("xlsx: no renderer for block type %q", pb.Block.Type)
-		}
-
-		ctx := xlsxBlock{f: f, sheet: sheetName, data: data, pb: pb, styles: styles, state: &state}
-		if err := fn(ctx); err != nil {
-			return nil, fmt.Errorf("render block %q: %w", pb.Block.ID, err)
+			ctx := xlsxBlock{
+				f:             f,
+				sheet:         sheetName,
+				data:          data,
+				pb:            pb,
+				styles:        styles,
+				state:         &state,
+				pageRowOffset: pageRowOffset,
+			}
+			if err := fn(ctx); err != nil {
+				return nil, fmt.Errorf("render block %q: %w", pb.Block.ID, err)
+			}
 		}
 	}
 
@@ -229,7 +254,15 @@ func renderLayoutTable(
 	}
 
 	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
-	if err := writeMatrix(f, sheet, startCol, startRow, matrix, styles.body, styles.header); err != nil {
+	if err := writeMatrix(
+		f,
+		sheet,
+		startCol,
+		startRow,
+		matrix,
+		styles.body,
+		styles.header,
+	); err != nil {
 		return err
 	}
 
@@ -257,15 +290,12 @@ func renderLayoutTable(
 		return fmt.Errorf("add table: %w", err)
 	}
 
-	for idx, column := range columns {
+	columnWidth := xlsxGridColumnWidth * float64(max(block.Pos.W, 1)) / float64(len(columns))
+	for idx := range columns {
 		col := startCol + idx
-		width := column.Width
-		if width <= 0 {
-			width = int(getAutoWidth(matrix, idx))
-		}
 
 		colName, _ := excelize.ColumnNumberToName(col)
-		if err := f.SetColWidth(sheet, colName, colName, float64(width)); err != nil {
+		if err := f.SetColWidth(sheet, colName, colName, columnWidth); err != nil {
 			return fmt.Errorf("set column width: %w", err)
 		}
 	}
@@ -304,23 +334,41 @@ func renderLayoutMetric(
 		label = block.Metric.Field
 	}
 
-	if err := f.MergeCell(sheet, cellName(startCol, startRow), cellName(endCol, startRow)); err != nil {
+	if err := f.MergeCell(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+	); err != nil {
 		return fmt.Errorf("merge metric label: %w", err)
 	}
 	if err := f.SetCellValue(sheet, cellName(startCol, startRow), label); err != nil {
 		return err
 	}
-	if err := f.SetCellStyle(sheet, cellName(startCol, startRow), cellName(endCol, startRow), styles.label); err != nil {
+	if err := f.SetCellStyle(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+		styles.label,
+	); err != nil {
 		return err
 	}
 
-	if err := f.MergeCell(sheet, cellName(startCol, startRow+1), cellName(endCol, startRow+1)); err != nil {
+	if err := f.MergeCell(
+		sheet,
+		cellName(startCol, startRow+1),
+		cellName(endCol, startRow+1),
+	); err != nil {
 		return fmt.Errorf("merge metric value: %w", err)
 	}
 	if err := f.SetCellValue(sheet, cellName(startCol, startRow+1), value); err != nil {
 		return err
 	}
-	if err := f.SetCellStyle(sheet, cellName(startCol, startRow+1), cellName(endCol, startRow+1), styles.value); err != nil {
+	if err := f.SetCellStyle(
+		sheet,
+		cellName(startCol, startRow+1),
+		cellName(endCol, startRow+1),
+		styles.value,
+	); err != nil {
 		return err
 	}
 
@@ -345,7 +393,11 @@ func renderLayoutText(
 
 	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
 	endCol := startCol + max(block.Pos.W, 1) - 1
-	if err := f.MergeCell(sheet, cellName(startCol, startRow), cellName(endCol, startRow)); err != nil {
+	if err := f.MergeCell(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+	); err != nil {
 		return fmt.Errorf("merge text block: %w", err)
 	}
 
@@ -353,7 +405,12 @@ func renderLayoutText(
 		return err
 	}
 
-	return f.SetCellStyle(sheet, cellName(startCol, startRow), cellName(endCol, startRow), styles.text)
+	return f.SetCellStyle(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+		styles.text,
+	)
 }
 
 func renderLayoutRawHTML(
@@ -369,7 +426,11 @@ func renderLayoutRawHTML(
 	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
 	endCol := startCol + max(block.Pos.W, 1) - 1
 
-	if err := f.MergeCell(sheet, cellName(startCol, startRow), cellName(endCol, startRow)); err != nil {
+	if err := f.MergeCell(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+	); err != nil {
 		return fmt.Errorf("merge raw_html block: %w", err)
 	}
 
@@ -377,7 +438,12 @@ func renderLayoutRawHTML(
 		return err
 	}
 
-	return f.SetCellStyle(sheet, cellName(startCol, startRow), cellName(endCol, startRow), styles.rawHTML)
+	return f.SetCellStyle(
+		sheet,
+		cellName(startCol, startRow),
+		cellName(endCol, startRow),
+		styles.rawHTML,
+	)
 }
 
 func renderLayoutChart(
@@ -401,7 +467,15 @@ func renderLayoutChart(
 	startRow := state.chartDataRow
 	startCol := 1
 
-	if err := writeChartData(f, dataSheet, startCol, startRow, rows, block.Chart.XField, series); err != nil {
+	if err := writeChartData(
+		f,
+		dataSheet,
+		startCol,
+		startRow,
+		rows,
+		block.Chart.XField,
+		series,
+	); err != nil {
 		return err
 	}
 
@@ -432,10 +506,22 @@ func renderLayoutChart(
 			dataSheet, cellColumn(valueCol), startRow+1, cellColumn(valueCol), startRow+len(rows))
 		nameRef := fmt.Sprintf("%s!$%s$%d", dataSheet, cellColumn(valueCol), startRow)
 		if idx == 0 && block.Chart.Kind == models.ChartKindPie {
-			valueRange = fmt.Sprintf("%s!$%s$%d:$%s$%d",
-				dataSheet, cellColumn(valueCol), startRow+1, cellColumn(valueCol), startRow+len(rows))
-			categories = fmt.Sprintf("%s!$%s$%d:$%s$%d",
-				dataSheet, cellColumn(startCol), startRow+1, cellColumn(startCol), startRow+len(rows))
+			valueRange = fmt.Sprintf(
+				"%s!$%s$%d:$%s$%d",
+				dataSheet,
+				cellColumn(valueCol),
+				startRow+1,
+				cellColumn(valueCol),
+				startRow+len(rows),
+			)
+			categories = fmt.Sprintf(
+				"%s!$%s$%d:$%s$%d",
+				dataSheet,
+				cellColumn(startCol),
+				startRow+1,
+				cellColumn(startCol),
+				startRow+len(rows),
+			)
 		}
 
 		ch.Series = append(ch.Series, excelize.ChartSeries{
@@ -607,5 +693,5 @@ func chartHeight(h int) uint {
 		return 300
 	}
 
-	return uint(80 * h)
+	return uint(15 * h)
 }

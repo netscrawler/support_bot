@@ -197,9 +197,21 @@ func styles(args ...any) template.HTML {
         page-break-inside: avoid;
     }
 
+    .report-grid-item > .chart-card,
+    .report-grid-item > .table-card,
+    .report-grid-item > .metric-card,
+    .report-grid-item > .report-text {
+        height: 100%%;
+    }
+
     .chart-card {
         width: 100%%;
+        height: 100%%;
         min-width: 0;
+        min-height: 0;
+
+        display: flex;
+        flex-direction: column;
 
         padding: 5mm;
 
@@ -223,6 +235,33 @@ func styles(args ...any) template.HTML {
     .report-chart {
         position: relative;
         width: 100%%;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .report-chart canvas {
+        max-height: 100%%;
+    }
+
+    .table-card {
+        width: 100%%;
+        min-height: 0;
+        overflow: auto;
+
+        border: 1px solid #e5e9f0;
+        border-radius: 10px;
+        background: #ffffff;
+    }
+
+    .table-card table {
+        width: 100%%;
+        border-collapse: collapse;
+    }
+
+    .metric-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 
     .footer {
@@ -321,7 +360,10 @@ func pageStyleConfigFromAny(value any, fallback pageStyleConfig) pageStyleConfig
 	}
 }
 
-func pageStyleConfigFromPageConfig(page models.PageConfig, fallback pageStyleConfig) pageStyleConfig {
+func pageStyleConfigFromPageConfig(
+	page models.PageConfig,
+	fallback pageStyleConfig,
+) pageStyleConfig {
 	cfg := fallback
 
 	if strings.TrimSpace(page.Format) != "" {

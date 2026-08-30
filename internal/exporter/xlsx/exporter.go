@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
+
 	"github.com/xuri/excelize/v2"
 
 	layoutpkg "support_bot/internal/layout"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 )
 
 type Exporter struct{}
@@ -20,10 +21,10 @@ type Exporter struct{}
 // Format implements render.Renderer.
 func (e Exporter) Format() string { return models.ReportFormatXlsx }
 
-// Geometry implements render.Renderer: the spreadsheet places blocks at their
-// authored Block.Pos on a single sheet, no pagination.
-func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
-	return layoutpkg.PageGeometry{RespectAuthoredPos: true}
+// Geometry implements render.Renderer. The packer creates the same pages as
+// the visual formats; Render appends those pages on one unbounded worksheet.
+func (e Exporter) Geometry(page models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometryFor(page)
 }
 
 // Export renders one export. A declarative layout goes through the shared

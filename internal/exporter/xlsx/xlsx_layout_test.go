@@ -3,10 +3,10 @@ package xlsx_test
 import (
 	"testing"
 
-	"github.com/xuri/excelize/v2"
-
 	"support_bot/internal/exporter/xlsx"
 	"support_bot/internal/models"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func layoutDataset() models.Dataset {
@@ -100,9 +100,47 @@ func TestExporterLayout(t *testing.T) {
 	}
 
 	// Sort desc by accepted -> first data row of the table is date 2026-08-02 (140).
-	// Table starts at Block.Pos row 8+1 = 9; header on row 9, first data row 10.
-	got, _ := f.GetCellValue("layout", "A10")
+	// The packed table starts at grid row 6. Each grid row maps to six worksheet
+	// rows, so its header is on row 37 and the first data row is on row 38.
+	got, _ := f.GetCellValue("layout", "A38")
 	if got != "2026-08-02" {
-		t.Errorf("table not sorted by accepted desc: A10 = %q, want 2026-08-02", got)
+		t.Errorf("table not sorted by accepted desc: A38 = %q, want 2026-08-02", got)
+	}
+}
+
+func TestExporterLayoutAppendsPackedPagesOnOneSheet(t *testing.T) {
+	rows := make([]map[string]any, 200)
+	for i := range rows {
+		rows[i] = map[string]any{"n": i}
+	}
+
+	l := models.Layout{Blocks: []models.Block{{
+		ID: "table", Type: models.BlockTypeTable, Dataset: "rows",
+		Pos:   models.GridPosition{W: 12},
+		Table: &models.TableBlock{Columns: []models.Column{{Field: "n", Title: "N"}}},
+	}}}
+
+	out, err := xlsx.Exporter{}.Export(
+		models.Dataset{"rows": rows},
+		models.Export{FileName: new("pages"), Layout: &l},
+	)
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+
+	f, err := excelize.OpenReader(out[0].Data)
+	if err != nil {
+		t.Fatalf("open workbook: %v", err)
+	}
+	defer f.Close()
+
+	// The final packed chunk starts after the first 12x6 grid rows and the
+	// configured page gap, so data must continue below the first visual page.
+	got, err := f.GetCellValue("layout", "A80")
+	if err != nil {
+		t.Fatalf("read continuation row: %v", err)
+	}
+	if got == "" {
+		t.Fatal("expected packed continuation on the same worksheet")
 	}
 }

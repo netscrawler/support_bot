@@ -5,8 +5,9 @@ import (
 	"html/template"
 	"strings"
 
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
+
+	layoutpkg "support_bot/internal/layout"
 )
 
 // tableOptions accepts key/value pairs similar to chartOptions.
@@ -150,8 +151,8 @@ func validateTableFields(rows []map[string]any, cols []models.Column) error {
 func renderTableChunk(headers []string, rows [][]string) string {
 	var sb strings.Builder
 
-	sb.WriteString("<div class=\"chart-card\">\n")
-	sb.WriteString("<table style=\"width:100%;border-collapse:collapse;\">\n")
+	sb.WriteString("<div class=\"table-card\">\n")
+	sb.WriteString("<table>\n")
 	sb.WriteString("<thead><tr>")
 
 	for _, hname := range headers {
