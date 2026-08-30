@@ -128,6 +128,16 @@ func Normalize(layout models.Layout) models.Layout {
 		layoutCopy.Page.PaddingMM = DefaultPaddingMM
 	}
 
+	if layoutCopy.Page.Header != nil {
+		header := *layoutCopy.Page.Header
+		layoutCopy.Page.Header = &header
+	}
+
+	if layoutCopy.Page.Footer != nil {
+		footer := *layoutCopy.Page.Footer
+		layoutCopy.Page.Footer = &footer
+	}
+
 	for i := range layoutCopy.Blocks {
 		normalizeBlock(&layoutCopy.Blocks[i])
 	}

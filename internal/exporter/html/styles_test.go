@@ -17,6 +17,8 @@ func TestStylesUsesDefaultPageConfig(t *testing.T) {
 		"height: 297mm;",
 		"page-break-after: always;",
 		"break-after: page;",
+		".report-header",
+		".report-footer",
 	} {
 		if !strings.Contains(got, expected) {
 			t.Fatalf("expected CSS to contain %q", expected)

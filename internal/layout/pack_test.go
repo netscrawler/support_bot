@@ -161,3 +161,34 @@ func TestPackNonSplittableTooTall(t *testing.T) {
 		t.Fatalf("expected height error for non-splittable block")
 	}
 }
+
+func TestPageGeometryForWorkArea(t *testing.T) {
+	plain := PageGeometryFor(models.PageConfig{})
+
+	if plain.Cols != GridColumns || plain.Rows != GridRows {
+		t.Fatalf("grid stays %dx%d, got %dx%d", GridColumns, GridRows, plain.Cols, plain.Rows)
+	}
+
+	wantH := a4HeightMM - 2*DefaultPaddingMM
+	if plain.HeightMM != wantH {
+		t.Fatalf("plain work height = %d, want %d", plain.HeightMM, wantH)
+	}
+
+	if plain.RowHeightMM != float64(wantH)/float64(GridRows) {
+		t.Fatalf("row height = %v, want %v", plain.RowHeightMM, float64(wantH)/float64(GridRows))
+	}
+
+	chrome := PageGeometryFor(models.PageConfig{
+		Header: &models.PageSection{Text: "h"},
+		Footer: &models.PageSection{HTML: "<b>f</b>"},
+	})
+
+	if got, want := chrome.HeightMM, wantH-HeaderBandMM-FooterBandMM; got != want {
+		t.Fatalf("chrome work height = %d, want %d", got, want)
+	}
+
+	land := PageGeometryFor(models.PageConfig{Orientation: "landscape"})
+	if land.WidthMM != a4HeightMM-2*DefaultPaddingMM {
+		t.Fatalf("landscape work width = %d, want %d", land.WidthMM, a4HeightMM-2*DefaultPaddingMM)
+	}
+}

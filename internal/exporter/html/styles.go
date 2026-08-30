@@ -142,7 +142,9 @@ func styles(args ...any) template.HTML {
         gap: 5mm;
 
         width: 100%%;
-        height: 230mm;
+        /* Physical height is set inline per page by the renderer: the A4 sheet
+           minus padding and any header / footer band. */
+        min-height: 0;
     }
 
     .report-page {
@@ -159,6 +161,31 @@ func styles(args ...any) template.HTML {
     .report-page:last-child {
         page-break-after: auto;
         break-after: auto;
+    }
+
+    .report-header,
+    .report-footer {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: hidden;
+
+        font-size: 11px;
+        line-height: 1.4;
+        color: #667085;
+    }
+
+    .report-header {
+        margin-bottom: 6mm;
+        padding-bottom: 4mm;
+
+        border-bottom: 1px solid #e5e9f0;
+    }
+
+    .report-footer {
+        margin-top: 6mm;
+        padding-top: 4mm;
+
+        border-top: 1px solid #e5e9f0;
     }
 
     .report-grid-item {

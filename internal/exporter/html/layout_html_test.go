@@ -117,6 +117,48 @@ func TestExportLayoutPaginatesTallTable(t *testing.T) {
 	}
 }
 
+func TestExportLayoutRendersHeaderAndFooter(t *testing.T) {
+	data := models.Dataset{
+		"daily": {{"date": "2026-08-01", "n": 1}, {"date": "2026-08-02", "n": 2}},
+	}
+
+	l := models.Layout{
+		Version: 1,
+		Page: models.PageConfig{
+			Header: &models.PageSection{Text: `Отчёт за {{ len .daily }} дн.`},
+			Footer: &models.PageSection{HTML: `<span id="pg">стр. 1</span>`},
+		},
+		Blocks: []models.Block{
+			{
+				ID: "t", Type: models.BlockTypeTable, Dataset: "daily",
+				Pos:   models.GridPosition{X: 0, Y: 0, W: 12, H: 0},
+				Table: &models.TableBlock{Columns: []models.Column{{Field: "date", Title: "Дата"}}},
+			},
+		},
+	}
+
+	out, err := html.Exporter{}.Export(
+		data,
+		models.Export{Layout: &l, FileName: new("chrome")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	for _, want := range []string{
+		`<header class="report-header">`,
+		"Отчёт за 2 дн.",
+		`<footer class="report-footer">`,
+		`<span id="pg">стр. 1</span>`,
+		"display: flex; flex-direction: column; padding: 16mm;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
+
 func TestExportLayoutRespectsLimit(t *testing.T) {
 	rows := make([]map[string]any, 50)
 	for i := range rows {

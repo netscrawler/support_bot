@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"strings"
+	texttemplate "text/template"
 
 	"github.com/Masterminds/sprig/v3"
 
@@ -20,9 +22,10 @@ type Exporter struct{}
 // Format implements render.Renderer.
 func (e Exporter) Format() string { return models.ReportFormatHTML }
 
-// Geometry implements render.Renderer: the html grid is a fixed 12x12 page.
-func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
-	return layoutpkg.PageGeometry{Cols: layoutpkg.GridColumns, Rows: layoutpkg.GridRows}
+// Geometry implements render.Renderer: a fixed 12x12 grid whose millimetre
+// work-area is the A4 sheet net of padding and any header / footer band.
+func (e Exporter) Geometry(page models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometryFor(page)
 }
 
 // Export renders one export. A declarative layout goes through the shared
@@ -68,7 +71,7 @@ func (e Exporter) Render(
 
 	buf.WriteString("</head>\n<body>\n")
 
-	if err := renderPages(&buf, rc, pages); err != nil {
+	if err := renderPages(&buf, rc, pages, doc.Page); err != nil {
 		return nil, err
 	}
 
@@ -133,15 +136,31 @@ func (e Exporter) exportTemplate(data models.Dataset, format models.Export) ([]m
 	return []models.Data{fd}, nil
 }
 
-func renderPages(w io.Writer, rc *render.RenderContext, pages []layoutpkg.Page) error {
+func renderPages(
+	w io.Writer,
+	rc *render.RenderContext,
+	pages []layoutpkg.Page,
+	page models.PageConfig,
+) error {
+	pad := page.PaddingMM
+	if pad <= 0 {
+		pad = layoutpkg.DefaultPaddingMM
+	}
+
+	pageStyle := fmt.Sprintf(
+		"display: flex; flex-direction: column; padding: %dmm;", pad,
+	)
+
 	for _, p := range pages {
-		if _, err := io.WriteString(w, `<div class="report-page">`+"\n"); err != nil {
+		fmt.Fprintf(w, `<div class="report-page" style="%s">`+"\n", pageStyle)
+
+		if err := renderPageSection(w, rc, page.Header, "header", "report-header"); err != nil {
 			return err
 		}
 
 		fmt.Fprintf(
 			w,
-			`<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr));">`+"\n",
+			`<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr)); height: auto; flex: 1 1 auto; min-height: 0;">`+"\n",
 			layoutpkg.GridRows,
 		)
 
@@ -162,10 +181,58 @@ func renderPages(w io.Writer, rc *render.RenderContext, pages []layoutpkg.Page) 
 			}
 		}
 
-		if _, err := io.WriteString(w, "</div>\n</div>\n"); err != nil {
+		if _, err := io.WriteString(w, "</div>\n"); err != nil {
+			return err
+		}
+
+		if err := renderPageSection(w, rc, page.Footer, "footer", "report-footer"); err != nil {
+			return err
+		}
+
+		if _, err := io.WriteString(w, "</div>\n"); err != nil {
 			return err
 		}
 	}
+
+	return nil
+}
+
+// renderPageSection writes a running header or footer for a page. HTML wins over
+// Text; Text is executed as a text/template over the render dataset. A nil or
+// empty section writes nothing.
+func renderPageSection(
+	w io.Writer,
+	rc *render.RenderContext,
+	sec *models.PageSection,
+	tag, class string,
+) error {
+	if sec == nil {
+		return nil
+	}
+
+	switch {
+	case strings.TrimSpace(sec.HTML) != "":
+		fmt.Fprintf(w, `<%s class="%s">`, tag, class)
+
+		if _, err := io.WriteString(w, sec.HTML); err != nil {
+			return err
+		}
+	case strings.TrimSpace(sec.Text) != "":
+		t, err := texttemplate.New(class).Funcs(rc.Funcs).Parse(sec.Text)
+		if err != nil {
+			return fmt.Errorf("html: parse %s: %w", class, err)
+		}
+
+		fmt.Fprintf(w, `<%s class="%s">`, tag, class)
+
+		if err := t.Execute(w, rc.Data); err != nil {
+			return fmt.Errorf("html: exec %s: %w", class, err)
+		}
+	default:
+		return nil
+	}
+
+	fmt.Fprintf(w, "</%s>\n", tag)
 
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"support_bot/internal/exporter/render"
 	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
 )
 
 // gridState holds per-render state for the {{ reportGrid }} / {{ chart }} /
@@ -68,7 +69,7 @@ func (s *gridState) endReportGrid() (template.HTML, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := renderPages(&buf, s.renderCtx(), pages); err != nil {
+	if err := renderPages(&buf, s.renderCtx(), pages, models.PageConfig{}); err != nil {
 		return "", err
 	}
 
