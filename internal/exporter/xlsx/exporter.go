@@ -2,34 +2,85 @@ package xlsx
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 	"time"
 
 	"github.com/xuri/excelize/v2"
+
+	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct{}
 
-func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
-	var (
-		buf *bytes.Buffer
-		err error
-	)
+// Format implements render.Renderer.
+func (e Exporter) Format() string { return models.ReportFormatXlsx }
 
+// Geometry implements render.Renderer: the spreadsheet places blocks at their
+// authored Block.Pos on a single sheet, no pagination.
+func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{RespectAuthoredPos: true}
+}
+
+// Export renders one export. A declarative layout goes through the shared
+// Resolve/Pack/Render pipeline; otherwise the legacy Order-based multi-sheet
+// path is used.
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
 	if format.Layout != nil {
-		buf, err = e.createXlsxBookFromLayout(data, *format.Layout)
-	} else {
-		buf, err = e.createXlsxBook(data, format.Order)
+		l := layoutpkg.Normalize(*format.Layout)
+
+		if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+			return nil, fmt.Errorf("xlsx: invalid layout: %w", err)
+		}
+
+		doc, err := layoutpkg.Resolve(l, data)
+		if err != nil {
+			return nil, fmt.Errorf("xlsx: resolve layout: %w", err)
+		}
+
+		pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+		if err != nil {
+			return nil, fmt.Errorf("xlsx: pack layout: %w", err)
+		}
+
+		return e.Render(context.Background(), data, doc, pages, format)
 	}
+
+	buf, err := e.createXlsxBook(data, format.Order)
 	if err != nil {
 		return nil, err
 	}
 
-	fd, err := models.NewFileData(buf, *format.FileName+".xlsx")
+	return fileData(buf, format)
+}
+
+// Render implements render.Renderer for the pure-layout path.
+func (e Exporter) Render(
+	_ context.Context,
+	data models.Dataset,
+	_ layoutpkg.ResolvedDocument,
+	pages []layoutpkg.Page,
+	format models.Export,
+) ([]models.Data, error) {
+	buf, err := buildLayoutWorkbook(data, pages)
+	if err != nil {
+		return nil, err
+	}
+
+	return fileData(buf, format)
+}
+
+func fileData(buf *bytes.Buffer, format models.Export) ([]models.Data, error) {
+	name := "report"
+	if format.FileName != nil {
+		name = *format.FileName
+	}
+
+	fd, err := models.NewFileData(buf, name+".xlsx")
 	if err != nil {
 		return nil, err
 	}

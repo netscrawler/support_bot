@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	texttemplate "text/template"
+
+	"github.com/xuri/excelize/v2"
+
+	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 	textfuncs "support_bot/internal/pkg/text"
-
-	"github.com/xuri/excelize/v2"
 )
 
 type layoutRenderState struct {
@@ -16,9 +18,39 @@ type layoutRenderState struct {
 	chartDataRow   int
 }
 
-func (e *Exporter) createXlsxBookFromLayout(
+// xlsxBlock is the per-block context passed to every block renderer.
+type xlsxBlock struct {
+	f      *excelize.File
+	sheet  string
+	data   models.Dataset
+	pb     layoutpkg.PlacedBlock
+	styles layoutStyles
+	state  *layoutRenderState
+}
+
+func (b xlsxBlock) block() models.Block { return b.pb.Block }
+
+func (b xlsxBlock) rows() []map[string]any {
+	end := min(b.pb.RowOffset+b.pb.RowCount, len(b.pb.Rows))
+
+	return b.pb.Rows[b.pb.RowOffset:end]
+}
+
+type xlsxBlockFn func(xlsxBlock) error
+
+var xlsxBlockRenderers = map[models.BlockType]xlsxBlockFn{
+	models.BlockTypeTable: func(b xlsxBlock) error { return renderLayoutTable(b.f, b.sheet, b.rows(), b.block(), b.styles) },
+	models.BlockTypeChart: func(b xlsxBlock) error {
+		return renderLayoutChart(b.f, b.sheet, b.rows(), b.block(), b.styles, b.state)
+	},
+	models.BlockTypeMetric:  func(b xlsxBlock) error { return renderLayoutMetric(b.f, b.sheet, b.rows(), b.block(), b.styles) },
+	models.BlockTypeText:    func(b xlsxBlock) error { return renderLayoutText(b.f, b.sheet, b.data, b.block(), b.styles) },
+	models.BlockTypeRawHTML: func(b xlsxBlock) error { return renderLayoutRawHTML(b.f, b.sheet, b.block(), b.styles) },
+}
+
+func buildLayoutWorkbook(
 	data models.Dataset,
-	layout models.Layout,
+	pages []layoutpkg.Page,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
 	defer f.Close()
@@ -35,9 +67,20 @@ func (e *Exporter) createXlsxBookFromLayout(
 
 	state := layoutRenderState{}
 
-	for _, block := range layout.Blocks {
-		if err := renderLayoutBlock(f, sheetName, data, block, styles, &state); err != nil {
-			return nil, fmt.Errorf("render block %q: %w", block.ID, err)
+	var placed []layoutpkg.PlacedBlock
+	if len(pages) > 0 {
+		placed = pages[0].Blocks
+	}
+
+	for _, pb := range placed {
+		fn, ok := xlsxBlockRenderers[pb.Block.Type]
+		if !ok {
+			return nil, fmt.Errorf("xlsx: no renderer for block type %q", pb.Block.Type)
+		}
+
+		ctx := xlsxBlock{f: f, sheet: sheetName, data: data, pb: pb, styles: styles, state: &state}
+		if err := fn(ctx); err != nil {
+			return nil, fmt.Errorf("render block %q: %w", pb.Block.ID, err)
 		}
 	}
 
@@ -59,12 +102,12 @@ func (e *Exporter) createXlsxBookFromLayout(
 }
 
 type layoutStyles struct {
-	header   int
-	body     int
-	label    int
-	value    int
-	text     int
-	rawHTML  int
+	header  int
+	body    int
+	label   int
+	value   int
+	text    int
+	rawHTML int
 }
 
 func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
@@ -159,48 +202,15 @@ func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 	}, nil
 }
 
-func renderLayoutBlock(
-	f *excelize.File,
-	sheet string,
-	data models.Dataset,
-	block models.Block,
-	styles layoutStyles,
-	state *layoutRenderState,
-) error {
-	switch block.Type {
-	case models.BlockTypeTable:
-		return renderLayoutTable(f, sheet, data, block, styles)
-	case models.BlockTypeChart:
-		return renderLayoutChart(f, sheet, data, block, styles, state)
-	case models.BlockTypeMetric:
-		return renderLayoutMetric(f, sheet, data, block, styles)
-	case models.BlockTypeText:
-		return renderLayoutText(f, sheet, data, block, styles)
-	case models.BlockTypeRawHTML:
-		return renderLayoutRawHTML(f, sheet, block, styles)
-	default:
-		return fmt.Errorf("unsupported block type %q", block.Type)
-	}
-}
-
 func renderLayoutTable(
 	f *excelize.File,
 	sheet string,
-	data models.Dataset,
+	rows []map[string]any,
 	block models.Block,
 	styles layoutStyles,
 ) error {
 	if block.Table == nil {
 		return fmt.Errorf("table configuration is required")
-	}
-
-	rows, ok := data[block.Dataset]
-	if !ok {
-		return fmt.Errorf("dataset %q not found", block.Dataset)
-	}
-
-	if len(rows) == 0 {
-		rows = []map[string]any{}
 	}
 
 	columns := block.Table.Columns
@@ -265,17 +275,12 @@ func renderLayoutTable(
 func renderLayoutMetric(
 	f *excelize.File,
 	sheet string,
-	data models.Dataset,
+	rows []map[string]any,
 	block models.Block,
 	styles layoutStyles,
 ) error {
 	if block.Metric == nil {
 		return fmt.Errorf("metric configuration is required")
-	}
-
-	rows, ok := data[block.Dataset]
-	if !ok {
-		return fmt.Errorf("dataset %q not found", block.Dataset)
 	}
 
 	value := ""
@@ -377,18 +382,13 @@ func renderLayoutRawHTML(
 func renderLayoutChart(
 	f *excelize.File,
 	mainSheet string,
-	data models.Dataset,
+	rows []map[string]any,
 	block models.Block,
 	styles layoutStyles,
 	state *layoutRenderState,
 ) error {
 	if block.Chart == nil {
 		return fmt.Errorf("chart configuration is required")
-	}
-
-	rows, ok := data[block.Dataset]
-	if !ok {
-		return fmt.Errorf("dataset %q not found", block.Dataset)
 	}
 
 	series := block.Chart.Series
@@ -599,4 +599,3 @@ func chartHeight(h int) uint {
 
 	return uint(80 * h)
 }
-
