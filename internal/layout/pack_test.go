@@ -162,6 +162,153 @@ func TestPackNonSplittableTooTall(t *testing.T) {
 	}
 }
 
+func flowGeometry() PageGeometry {
+	g := PageGeometryFor(models.PageConfig{})
+	g.Flow = true
+
+	return g
+}
+
+func TestPackFlowWrapsAndFillsWidth(t *testing.T) {
+	// 8 + 6 overflow one row: the 8 stretches to 12, the 6 wraps and also
+	// stretches to 12.
+	doc := resolvedDoc(t, chartBlock("a", 8, 4), chartBlock("b", 6, 4))
+
+	pages, err := Pack(doc, flowGeometry())
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	if len(pages) != 1 || len(pages[0].Blocks) != 2 {
+		t.Fatalf("want 1 page / 2 blocks, got %d pages", len(pages))
+	}
+
+	for i, pb := range pages[0].Blocks {
+		if pb.Pos.W != GridColumns || pb.Pos.X != 0 || pb.Row != i {
+			t.Fatalf("block %d: got X=%d W=%d Row=%d, want X=0 W=%d Row=%d",
+				i, pb.Pos.X, pb.Pos.W, pb.Row, GridColumns, i)
+		}
+	}
+}
+
+func TestPackFlowProportionalFill(t *testing.T) {
+	// 3 + 3 + 3 then a 4 wraps: the first row grows 3/3/3 -> 4/4/4, the 4 wraps
+	// to a full-width second row.
+	doc := resolvedDoc(t,
+		chartBlock("a", 3, 4), chartBlock("b", 3, 4),
+		chartBlock("c", 3, 4), chartBlock("d", 4, 4),
+	)
+
+	pages, err := Pack(doc, flowGeometry())
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	got := pages[0].Blocks
+	if len(got) != 4 {
+		t.Fatalf("want 4 blocks, got %d", len(got))
+	}
+
+	want := []struct{ x, w, row int }{
+		{0, 4, 0}, {4, 4, 0}, {8, 4, 0}, {0, 12, 1},
+	}
+	for i, w := range want {
+		if got[i].Pos.X != w.x || got[i].Pos.W != w.w || got[i].Row != w.row {
+			t.Fatalf("block %d: got X=%d W=%d Row=%d, want X=%d W=%d Row=%d",
+				i, got[i].Pos.X, got[i].Pos.W, got[i].Row, w.x, w.w, w.row)
+		}
+	}
+}
+
+func TestPackFlowPosYForcesNewRow(t *testing.T) {
+	// 4 + 4 would share a row, but the second block's Pos.Y is higher.
+	a := chartBlock("a", 4, 4)
+	b := chartBlock("b", 4, 4)
+	b.Pos.Y = 2
+
+	pages, err := Pack(resolvedDoc(t, a, b), flowGeometry())
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	got := pages[0].Blocks
+	if len(got) != 2 || got[0].Row != 0 || got[1].Row != 1 {
+		t.Fatalf("Pos.Y bump must split the row, got rows %d/%d", got[0].Row, got[1].Row)
+	}
+
+	if got[0].Pos.W != GridColumns || got[1].Pos.W != GridColumns {
+		t.Fatalf("each lone block should fill the width, got %d/%d", got[0].Pos.W, got[1].Pos.W)
+	}
+}
+
+func TestPackFlowPaginatesByEstimatedHeight(t *testing.T) {
+	blocks := make([]models.Block, 8)
+	for i := range blocks {
+		blocks[i] = chartBlock(string(rune('a'+i)), 12, 4)
+	}
+
+	pages, err := Pack(resolvedDoc(t, blocks...), flowGeometry())
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	if len(pages) < 2 {
+		t.Fatalf("8 full-width charts must paginate, got %d page(s)", len(pages))
+	}
+
+	total := 0
+	for i, p := range pages {
+		for _, pb := range p.Blocks {
+			if pb.PageIndex != i {
+				t.Fatalf("block PageIndex %d on page %d", pb.PageIndex, i)
+			}
+
+			total++
+		}
+	}
+
+	if total != 8 {
+		t.Fatalf("pages cover %d blocks, want 8", total)
+	}
+}
+
+func TestPackFlowSplitsTallTable(t *testing.T) {
+	rows := make([]map[string]any, 200)
+	for i := range rows {
+		rows[i] = map[string]any{"n": i}
+	}
+
+	doc, err := Resolve(tableLayout(nil, nil), map[string][]map[string]any{"d": rows})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	pages, err := Pack(doc, flowGeometry())
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	if len(pages) < 2 {
+		t.Fatalf("200-row table should span >= 2 pages, got %d", len(pages))
+	}
+
+	total, nextOffset := 0, 0
+	for _, p := range pages {
+		for _, pb := range p.Blocks {
+			if pb.RowOffset != nextOffset {
+				t.Fatalf("non-contiguous chunk: offset %d, want %d", pb.RowOffset, nextOffset)
+			}
+
+			nextOffset += pb.RowCount
+			total += pb.RowCount
+		}
+	}
+
+	if total != 200 {
+		t.Fatalf("chunks cover %d rows, want 200", total)
+	}
+}
+
 func TestPageGeometryForWorkArea(t *testing.T) {
 	plain := PageGeometryFor(models.PageConfig{})
 

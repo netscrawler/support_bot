@@ -2,6 +2,7 @@ package layout
 
 import (
 	"fmt"
+	"math"
 
 	"support_bot/internal/models"
 )
@@ -20,12 +21,17 @@ const (
 //     splitting; each block is placed at its PreferredSize.
 //   - RespectAuthoredPos   => a single page; each block is placed at its authored
 //     Block.Pos verbatim (used by the spreadsheet renderer).
+//   - Flow                 => blocks flow left-to-right in declaration order; a
+//     block that does not fit the remaining columns wraps to a new row and the
+//     blocks left behind grow proportionally to fill it. Pagination is driven by
+//     estimated millimetre heights against HeightMM, so WidthMM / HeightMM /
+//     RowHeightMM must be set.
 //   - otherwise            => first-fit row-major packing across Cols x Rows
 //     pages, splitting Splittable blocks across page boundaries.
 //
 // WidthMM / HeightMM / RowHeightMM carry the physical work-area for renderers
-// that need millimetre sizing; Pack itself only uses Cols, Rows and
-// RespectAuthoredPos.
+// that need millimetre sizing; the non-Flow modes of Pack only use Cols, Rows
+// and RespectAuthoredPos.
 type PageGeometry struct {
 	Cols               int
 	Rows               int
@@ -33,16 +39,21 @@ type PageGeometry struct {
 	HeightMM           int
 	RowHeightMM        float64
 	RespectAuthoredPos bool
+	Flow               bool
 }
 
 // PlacedBlock is a ResolvedBlock with a final grid position and the window of
 // Rows that belongs on this page. For non-split blocks RowOffset is 0 and
 // RowCount is len(Rows).
+//
+// Row is the 0-based flow row this block sits on within its page (Flow mode
+// only; 0 for every other mode).
 type PlacedBlock struct {
 	ResolvedBlock
 
 	Pos       models.GridPosition
 	PageIndex int
+	Row       int
 	RowOffset int
 	RowCount  int
 }
@@ -65,6 +76,8 @@ func Pack(doc ResolvedDocument, geom PageGeometry) ([]Page, error) {
 		return singlePage(doc, authoredPos), nil
 	case geom.Rows <= 0:
 		return singlePage(doc, preferredPos), nil
+	case geom.Flow:
+		return packFlow(doc, cols, geom), nil
 	default:
 		return packGrid(doc, cols, geom.Rows)
 	}
@@ -295,4 +308,282 @@ func ceilDiv(a, b int) int {
 	}
 
 	return (a + b - 1) / b
+}
+
+// Millimetre estimates for the flow packer. Server-side rendering cannot measure
+// content, so these are deliberately biased to over-estimate: an under-filled
+// page is cosmetic, an over-filled .report-page div spills past its A4 @page box
+// and doubles the PDF page count. Calibrated against A4 at 96 dpi (1123 px).
+const (
+	pxPerMM = 3.779527559
+
+	metricBlockMM    = 34.0
+	chartChromeMM    = 26.0 // card padding + title band
+	chartMinBodyMM   = 52.0
+	defaultChartPx   = 240
+	tableHeaderMM    = 15.0 // header row + card padding
+	tableRowMM       = 9.0
+	textDefaultMM    = 24.0
+	rawHTMLDefaultMM = 20.0
+	rowGapMM         = 7.0
+)
+
+// flowItem is one block on a flow row, with its final column span and (for a
+// split table) the window of Rows that belongs on this row.
+type flowItem struct {
+	rb     ResolvedBlock
+	x      int
+	w      int
+	offset int
+	count  int
+}
+
+type flowRow struct {
+	items    []flowItem
+	heightMM float64
+}
+
+// packFlow lays blocks out in declaration order: a block that does not fit the
+// remaining columns of the current row wraps to a new one, and the blocks left
+// behind grow proportionally to fill the width. Pages break when the estimated
+// millimetre height of the next row would overflow geom.HeightMM; a splittable
+// table taller than a page is split by row count.
+func packFlow(doc ResolvedDocument, cols int, geom PageGeometry) []Page {
+	availMM := float64(geom.HeightMM)
+	if availMM <= 0 {
+		availMM = float64(a4HeightMM - 2*DefaultPaddingMM)
+	}
+
+	rowHeightMM := geom.RowHeightMM
+	if rowHeightMM <= 0 {
+		rowHeightMM = availMM / float64(GridRows)
+	}
+
+	queue := formFlowRows(doc.Blocks, cols)
+
+	var pages []Page
+
+	page := Page{Index: 0}
+	usedMM := 0.0
+	rowIdx := 0
+
+	newPage := func() {
+		pages = append(pages, page)
+		page = Page{Index: len(pages)}
+		usedMM = 0
+		rowIdx = 0
+	}
+
+	appendRow := func(r flowRow) {
+		span := gridSpan(r.heightMM, rowHeightMM)
+		for _, it := range r.items {
+			page.Blocks = append(page.Blocks, PlacedBlock{
+				ResolvedBlock: it.rb,
+				Pos: models.GridPosition{
+					X: it.x, Y: rowIdx, W: it.w, H: span,
+				},
+				PageIndex: page.Index,
+				Row:       rowIdx,
+				RowOffset: it.offset,
+				RowCount:  it.count,
+			})
+		}
+
+		usedMM += r.heightMM
+		rowIdx++
+	}
+
+	for qi := 0; qi < len(queue); qi++ {
+		r := queue[qi]
+		r.heightMM = flowRowHeightMM(r, rowHeightMM)
+
+		splittable := len(r.items) == 1 && r.items[0].rb.Splittable
+
+		if usedMM > 0 && usedMM+r.heightMM > availMM && (!splittable || r.heightMM <= availMM) {
+			newPage()
+		}
+
+		if splittable && r.heightMM > availMM-usedMM {
+			it := r.items[0]
+
+			avail := availMM - usedMM
+			fit := int((avail - tableHeaderMM - rowGapMM) / tableRowMM)
+
+			if fit < 1 && usedMM > 0 {
+				newPage()
+
+				avail = availMM
+				fit = int((avail - tableHeaderMM - rowGapMM) / tableRowMM)
+			}
+
+			if fit < 1 {
+				fit = 1
+			}
+
+			if fit < it.count {
+				chunk := flowRow{items: []flowItem{{
+					rb: it.rb, x: it.x, w: it.w, offset: it.offset, count: fit,
+				}}}
+				chunk.heightMM = flowRowHeightMM(chunk, rowHeightMM)
+				appendRow(chunk)
+
+				rem := flowRow{items: []flowItem{{
+					rb: it.rb, x: 0, w: cols, offset: it.offset + fit, count: it.count - fit,
+				}}}
+				tail := append([]flowRow{rem}, queue[qi+1:]...)
+				queue = append(queue[:qi+1], tail...)
+
+				newPage()
+
+				continue
+			}
+		}
+
+		appendRow(r)
+	}
+
+	pages = append(pages, page)
+
+	return pages
+}
+
+// formFlowRows groups blocks into rows: a new row starts when the next block
+// would overflow the column count, or when its authored Pos.Y is greater than
+// the previous block's (a grouping hint). Each closed row is grown to the full
+// column count in fillRow.
+func formFlowRows(blocks []ResolvedBlock, cols int) []flowRow {
+	var (
+		rows  []flowRow
+		cur   []flowItem
+		curW  int
+		prevY int
+		hasY  bool
+	)
+
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+
+		rows = append(rows, flowRow{items: fillRow(cur, cols)})
+		cur = nil
+		curW = 0
+	}
+
+	for _, rb := range blocks {
+		w := rb.PreferredSize.W
+		if w <= 0 {
+			w = cols
+		}
+
+		if w > cols {
+			w = cols
+		}
+
+		y := rb.Block.Pos.Y
+
+		if len(cur) > 0 && (curW+w > cols || (hasY && y > prevY)) {
+			flush()
+		}
+
+		cur = append(cur, flowItem{rb: rb, w: w, count: len(rb.Rows)})
+		curW += w
+		prevY = y
+		hasY = true
+
+		if curW >= cols {
+			flush()
+		}
+	}
+
+	flush()
+
+	return rows
+}
+
+// fillRow distributes the leftover columns of a short row across its blocks in
+// proportion to their widths, handing any remainder to the last block, then
+// assigns each block its x offset. A single block on a row becomes full width.
+func fillRow(items []flowItem, cols int) []flowItem {
+	sum := 0
+	for _, it := range items {
+		sum += it.w
+	}
+
+	if sum < cols && sum > 0 {
+		extra := cols - sum
+		added := 0
+
+		for i := range items {
+			add := extra * items[i].w / sum
+			items[i].w += add
+			added += add
+		}
+
+		items[len(items)-1].w += extra - added
+	}
+
+	x := 0
+	for i := range items {
+		items[i].x = x
+		x += items[i].w
+	}
+
+	return items
+}
+
+func flowRowHeightMM(r flowRow, rowHeightMM float64) float64 {
+	maxH := 0.0
+
+	for _, it := range r.items {
+		if h := blockHeightMM(it.rb, it.count, rowHeightMM); h > maxH {
+			maxH = h
+		}
+	}
+
+	return maxH + rowGapMM
+}
+
+func blockHeightMM(rb ResolvedBlock, rowCount int, rowHeightMM float64) float64 {
+	switch rb.Block.Type {
+	case models.BlockTypeMetric:
+		return metricBlockMM
+	case models.BlockTypeChart:
+		px := defaultChartPx
+		if rb.Block.Chart != nil && rb.Block.Chart.HeightPx > 0 {
+			px = rb.Block.Chart.HeightPx
+		}
+
+		body := math.Max(float64(px)/pxPerMM, chartMinBodyMM)
+
+		return chartChromeMM + body
+	case models.BlockTypeTable:
+		return tableHeaderMM + float64(rowCount)*tableRowMM
+	case models.BlockTypeText:
+		if rb.Block.Pos.H > 0 {
+			return float64(rb.Block.Pos.H) * rowHeightMM
+		}
+
+		return textDefaultMM
+	case models.BlockTypeRawHTML:
+		if rb.Block.Pos.H > 0 {
+			return float64(rb.Block.Pos.H) * rowHeightMM
+		}
+
+		return rawHTMLDefaultMM
+	default:
+		return rowHeightMM
+	}
+}
+
+func gridSpan(heightMM, rowHeightMM float64) int {
+	if rowHeightMM <= 0 {
+		return 1
+	}
+
+	if s := int(math.Ceil(heightMM / rowHeightMM)); s > 1 {
+		return s
+	}
+
+	return 1
 }
