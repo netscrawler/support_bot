@@ -2,40 +2,118 @@ package csv
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
+
+	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 )
 
 type Exporter struct{}
 
+// Format implements render.Renderer.
+func (e Exporter) Format() string { return models.ReportFormatCsv }
+
+// Geometry implements render.Renderer: CSV output is a single unbounded page,
+// no pagination or table splitting.
+func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{Rows: 0}
+}
+
+// Export renders one export. A declarative layout (or a legacy Order converted
+// to one) flows through the shared Resolve/Pack/Render pipeline and yields one
+// CSV file per table block. With neither a layout nor an Order the legacy
+// "one file per dataset key" behaviour is kept.
 func (e Exporter) Export(data models.Dataset, export models.Export) ([]models.Data, error) {
-	// Если есть Layout — используем его для рендеринга табличных блоков
-	if export.Layout != nil {
-		return e.exportFromLayout(data, *export.Layout, export)
+	if export.Layout == nil && len(export.Order) == 0 {
+		return e.exportLegacy(data, export)
 	}
 
-	// Legacy режим
-	var fd []models.Data
+	l := layoutpkg.LayoutFromExport(export)
 
+	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+		return nil, fmt.Errorf("csv: invalid layout: %w", err)
+	}
+
+	doc, err := layoutpkg.Resolve(l, data)
+	if err != nil {
+		return nil, fmt.Errorf("csv: resolve layout: %w", err)
+	}
+
+	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+	if err != nil {
+		return nil, fmt.Errorf("csv: pack layout: %w", err)
+	}
+
+	return e.Render(context.Background(), data, doc, pages, export)
+}
+
+// Render implements render.Renderer: one CSV file per resolved table block, in
+// the column order declared on the block.
+func (e Exporter) Render(
+	_ context.Context,
+	_ models.Dataset,
+	_ layoutpkg.ResolvedDocument,
+	pages []layoutpkg.Page,
+	export models.Export,
+) ([]models.Data, error) {
+	name := "report"
+	if export.FileName != nil {
+		name = *export.FileName
+	}
+
+	var outputs []models.Data
+
+	for _, page := range pages {
+		for _, pb := range page.Blocks {
+			if pb.Block.Type != models.BlockTypeTable || pb.Block.Table == nil {
+				continue
+			}
+
+			ordering := make([]string, 0, len(pb.Block.Table.Columns))
+			for _, col := range pb.Block.Table.Columns {
+				ordering = append(ordering, col.Field)
+			}
+
+			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
+			matrix := pkg.ConvertSortedRows(pb.Rows[pb.RowOffset:end], ordering)
+
+			dt, err := models.NewFileData(writeCsv(matrix), name+"_"+pb.Block.ID+".csv")
+			if err != nil {
+				return nil, fmt.Errorf("csv: block %q: %w", pb.Block.ID, err)
+			}
+
+			outputs = append(outputs, dt)
+		}
+	}
+
+	if len(outputs) == 0 {
+		return nil, errors.New("csv: layout has no table blocks")
+	}
+
+	return outputs, nil
+}
+
+func (e Exporter) exportLegacy(data models.Dataset, export models.Export) ([]models.Data, error) {
 	if err := validateFormat(export); err != nil {
 		return nil, fmt.Errorf("validation format error: %w", err)
 	}
 
-	var err error
+	var (
+		fd  []models.Data
+		err error
+	)
 
 	for k, v := range data {
 		var ordering []string
-
 		if o, ok := export.Order[k]; ok {
 			ordering = o
 		}
 
-		cBuf := pkg.ConvertSortedRows(v, ordering)
-
-		buf := writeCsv(cBuf)
+		buf := writeCsv(pkg.ConvertSortedRows(v, ordering))
 
 		dt, eErr := models.NewFileData(buf, *export.FileName+"_"+k+".csv")
 		if eErr != nil {
@@ -47,56 +125,18 @@ func (e Exporter) Export(data models.Dataset, export models.Export) ([]models.Da
 		fd = append(fd, dt)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
 	return fd, nil
-}
-
-func (e Exporter) exportFromLayout(data models.Dataset, layout models.Layout, export models.Export) ([]models.Data, error) {
-	var outputs []models.Data
-
-	for _, block := range layout.Blocks {
-		if block.Type != models.BlockTypeTable {
-			continue
-		}
-
-		if block.Table == nil || block.Dataset == "" {
-			continue
-		}
-
-		rows, ok := data[block.Dataset]
-		if !ok || len(rows) == 0 {
-			continue
-		}
-
-		// Формируем порядок колонок из блока
-		var ordering []string
-		for _, col := range block.Table.Columns {
-			ordering = append(ordering, col.Field)
-		}
-
-		matrix := pkg.ConvertSortedRows(rows, ordering)
-		buf := writeCsv(matrix)
-
-		filename := *export.FileName + "_" + block.ID + ".csv"
-		dt, err := models.NewFileData(buf, filename)
-		if err != nil {
-			return nil, fmt.Errorf("create file for block %q: %w", block.ID, err)
-		}
-
-		outputs = append(outputs, dt)
-	}
-
-	if len(outputs) == 0 {
-		return nil, errors.New("no table blocks found in layout")
-	}
-
-	return outputs, nil
 }
 
 func validateFormat(format models.Export) error {
 	var err error
 
 	if format.FileName == nil || *format.FileName == "" {
-		err = errors.Join(err, fmt.Errorf("format file name must not be empty"))
+		err = errors.Join(err, errors.New("format file name must not be empty"))
 	}
 
 	return err

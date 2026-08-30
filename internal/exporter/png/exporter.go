@@ -2,6 +2,7 @@ package png
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -10,19 +11,32 @@ import (
 	"image/png"
 	"math"
 	"strings"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 
 	"github.com/fogleman/gg"
 	"golang.org/x/image/font"
+
+	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg"
 )
 
 type Exporter struct{}
 
+// Format implements render.Renderer.
+func (e Exporter) Format() string { return models.ReportFormatPng }
+
+// Geometry implements render.Renderer: the gg rasterizer draws one image per
+// table block, so blocks stay at their preferred size on a single page.
+func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{Rows: 0}
+}
+
+// Export renders one export. A declarative layout flows through the shared
+// Resolve/Pack/Render pipeline and yields one PNG per table block; otherwise
+// the legacy "one image per dataset key" behaviour is kept.
 func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
-	// Если есть Layout — используем его для рендеринга табличных блоков в PNG
 	if format.Layout != nil {
-		return e.exportFromLayout(data, *format.Layout, format)
+		return e.exportLayout(data, format)
 	}
 
 	// Legacy режим
@@ -60,51 +74,77 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 	return id, nil
 }
 
-func (e Exporter) exportFromLayout(data models.Dataset, layout models.Layout, format models.Export) ([]models.Data, error) {
+// Render implements render.Renderer: one rasterised PNG per resolved table
+// block, titled with the block id.
+func (e Exporter) Render(
+	_ context.Context,
+	_ models.Dataset,
+	_ layoutpkg.ResolvedDocument,
+	pages []layoutpkg.Page,
+	format models.Export,
+) ([]models.Data, error) {
+	name := "report"
+	if format.FileName != nil {
+		name = *format.FileName
+	}
+
 	var outputs []models.Data
 
-	for _, block := range layout.Blocks {
-		if block.Type != models.BlockTypeTable {
-			continue
+	for _, page := range pages {
+		for _, pb := range page.Blocks {
+			if pb.Block.Type != models.BlockTypeTable || pb.Block.Table == nil {
+				continue
+			}
+
+			ordering := make([]string, 0, len(pb.Block.Table.Columns))
+			for _, col := range pb.Block.Table.Columns {
+				ordering = append(ordering, col.Field)
+			}
+
+			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
+			mtx := pkg.ConvertSortedRows(pb.Rows[pb.RowOffset:end], ordering)
+
+			blockID := pb.Block.ID
+
+			img, err := createImageFromMatrix(mtx, &blockID)
+			if err != nil {
+				return nil, fmt.Errorf("png: image for block %q: %w", blockID, err)
+			}
+
+			dt, err := models.NewImageData(img, name+"_"+blockID+".png")
+			if err != nil {
+				return nil, fmt.Errorf("png: image data for block %q: %w", blockID, err)
+			}
+
+			outputs = append(outputs, dt)
 		}
-
-		if block.Table == nil || block.Dataset == "" {
-			continue
-		}
-
-		rows, ok := data[block.Dataset]
-		if !ok || len(rows) == 0 {
-			continue
-		}
-
-		// Формируем порядок колонок из блока
-		var ordering []string
-		for _, col := range block.Table.Columns {
-			ordering = append(ordering, col.Field)
-		}
-
-		mtx := pkg.ConvertSortedRows(rows, ordering)
-
-		title := block.ID
-		img, err := createImageFromMatrix(mtx, &title)
-		if err != nil {
-			return nil, fmt.Errorf("create image for block %q: %w", block.ID, err)
-		}
-
-		filename := *format.FileName + "_" + block.ID + ".png"
-		dt, err := models.NewImageData(img, filename)
-		if err != nil {
-			return nil, fmt.Errorf("create image data for block %q: %w", block.ID, err)
-		}
-
-		outputs = append(outputs, dt)
 	}
 
 	if len(outputs) == 0 {
-		return nil, errors.New("no table blocks found in layout")
+		return nil, errors.New("png: layout has no table blocks")
 	}
 
 	return outputs, nil
+}
+
+func (e Exporter) exportLayout(data models.Dataset, format models.Export) ([]models.Data, error) {
+	l := layoutpkg.LayoutFromExport(format)
+
+	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+		return nil, fmt.Errorf("png: invalid layout: %w", err)
+	}
+
+	doc, err := layoutpkg.Resolve(l, data)
+	if err != nil {
+		return nil, fmt.Errorf("png: resolve layout: %w", err)
+	}
+
+	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+	if err != nil {
+		return nil, fmt.Errorf("png: pack layout: %w", err)
+	}
+
+	return e.Render(context.Background(), data, doc, pages, format)
 }
 
 const (

@@ -2,84 +2,97 @@ package text
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/text"
+	"maps"
 	texttemplate "text/template"
 
-	"github.com/Masterminds/sprig/v3"
+	"support_bot/internal/exporter/render"
+	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
 )
 
 type Exporter struct{}
 
-func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
-	// Если есть Layout — используем его для рендеринга текстовых блоков
-	if format.Layout != nil {
-		return e.exportFromLayout(data, *format.Layout, format)
-	}
+// Format implements render.Renderer.
+func (e Exporter) Format() string { return models.ReportFormatText }
 
-	// Legacy режим: работа с Template.TemplateText
-	if format.Template == nil || format.Template.TemplateText == "" {
-		return nil, fmt.Errorf("text export %q: template is required", *format.FileName)
-	}
-
-	t, err := texttemplate.New("text_templ").
-		Funcs(sprig.TxtFuncMap()).
-		Funcs(textMap).
-		Funcs(text.FuncMap).
-		Parse(format.Template.TemplateText)
-	if err != nil {
-		return nil, err
-	}
-
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return nil, err
-	}
-
-	dt := models.NewTextData(&buf, format.Template.Type)
-
-	return []models.Data{dt}, nil
+// Geometry implements render.Renderer: text output is a single unbounded page,
+// no pagination.
+func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{Rows: 0}
 }
 
-func (e Exporter) exportFromLayout(data models.Dataset, layout models.Layout, format models.Export) ([]models.Data, error) {
+// Export renders one export. A declarative layout — or a legacy bare Template
+// converted to a single text block — flows through the shared
+// Resolve/Pack/Render pipeline.
+func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	if format.Layout == nil &&
+		(format.Template == nil || format.Template.TemplateText == "") {
+		return nil, errors.New("text export: a layout or a non-empty template is required")
+	}
+
+	l := layoutpkg.LayoutFromExport(format)
+
+	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+		return nil, fmt.Errorf("text: invalid layout: %w", err)
+	}
+
+	doc, err := layoutpkg.Resolve(l, data)
+	if err != nil {
+		return nil, fmt.Errorf("text: resolve layout: %w", err)
+	}
+
+	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+	if err != nil {
+		return nil, fmt.Errorf("text: pack layout: %w", err)
+	}
+
+	return e.Render(context.Background(), data, doc, pages, format)
+}
+
+// Render implements render.Renderer: it executes every text block's body as a
+// text/template over data and returns one text file per block.
+func (e Exporter) Render(
+	_ context.Context,
+	data models.Dataset,
+	_ layoutpkg.ResolvedDocument,
+	pages []layoutpkg.Page,
+	format models.Export,
+) ([]models.Data, error) {
+	fm := render.FuncMap()
+	maps.Copy(fm, textMap)
+
+	dataType := "text"
+	if format.Template != nil && format.Template.Type != "" {
+		dataType = format.Template.Type
+	}
+
 	var outputs []models.Data
 
-	for _, block := range layout.Blocks {
-		if block.Type != models.BlockTypeText {
-			continue
-		}
+	for _, page := range pages {
+		for _, pb := range page.Blocks {
+			if pb.Block.Type != models.BlockTypeText || pb.Block.Text == nil {
+				continue
+			}
 
-		if block.Text == nil {
-			continue
-		}
+			t, err := texttemplate.New(pb.Block.ID).Funcs(fm).Parse(pb.Block.Text.Text)
+			if err != nil {
+				return nil, fmt.Errorf("text: parse block %q: %w", pb.Block.ID, err)
+			}
 
-		t, err := texttemplate.New(block.ID).
-			Funcs(sprig.TxtFuncMap()).
-			Funcs(textMap).
-			Funcs(text.FuncMap).
-			Parse(block.Text.Text)
-		if err != nil {
-			return nil, fmt.Errorf("parse text block %q: %w", block.ID, err)
-		}
+			var buf bytes.Buffer
+			if err := t.Execute(&buf, data); err != nil {
+				return nil, fmt.Errorf("text: render block %q: %w", pb.Block.ID, err)
+			}
 
-		var buf bytes.Buffer
-		if err := t.Execute(&buf, data); err != nil {
-			return nil, fmt.Errorf("render text block %q: %w", block.ID, err)
+			outputs = append(outputs, models.NewTextData(&buf, dataType))
 		}
-
-		// Для layout используем тип из формата или дефолтный
-		dataType := "text"
-		if format.Template != nil && format.Template.Type != "" {
-			dataType = format.Template.Type
-		}
-
-		dt := models.NewTextData(&buf, dataType)
-		outputs = append(outputs, dt)
 	}
 
 	if len(outputs) == 0 {
-		return nil, fmt.Errorf("no text blocks found in layout")
+		return nil, errors.New("text: layout has no text blocks")
 	}
 
 	return outputs, nil
