@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"io"
 	"strings"
-	texttemplate "text/template"
 
 	"github.com/Masterminds/sprig/v3"
 
@@ -197,9 +196,10 @@ func renderPages(
 	return nil
 }
 
-// renderPageSection writes a running header or footer for a page. HTML wins over
-// Text; Text is executed as a text/template over the render dataset. A nil or
-// empty section writes nothing.
+// renderPageSection writes a running header or footer for a page. PageSection.HTML
+// is emitted verbatim (the author's explicit opt-in to raw markup); otherwise
+// PageSection.Text is executed as an html/template over the render dataset, so
+// collected values are context-escaped. A nil or empty section writes nothing.
 func renderPageSection(
 	w io.Writer,
 	rc *render.RenderContext,
@@ -218,7 +218,7 @@ func renderPageSection(
 			return err
 		}
 	case strings.TrimSpace(sec.Text) != "":
-		t, err := texttemplate.New(class).Funcs(rc.Funcs).Parse(sec.Text)
+		t, err := template.New(class).Funcs(rc.Funcs).Parse(sec.Text)
 		if err != nil {
 			return fmt.Errorf("html: parse %s: %w", class, err)
 		}

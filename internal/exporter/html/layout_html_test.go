@@ -159,6 +159,40 @@ func TestExportLayoutRendersHeaderAndFooter(t *testing.T) {
 	}
 }
 
+func TestExportLayoutHeaderTextEscapesData(t *testing.T) {
+	data := models.Dataset{
+		"daily": {{"src": `<script>alert(1)</script>`, "n": 1}},
+	}
+
+	l := models.Layout{
+		Version: 1,
+		Page: models.PageConfig{
+			Header: &models.PageSection{Text: `Источник: {{ (index .daily 0).src }}`},
+		},
+		Blocks: []models.Block{
+			{
+				ID: "t", Type: models.BlockTypeTable, Dataset: "daily",
+				Pos:   models.GridPosition{X: 0, Y: 0, W: 12, H: 0},
+				Table: &models.TableBlock{Columns: []models.Column{{Field: "n", Title: "N"}}},
+			},
+		},
+	}
+
+	out, err := html.Exporter{}.Export(data, models.Export{Layout: &l, FileName: new("esc")})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	if strings.Contains(got, "<script>alert(1)</script>") {
+		t.Fatal("header rendered a raw <script> tag from dataset content")
+	}
+
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Fatalf("expected the dataset value to be html-escaped in the header")
+	}
+}
+
 func TestExportLayoutRespectsLimit(t *testing.T) {
 	rows := make([]map[string]any, 50)
 	for i := range rows {
