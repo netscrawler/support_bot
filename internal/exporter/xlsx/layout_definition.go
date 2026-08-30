@@ -128,12 +128,14 @@ func buildLayoutWorkbook(
 }
 
 type layoutStyles struct {
-	header  int
-	body    int
-	label   int
-	value   int
-	text    int
-	rawHTML int
+	header     int
+	body       int
+	bodyCenter int
+	bodyRight  int
+	label      int
+	value      int
+	text       int
+	rawHTML    int
 }
 
 func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
@@ -156,18 +158,36 @@ func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 		return layoutStyles{}, err
 	}
 
+	bodyBorder := []excelize.Border{
+		{Type: "left", Color: "E5E9F0", Style: 1},
+		{Type: "right", Color: "E5E9F0", Style: 1},
+		{Type: "top", Color: "E5E9F0", Style: 1},
+		{Type: "bottom", Color: "E5E9F0", Style: 1},
+	}
+
 	body, err := f.NewStyle(&excelize.Style{
-		Border: []excelize.Border{
-			{Type: "left", Color: "E5E9F0", Style: 1},
-			{Type: "right", Color: "E5E9F0", Style: 1},
-			{Type: "top", Color: "E5E9F0", Style: 1},
-			{Type: "bottom", Color: "E5E9F0", Style: 1},
-		},
+		Border: bodyBorder,
 		Alignment: &excelize.Alignment{
 			Horizontal: "left",
 			Vertical:   "center",
 			WrapText:   true,
 		},
+	})
+	if err != nil {
+		return layoutStyles{}, err
+	}
+
+	bodyCenter, err := f.NewStyle(&excelize.Style{
+		Border:    bodyBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	if err != nil {
+		return layoutStyles{}, err
+	}
+
+	bodyRight, err := f.NewStyle(&excelize.Style{
+		Border:    bodyBorder,
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center", WrapText: true},
 	})
 	if err != nil {
 		return layoutStyles{}, err
@@ -219,12 +239,14 @@ func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 	}
 
 	return layoutStyles{
-		header:  header,
-		body:    body,
-		label:   label,
-		value:   value,
-		text:    textStyle,
-		rawHTML: rawHTMLStyle,
+		header:     header,
+		body:       body,
+		bodyCenter: bodyCenter,
+		bodyRight:  bodyRight,
+		label:      label,
+		value:      value,
+		text:       textStyle,
+		rawHTML:    rawHTMLStyle,
 	}, nil
 }
 
@@ -250,6 +272,14 @@ func renderLayoutTable(
 		matrix = [][]any{make([]any, len(columns))}
 		for i, column := range columns {
 			matrix[0][i] = column.Title
+		}
+	}
+
+	// Pre-format every body cell so Column.Format applies and a missing value
+	// is an empty cell rather than "<nil>". The header row is left untouched.
+	for r := 1; r < len(matrix); r++ {
+		for c, column := range columns {
+			matrix[r][c] = layoutpkg.FormatValue(matrix[r][c], column.Format)
 		}
 	}
 
@@ -291,16 +321,43 @@ func renderLayoutTable(
 	}
 
 	columnWidth := xlsxGridColumnWidth * float64(max(block.Pos.W, 1)) / float64(len(columns))
-	for idx := range columns {
+	for idx, column := range columns {
 		col := startCol + idx
 
 		colName, _ := excelize.ColumnNumberToName(col)
 		if err := f.SetColWidth(sheet, colName, colName, columnWidth); err != nil {
 			return fmt.Errorf("set column width: %w", err)
 		}
+
+		style, ok := alignedBodyStyle(styles, column.Align)
+		if !ok || endRow <= startRow {
+			continue
+		}
+
+		if err := f.SetCellStyle(
+			sheet,
+			cellName(col, startRow+1),
+			cellName(col, endRow),
+			style,
+		); err != nil {
+			return fmt.Errorf("set column alignment: %w", err)
+		}
 	}
 
 	return nil
+}
+
+// alignedBodyStyle maps a column alignment to its body style; ok is false for
+// the default (left), which keeps the style writeMatrix already applied.
+func alignedBodyStyle(styles layoutStyles, align models.ColumnAlign) (int, bool) {
+	switch align {
+	case models.ColumnAlignRight:
+		return styles.bodyRight, true
+	case models.ColumnAlignCenter:
+		return styles.bodyCenter, true
+	default:
+		return 0, false
+	}
 }
 
 func renderLayoutMetric(
@@ -317,7 +374,7 @@ func renderLayoutMetric(
 	value := ""
 	for _, row := range rows {
 		if v, ok := row[block.Metric.Field]; ok {
-			value = fmt.Sprint(v)
+			value = layoutpkg.FormatValue(v, block.Metric.Format)
 			break
 		}
 	}

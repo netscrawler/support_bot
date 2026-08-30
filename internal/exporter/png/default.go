@@ -111,13 +111,27 @@ func (e Exporter) Render(
 				continue
 			}
 
-			ordering := make([]string, 0, len(pb.Block.Table.Columns))
-			for _, col := range pb.Block.Table.Columns {
-				ordering = append(ordering, col.Field)
+			cols := pb.Block.Table.Columns
+			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
+			win := pb.Rows[pb.RowOffset:end]
+
+			mtx := make([][]any, 0, len(win)+1)
+
+			head := make([]any, len(cols))
+			for i, c := range cols {
+				head[i] = c.Title
 			}
 
-			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
-			mtx := pkg.ConvertSortedRows(pb.Rows[pb.RowOffset:end], ordering)
+			mtx = append(mtx, head)
+
+			for _, row := range win {
+				rec := make([]any, len(cols))
+				for i, c := range cols {
+					rec[i] = layoutpkg.FormatValue(row[c.Field], c.Format)
+				}
+
+				mtx = append(mtx, rec)
+			}
 
 			blockID := pb.Block.ID
 

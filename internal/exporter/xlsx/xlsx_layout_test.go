@@ -144,3 +144,47 @@ func TestExporterLayoutAppendsPackedPagesOnOneSheet(t *testing.T) {
 		t.Fatal("expected packed continuation on the same worksheet")
 	}
 }
+
+func TestExporterLayoutFormatsAndAligns(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "ch",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{Columns: []models.Column{
+			{Field: "channel", Title: "Канал", Align: models.ColumnAlignLeft},
+			{Field: "share", Title: "Доля", Align: models.ColumnAlignRight, Format: "percent"},
+		}},
+	}}}
+
+	out, err := xlsx.Exporter{}.Export(
+		models.Dataset{"ch": {{"channel": "Веб", "share": 0.46}}},
+		models.Export{FileName: new("fmt"), Layout: &l},
+	)
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+
+	f, err := excelize.OpenReader(out[0].Data)
+	if err != nil {
+		t.Fatalf("open workbook: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	cells, err := f.SearchSheet("layout", "46%")
+	if err != nil || len(cells) == 0 {
+		t.Fatalf("formatted percent value not found (err %v, cells %v)", err, cells)
+	}
+
+	styleID, err := f.GetCellStyle("layout", cells[0])
+	if err != nil {
+		t.Fatalf("get cell style: %v", err)
+	}
+
+	st, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatalf("get style: %v", err)
+	}
+
+	if st.Alignment == nil || st.Alignment.Horizontal != "right" {
+		t.Errorf("share cell not right-aligned: %+v", st.Alignment)
+	}
+}

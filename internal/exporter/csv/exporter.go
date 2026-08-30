@@ -74,15 +74,34 @@ func (e Exporter) Render(
 				continue
 			}
 
-			ordering := make([]string, 0, len(pb.Block.Table.Columns))
-			for _, col := range pb.Block.Table.Columns {
-				ordering = append(ordering, col.Field)
+			cols := pb.Block.Table.Columns
+			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
+			win := pb.Rows[pb.RowOffset:end]
+
+			matrix := make([][]string, 0, len(win)+1)
+
+			header := make([]string, len(cols))
+			for i, c := range cols {
+				header[i] = c.Field
 			}
 
-			end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
-			matrix := pkg.ConvertSortedRows(pb.Rows[pb.RowOffset:end], ordering)
+			matrix = append(matrix, header)
 
-			dt, err := models.NewFileData(writeCsv(matrix), name+"_"+pb.Block.ID+".csv")
+			for _, row := range win {
+				rec := make([]string, len(cols))
+				for i, c := range cols {
+					rec[i] = layoutpkg.FormatValue(row[c.Field], c.Format)
+				}
+
+				matrix = append(matrix, rec)
+			}
+
+			buf, err := writeStringMatrix(matrix)
+			if err != nil {
+				return nil, fmt.Errorf("csv: block %q: %w", pb.Block.ID, err)
+			}
+
+			dt, err := models.NewFileData(buf, name+"_"+pb.Block.ID+".csv")
 			if err != nil {
 				return nil, fmt.Errorf("csv: block %q: %w", pb.Block.ID, err)
 			}
@@ -141,6 +160,19 @@ func validateFormat(format models.Export) error {
 	}
 
 	return err
+}
+
+// writeStringMatrix writes a fully pre-formatted string matrix (header + rows)
+// as CSV. Unlike writeCsv it never stringifies nil as "<nil>".
+func writeStringMatrix(rows [][]string) (*bytes.Buffer, error) {
+	var buf bytes.Buffer
+
+	w := csv.NewWriter(&buf)
+	if err := w.WriteAll(rows); err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
 }
 
 func writeCsv(data [][]any) *bytes.Buffer {
