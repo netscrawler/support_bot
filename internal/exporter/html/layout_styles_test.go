@@ -13,7 +13,8 @@ func TestLayoutStylesPortrait(t *testing.T) {
 	for _, want := range []string{
 		"@page { size: A4 portrait; margin: 0; }",
 		"width: 210mm;",
-		"min-height: 297mm;",
+		"min-height: 293mm;",
+		"max-height: 297mm;",
 		"padding: 16mm;",
 		".card {",
 		".card-title {",
@@ -35,7 +36,7 @@ func TestLayoutStylesLandscapeAndPadding(t *testing.T) {
 	for _, want := range []string{
 		"@page { size: A4 landscape; margin: 0; }",
 		"width: 297mm;",
-		"min-height: 210mm;",
+		"min-height: 206mm;",
 		"padding: 20mm;",
 	} {
 		if !strings.Contains(got, want) {

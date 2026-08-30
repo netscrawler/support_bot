@@ -30,6 +30,11 @@ func layoutStyles(page models.PageConfig) template.HTML {
 		pad = 16
 	}
 
+	// The page box is a few mm under the physical sheet: at 96 dpi a full
+	// 297mm min-height rounds up past the @page box and PrintToPDF then splits
+	// every page in two. The content never approaches this floor.
+	pageMinMM := heightMM - 4
+
 	css := fmt.Sprintf(`<style>
     @page { size: A4 %[1]s; margin: 0; }
 
@@ -46,7 +51,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
 
     .report-page {
         width: %[2]dmm;
-        min-height: %[3]dmm;
+        min-height: %[6]dmm;
         box-sizing: border-box;
         margin: 0 auto;
         padding: %[5]dmm;
@@ -133,7 +138,6 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-chart {
         position: relative;
         width: 100%%;
-        flex: 1 1 auto;
     }
 
     .report-chart canvas {
@@ -176,9 +180,15 @@ func layoutStyles(page models.PageConfig) template.HTML {
     @media print {
         html, body { background: #ffffff; }
         body { padding: 0; }
+        .report-page + .report-page { margin-top: 0; }
         .report-page {
             margin: 0;
             box-shadow: none;
+            /* Never let a page exceed one physical sheet: with a good height
+               estimate this is slack, and if one is off the page clips a few
+               mm rather than fragmenting into a second sheet. */
+            max-height: %[3]dmm;
+            overflow: hidden;
             break-after: page;
             page-break-after: always;
         }
@@ -187,7 +197,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
             page-break-after: auto;
         }
     }
-</style>`, orientation, widthMM, heightMM, fontStack, pad)
+</style>`, orientation, widthMM, heightMM, fontStack, pad, pageMinMM)
 
 	return template.HTML(css) //nolint:gosec // static stylesheet, no user data
 }

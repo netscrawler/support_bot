@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "page": {
+    "format": "A4",
+    "orientation": "portrait",
+    "padding_mm": 16,
+    "header": {
+      "text": "Отчёт службы поддержки — {{ index (index .kpi 0) \"period\" }}"
+    },
+    "footer": {
+      "html": "<span>support_bot</span> · сформировано автоматически"
+    }
+  },
+  "blocks": [
+    {
+      "id": "kpi-accepted",
+      "type": "metric",
+      "dataset": "kpi",
+      "pos": {"x": 0, "y": 0, "w": 3, "h": 2},
+      "metric": {"field": "total_accepted", "label": "Принято", "format": "number"}
+    },
+    {
+      "id": "kpi-rejected",
+      "type": "metric",
+      "dataset": "kpi",
+      "pos": {"x": 3, "y": 0, "w": 3, "h": 2},
+      "metric": {"field": "total_rejected", "label": "Отклонено", "format": "number"}
+    },
+    {
+      "id": "kpi-rate",
+      "type": "metric",
+      "dataset": "kpi",
+      "pos": {"x": 6, "y": 0, "w": 3, "h": 2},
+      "metric": {"field": "approval_rate", "label": "Доля одобрений", "format": "percent"}
+    },
+    {
+      "id": "kpi-sla",
+      "type": "metric",
+      "dataset": "kpi",
+      "pos": {"x": 9, "y": 0, "w": 3, "h": 2},
+      "metric": {"field": "sla_hours", "label": "SLA, часов"}
+    },
+    {
+      "id": "trend-line",
+      "type": "chart",
+      "dataset": "daily",
+      "pos": {"x": 0, "y": 2, "w": 8, "h": 4},
+      "chart": {
+        "kind": "line",
+        "x_field": "date",
+        "title": "Динамика заявок",
+        "legend": true,
+        "height_px": 320,
+        "series": [
+          {"field": "accepted", "title": "Принято", "color": "#2f80ed"},
+          {"field": "rejected", "title": "Отклонено", "color": "#eb5757"},
+          {"field": "target", "title": "План"}
+        ]
+      }
+    },
+    {
+      "id": "channel-pie",
+      "type": "chart",
+      "dataset": "channels",
+      "pos": {"x": 8, "y": 2, "w": 4, "h": 4},
+      "chart": {
+        "kind": "pie",
+        "x_field": "channel",
+        "title": "Доли каналов",
+        "series": [
+          {"field": "requests", "title": "Обращения"}
+        ]
+      }
+    },
+    {
+      "id": "trend-bar",
+      "type": "chart",
+      "dataset": "daily",
+      "pos": {"x": 0, "y": 6, "w": 8, "h": 4},
+      "chart": {
+        "kind": "bar",
+        "x_field": "date",
+        "title": "Принято и отклонено по дням",
+        "legend": false,
+        "stacked": true,
+        "series": [
+          {"field": "accepted", "title": "Принято"},
+          {"field": "rejected", "title": "Отклонено"}
+        ]
+      }
+    },
+    {
+      "id": "channel-table",
+      "type": "table",
+      "dataset": "channels",
+      "pos": {"x": 8, "y": 6, "w": 4, "h": 0},
+      "table": {
+        "columns": [
+          {"field": "channel",  "title": "Канал",     "align": "left",   "width": 160},
+          {"field": "requests", "title": "Обращений", "align": "right"},
+          {"field": "resolved", "title": "Решено",    "align": "right"},
+          {"field": "share",    "title": "Доля",      "align": "center", "format": "percent"}
+        ],
+        "sort": [{"field": "requests", "desc": true}],
+        "limit": 10
+      }
+    },
+    {
+      "id": "daily-table",
+      "type": "table",
+      "dataset": "daily",
+      "pos": {"x": 0, "y": 10, "w": 12, "h": 0},
+      "table": {
+        "columns": [
+          {"field": "date",     "title": "Дата"},
+          {"field": "channel",  "title": "Канал",     "align": "center"},
+          {"field": "accepted", "title": "Принято",   "align": "right"},
+          {"field": "rejected", "title": "Отклонено", "align": "right"},
+          {"field": "target",   "title": "План",      "align": "right"}
+        ],
+        "sort": [
+          {"field": "channel"},
+          {"field": "accepted", "desc": true}
+        ]
+      }
+    },
+    {
+      "id": "wrap-wide",
+      "type": "chart",
+      "dataset": "daily",
+      "pos": {"x": 0, "y": 8, "w": 8, "h": 4},
+      "chart": {
+        "kind": "bar",
+        "x_field": "date",
+        "title": "Широкий блок (w=8) — занимает всю строку",
+        "series": [
+          {"field": "accepted", "title": "Принято"}
+        ]
+      }
+    },
+    {
+      "id": "wrap-narrow",
+      "type": "chart",
+      "dataset": "channels",
+      "pos": {"x": 0, "y": 8, "w": 6, "h": 4},
+      "chart": {
+        "kind": "pie",
+        "x_field": "channel",
+        "title": "Узкий блок (w=6) — не влез рядом, перенёсся и растянулся",
+        "series": [
+          {"field": "requests", "title": "Обращения"}
+        ]
+      }
+    },
+    {
+      "id": "summary",
+      "type": "text",
+      "pos": {"x": 0, "y": 9, "w": 12, "h": 0},
+      "text": {
+        "text": "Итого за {{ index (index .kpi 0) \"period\" }}: принято {{ index (index .kpi 0) \"total_accepted\" }}, отклонено {{ index (index .kpi 0) \"total_rejected\" }}."
+      }
+    },
+    {
+      "id": "note",
+      "type": "raw_html",
+      "pos": {"x": 0, "y": 10, "w": 12, "h": 1},
+      "raw_html": {
+        "html": "<p style=\"color:#949aab;font-size:11px;margin:0\">Данные обновляются ежедневно в 06:00 МСК.</p>"
+      }
+    }
+  ]
+}

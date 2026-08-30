@@ -221,7 +221,7 @@ func renderLayoutChartBlock(
 		out.printf(`<h3 class="card-title">%s</h3>`, escapeHTML(title))
 	}
 
-	out.printf(`<div class="report-chart" style="min-height: %dpx;">`, height)
+	out.printf(`<div class="report-chart" style="height: %dpx;">`, height)
 	out.printf(`<canvas id="%s"></canvas></div>`, id)
 	out.printf(
 		`<script>(function(){var c=document.getElementById(%s);`+

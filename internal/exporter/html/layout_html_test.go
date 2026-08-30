@@ -373,8 +373,8 @@ func TestExportLayoutChartHeightPx(t *testing.T) {
 		t.Fatalf("export: %v", err)
 	}
 
-	// height_px is honoured as a min-height; the card grows, nothing is clipped.
-	if !strings.Contains(out[0].Data.String(), "min-height: 900px;") {
+	// height_px fixes the canvas box so the packer's height estimate stays honest.
+	if !strings.Contains(out[0].Data.String(), "height: 900px;") {
 		t.Fatal("chart canvas does not honour height_px")
 	}
 }
