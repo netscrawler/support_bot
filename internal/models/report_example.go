@@ -65,6 +65,19 @@ var ReportExample = Report{
 				Type:         "rich_text",
 				TemplateText: "SOME_RICH_TEXT_TEMPLATE",
 			},
+			Layout: &Layout{
+				Version: 1,
+				Blocks: []Block{
+					{
+						ID:   "example-summary",
+						Type: BlockTypeText,
+						Pos:  GridPosition{X: 0, Y: 0, W: 12, H: 0},
+						Text: &TextBlock{
+							Text: "{{ printf \"Всего строк: %d\" (len .example_mb) }}",
+						},
+					},
+				},
+			},
 		},
 		{
 			Format:   "xlsx",
@@ -78,15 +91,39 @@ var ReportExample = Report{
 					Header: &PageSection{
 						Text: "Example layout",
 					},
+					Footer: &PageSection{
+						Text: "support_bot",
+					},
 				},
 				Blocks: []Block{
+					{
+						ID:      "example-chart",
+						Type:    BlockTypeChart,
+						Dataset: "example_mb",
+						Pos: GridPosition{
+							X: 0,
+							Y: 0,
+							W: 12,
+							H: 4,
+						},
+						Chart: &ChartBlock{
+							Kind:     ChartKindBar,
+							XField:   "status",
+							Title:    "Заявки по статусам",
+							Legend:   ptr(true),
+							HeightPx: 320,
+							Series: []Series{
+								{Field: "count", Title: "Count"},
+							},
+						},
+					},
 					{
 						ID:      "example-table",
 						Type:    BlockTypeTable,
 						Dataset: "example_mb",
 						Pos: GridPosition{
 							X: 0,
-							Y: 0,
+							Y: 4,
 							W: 12,
 							H: 0,
 						},

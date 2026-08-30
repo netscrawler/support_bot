@@ -6,7 +6,6 @@ import (
 	htmltemplate "html/template"
 	"io"
 	"strings"
-	texttemplate "text/template"
 
 	"support_bot/internal/exporter/render"
 	layoutpkg "support_bot/internal/layout"
@@ -210,7 +209,7 @@ func renderTextBlock(w io.Writer, rc *render.RenderContext, pb layoutpkg.PlacedB
 		return fmt.Errorf("html: text block %q missing text config", pb.Block.ID)
 	}
 
-	t, err := texttemplate.New("text_block").Funcs(rc.Funcs).Parse(tb.Text)
+	t, err := htmltemplate.New("text_block").Funcs(rc.Funcs).Parse(tb.Text)
 	if err != nil {
 		return fmt.Errorf("html: parse text block %q: %w", pb.Block.ID, err)
 	}

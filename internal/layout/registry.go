@@ -352,6 +352,10 @@ func validateChartBlock(block models.Block) error {
 		return fmt.Errorf("pie chart does not support stacking")
 	}
 
+	if block.Chart.HeightPx < 0 {
+		return fmt.Errorf("chart height_px must not be negative")
+	}
+
 	return nil
 }
 

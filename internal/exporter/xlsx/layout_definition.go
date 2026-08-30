@@ -3,6 +3,7 @@ package xlsx
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	texttemplate "text/template"
 
 	"github.com/xuri/excelize/v2"
@@ -407,13 +408,22 @@ func renderLayoutChart(
 	categories := fmt.Sprintf("%s!$%s$%d:$%s$%d",
 		dataSheet, cellColumn(startCol), startRow+1, cellColumn(startCol), startRow+len(rows))
 
+	legendPos := "right"
+	if block.Chart.Legend != nil && !*block.Chart.Legend {
+		legendPos = "none"
+	}
+
 	ch := &excelize.Chart{
 		Type: chartTypeFromKind(block.Chart.Kind),
 		Dimension: excelize.ChartDimension{
 			Width:  chartWidth(block.Pos.W),
 			Height: chartHeight(block.Pos.H),
 		},
-		Legend: excelize.ChartLegend{Position: "right"},
+		Legend: excelize.ChartLegend{Position: legendPos},
+	}
+
+	if title := strings.TrimSpace(block.Chart.Title); title != "" {
+		ch.Title = []excelize.RichTextRun{{Text: title}}
 	}
 
 	for idx, s := range series {

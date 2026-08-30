@@ -91,6 +91,51 @@ func TestValidate(t *testing.T) {
 			datasets: []string{"daily"},
 		},
 		{
+			name: "chart with title, legend and height",
+			layout: models.Layout{
+				Version: 1,
+				Blocks: []models.Block{
+					{
+						ID:      "daily-chart",
+						Type:    models.BlockTypeChart,
+						Dataset: "daily",
+						Pos:     models.GridPosition{X: 0, Y: 0, W: 6, H: 4},
+						Chart: &models.ChartBlock{
+							Kind:     models.ChartKindLine,
+							XField:   "date",
+							Title:    "Динамика",
+							Legend:   new(false),
+							HeightPx: 280,
+							Series:   []models.Series{{Field: "accepted"}},
+						},
+					},
+				},
+			},
+			datasets: []string{"daily"},
+		},
+		{
+			name: "chart with negative height",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily-chart",
+						Type:    models.BlockTypeChart,
+						Dataset: "daily",
+						Pos:     models.GridPosition{X: 0, Y: 0, W: 6, H: 4},
+						Chart: &models.ChartBlock{
+							Kind:     models.ChartKindLine,
+							XField:   "date",
+							HeightPx: -1,
+							Series:   []models.Series{{Field: "accepted"}},
+						},
+					},
+				},
+			},
+			datasets:    []string{"daily"},
+			wantErr:     true,
+			errContains: "height_px must not be negative",
+		},
+		{
 			name: "unknown type",
 			layout: models.Layout{
 				Blocks: []models.Block{
@@ -194,5 +239,30 @@ func TestLayoutJSONExample(t *testing.T) {
 
 	if err := Validate(layout, []string{"daily"}); err != nil {
 		t.Fatalf("validate layout json: %v", err)
+	}
+
+	var chart *models.ChartBlock
+	for _, b := range layout.Blocks {
+		if b.Type == models.BlockTypeChart {
+			chart = b.Chart
+
+			break
+		}
+	}
+
+	if chart == nil {
+		t.Fatal("layout json has no chart block")
+	}
+
+	if chart.Title != "Динамика заявок" {
+		t.Fatalf("chart title = %q, want %q", chart.Title, "Динамика заявок")
+	}
+
+	if chart.Legend == nil || !*chart.Legend {
+		t.Fatalf("chart legend = %v, want true", chart.Legend)
+	}
+
+	if chart.HeightPx != 320 {
+		t.Fatalf("chart height_px = %d, want 320", chart.HeightPx)
 	}
 }

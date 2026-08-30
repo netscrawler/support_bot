@@ -119,10 +119,16 @@ type MetricBlock struct {
 	Format string `json:"format,omitempty"`
 }
 
+// TextBlock renders Text as a Go template over the report dataset. In the html
+// and pdf outputs it is executed with html/template (values are context
+// escaped); in the text output it is executed with text/template. Use
+// RawHTMLBlock to emit unescaped markup.
 type TextBlock struct {
 	Text string `json:"text"`
 }
 
+// RawHTMLBlock is emitted verbatim in the html and pdf outputs and as plain
+// text in xlsx. The author is responsible for the markup being safe.
 type RawHTMLBlock struct {
 	HTML string `json:"html"`
 }

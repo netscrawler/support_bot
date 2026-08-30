@@ -41,6 +41,9 @@
       "chart": {
         "kind": "line",
         "x_field": "date",
+        "title": "Динамика заявок",
+        "legend": true,
+        "height_px": 320,
         "series": [
           {
             "field": "accepted",

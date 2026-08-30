@@ -36,6 +36,8 @@ func TestExporterLayout(t *testing.T) {
 				Chart: &models.ChartBlock{
 					Kind:   models.ChartKindLine,
 					XField: "date",
+					Title:  "Принято по дням",
+					Legend: new(false),
 					Series: []models.Series{{Field: "accepted", Title: "Принято"}},
 				},
 			},
