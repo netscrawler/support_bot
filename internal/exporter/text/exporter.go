@@ -58,7 +58,7 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 func (e Exporter) Render(
 	_ context.Context,
 	data models.Dataset,
-	_ layoutpkg.ResolvedDocument,
+	doc layoutpkg.ResolvedDocument,
 	pages []layoutpkg.Page,
 	format models.Export,
 ) ([]models.Data, error) {
@@ -93,7 +93,12 @@ func (e Exporter) Render(
 	}
 
 	if len(outputs) == 0 {
-		return nil, errors.New("text: layout has no text blocks")
+		digest, err := renderDigest(doc, data, fm)
+		if err != nil {
+			return nil, fmt.Errorf("text: %w", err)
+		}
+
+		return []models.Data{models.NewTextData(bytes.NewBufferString(digest), dataType)}, nil
 	}
 
 	return outputs, nil

@@ -87,3 +87,62 @@ func TestExportRequiresLayoutOrTemplate(t *testing.T) {
 		t.Fatal("expected an error when neither layout nor template is set")
 	}
 }
+
+func TestExportLayoutDigestFallback(t *testing.T) {
+	data := models.Dataset{
+		"kpi":   {{"accepted": 994, "rate": 0.895, "period": "Август"}},
+		"daily": {{"date": "2026-08-01", "n": 7}, {"date": "2026-08-02", "n": 9}},
+	}
+
+	l := models.Layout{
+		Version: 1,
+		Page: models.PageConfig{
+			Header: &models.PageSection{Text: `Отчёт — {{ (index .kpi 0).period }}`},
+		},
+		Blocks: []models.Block{
+			{
+				ID: "m1", Type: models.BlockTypeMetric, Dataset: "kpi",
+				Pos:    models.GridPosition{W: 3, H: 2},
+				Metric: &models.MetricBlock{Field: "accepted", Label: "Принято", Format: "number"},
+			},
+			{
+				ID: "m2", Type: models.BlockTypeMetric, Dataset: "kpi",
+				Pos:    models.GridPosition{X: 3, W: 3, H: 2},
+				Metric: &models.MetricBlock{Field: "rate", Label: "Доля", Format: "percent"},
+			},
+			{
+				ID: "t", Type: models.BlockTypeTable, Dataset: "daily",
+				Pos: models.GridPosition{Y: 2, W: 12, H: 0},
+				Table: &models.TableBlock{Columns: []models.Column{
+					{Field: "date", Title: "Дата"},
+					{Field: "n", Title: "Кол-во"},
+				}},
+			},
+		},
+	}
+
+	out, err := text.Exporter{}.Export(data, models.Export{
+		Format: models.ReportFormatText,
+		Layout: &l,
+	})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	if len(out) != 1 {
+		t.Fatalf("want 1 digest file, got %d", len(out))
+	}
+
+	got := out[0].Data.String()
+	for _, want := range []string{
+		"Отчёт — Август",
+		"Принято: 994",
+		"Доля: 89.5%",
+		"Дата",
+		"2026-08-02",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("digest missing %q\n---\n%s", want, got)
+		}
+	}
+}
