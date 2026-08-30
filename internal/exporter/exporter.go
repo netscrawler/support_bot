@@ -37,10 +37,10 @@ func NewEngine(path string, custom map[string]Exporter) *Engine {
 	renderers := map[string]render.Renderer{
 		"csv":  csv.Exporter{},
 		"html": html.Exporter{},
-		"png":  png.Exporter{},
 		"text": text.Exporter{},
 		"xlsx": xlsx.Exporter{},
 		"pdf":  legacyRenderer{format: "pdf", inner: pdf.New(path, html.Exporter{})},
+		"png":  legacyRenderer{format: "png", inner: png.New(path, html.Exporter{})},
 	}
 
 	for format, exp := range custom {

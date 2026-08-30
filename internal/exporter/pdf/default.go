@@ -11,10 +11,10 @@ type HtmlExporter interface {
 	Export(data models.Dataset, exp models.Export) ([]models.Data, error)
 }
 
-type Exporter struct {
-	h HtmlExporter
-}
+// Exporter is the no-op pdf exporter for builds without a pdf backend tag.
+type Exporter struct{}
 
+// New accepts the chromium build's constructor arguments and ignores them.
 func New(string, HtmlExporter) *Exporter {
 	return &Exporter{}
 }

@@ -1,3 +1,5 @@
+//go:build !chromium
+
 package png
 
 import (
@@ -20,7 +22,19 @@ import (
 	"support_bot/internal/pkg"
 )
 
+// HtmlExporter matches the chromium build's constructor signature; the pure-Go
+// rasterizer does not need it.
+type HtmlExporter interface {
+	Export(data models.Dataset, exp models.Export) ([]models.Data, error)
+}
+
 type Exporter struct{}
+
+// New returns the pure-Go table rasterizer. shellPath and h are accepted for
+// parity with the chromium build and ignored.
+func New(_ string, _ HtmlExporter) *Exporter {
+	return &Exporter{}
+}
 
 // Format implements render.Renderer.
 func (e Exporter) Format() string { return models.ReportFormatPng }
