@@ -2,16 +2,61 @@ package html
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"html/template"
-	"support_bot/internal/models"
-	"support_bot/internal/pkg/text"
+	"io"
 
 	"github.com/Masterminds/sprig/v3"
+
+	"support_bot/internal/exporter/render"
+	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
+	"support_bot/internal/pkg/text"
 )
 
 type Exporter struct{}
 
+// Format implements render.Renderer.
+func (e Exporter) Format() string { return models.ReportFormatHTML }
+
+// Geometry implements render.Renderer: the html grid is a fixed 12x12 page.
+func (e Exporter) Geometry(_ models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{Cols: layoutpkg.GridColumns, Rows: layoutpkg.GridRows}
+}
+
+// Export renders one export. A declarative layout goes through the shared
+// Resolve/Pack/Render pipeline; otherwise the report is a hand-written
+// html/template that uses the reportGrid/chart/table helpers (escape-hatch).
 func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Data, error) {
+	if format.Layout != nil {
+		return e.exportLayout(data, format)
+	}
+
+	return e.exportTemplate(data, format)
+}
+
+func (e Exporter) exportLayout(data models.Dataset, format models.Export) ([]models.Data, error) {
+	l := layoutpkg.Normalize(*format.Layout)
+
+	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+		return nil, fmt.Errorf("html: invalid layout: %w", err)
+	}
+
+	doc, err := layoutpkg.Resolve(l, data)
+	if err != nil {
+		return nil, fmt.Errorf("html: resolve layout: %w", err)
+	}
+
+	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+	if err != nil {
+		return nil, fmt.Errorf("html: pack layout: %w", err)
+	}
+
+	return e.Render(context.Background(), data, doc, pages, format)
+}
+
+func (e Exporter) exportTemplate(data models.Dataset, format models.Export) ([]models.Data, error) {
 	grid := newGridState()
 
 	t, err := template.New("html_tmpl").
@@ -35,4 +80,103 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 	}
 
 	return []models.Data{fd}, nil
+}
+
+// Render implements render.Renderer for the pure-layout path.
+func (e Exporter) Render(
+	_ context.Context,
+	data models.Dataset,
+	doc layoutpkg.ResolvedDocument,
+	pages []layoutpkg.Page,
+	format models.Export,
+) ([]models.Data, error) {
+	var buf bytes.Buffer
+
+	if data == nil {
+		data = docData(doc)
+	}
+
+	rc := &render.RenderContext{
+		Doc:    doc,
+		Data:   data,
+		Funcs:  render.FuncMap(),
+		NextID: render.Counter("report-chart"),
+	}
+
+	buf.WriteString("<!doctype html>\n<html lang=\"ru\">\n<head>\n<meta charset=\"utf-8\">\n")
+	buf.WriteString(string(styles(doc.Page)))
+	buf.WriteString("\n")
+
+	if cjs, err := chartJS(); err == nil {
+		buf.WriteString(string(cjs))
+		buf.WriteString("\n")
+	}
+
+	buf.WriteString("</head>\n<body>\n")
+
+	if err := renderPages(&buf, rc, pages); err != nil {
+		return nil, err
+	}
+
+	buf.WriteString("\n</body>\n</html>\n")
+
+	name := "report"
+	if format.FileName != nil {
+		name = *format.FileName
+	}
+
+	fd, err := models.NewFileData(&buf, name+".html")
+	if err != nil {
+		return nil, err
+	}
+
+	return []models.Data{fd}, nil
+}
+
+func renderPages(w io.Writer, rc *render.RenderContext, pages []layoutpkg.Page) error {
+	for _, p := range pages {
+		if _, err := io.WriteString(w, `<div class="report-page">`+"\n"); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(
+			w,
+			`<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr));">`+"\n",
+			layoutpkg.GridRows,
+		)
+
+		for _, pb := range p.Blocks {
+			style := fmt.Sprintf(
+				"grid-column: %d / span %d; grid-row: %d / span %d;",
+				pb.Pos.X+1, pb.Pos.W, pb.Pos.Y+1, pb.Pos.H,
+			)
+
+			fmt.Fprintf(w, `<div class="report-grid-item" style="%s">`, style)
+
+			if err := renderBlock(w, rc, pb); err != nil {
+				return err
+			}
+
+			if _, err := io.WriteString(w, "</div>\n"); err != nil {
+				return err
+			}
+		}
+
+		if _, err := io.WriteString(w, "</div>\n</div>\n"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func docData(doc layoutpkg.ResolvedDocument) models.Dataset {
+	data := make(models.Dataset, len(doc.Blocks))
+	for _, rb := range doc.Blocks {
+		if rb.Block.Dataset != "" {
+			data[rb.Block.Dataset] = rb.Rows
+		}
+	}
+
+	return data
 }
