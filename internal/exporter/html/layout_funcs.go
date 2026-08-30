@@ -1,23 +1,27 @@
 package html
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
-	"strings"
+
+	"support_bot/internal/exporter/render"
+	layoutpkg "support_bot/internal/layout"
 )
 
-// gridState holds per-render state for template functions that collect report
-// grid blocks. Every Export call creates its own instance: a package-level
-// stack would be shared between concurrent generator workers.
+// gridState holds per-render state for the {{ reportGrid }} / {{ chart }} /
+// {{ table }} template helpers. Every Export call creates its own instance: a
+// package-level stack would be shared between concurrent generator workers.
 type gridState struct {
-	stack [][]ReportBlock
+	stack  [][]layoutpkg.ResolvedBlock
+	nextID func() string
 }
 
 func newGridState() *gridState {
-	return &gridState{}
+	return &gridState{nextID: render.Counter("report-chart")}
 }
 
-// funcMap exposes grid functions bound to this state for a template.
+// funcMap exposes the grid helpers bound to this state for a template.
 func (s *gridState) funcMap() map[string]any {
 	return map[string]any{
 		"reportGrid":    s.reportGrid,
@@ -28,73 +32,45 @@ func (s *gridState) funcMap() map[string]any {
 	}
 }
 
-// reportGrid initializes collection of blocks for a grid.
+func (s *gridState) renderCtx() *render.RenderContext {
+	return &render.RenderContext{
+		Funcs:  render.FuncMap(),
+		NextID: s.nextID,
+	}
+}
+
+// reportGrid opens a new block collector.
 func (s *gridState) reportGrid() (string, error) {
-	s.stack = append(s.stack, []ReportBlock{})
+	s.stack = append(s.stack, []layoutpkg.ResolvedBlock{})
 
 	return "", nil
 }
 
-// endReportGrid finalizes collection, runs layout engine and renders pages HTML.
+// endReportGrid closes the current collector, packs the collected blocks onto
+// 12x12 pages and renders the page HTML.
 func (s *gridState) endReportGrid() (template.HTML, error) {
 	if len(s.stack) == 0 {
 		return "", fmt.Errorf("endReportGrid: no active reportGrid")
 	}
 
-	// pop
 	idx := len(s.stack) - 1
 	blocks := s.stack[idx]
 	s.stack = s.stack[:idx]
 
-	engine := NewSimpleLayoutEngine(GridColumns, GridRows)
-	pages, err := engine.Layout(reportBlocksClone(blocks))
+	doc := layoutpkg.ResolvedDocument{Blocks: blocks}
+
+	pages, err := layoutpkg.Pack(doc, layoutpkg.PageGeometry{
+		Cols: layoutpkg.GridColumns,
+		Rows: layoutpkg.GridRows,
+	})
 	if err != nil {
 		return "", err
 	}
 
-	var sb strings.Builder
-
-	for pi, p := range pages {
-		sb.WriteString(`<div class="report-page">`)
-		sb.WriteString("\n")
-
-		fmt.Fprintf(&sb, `<div class="report-grid" style="grid-template-rows: repeat(%d, minmax(0, 1fr));">`,
-			engine.Rows)
-		sb.WriteString("\n")
-
-		for _, pb := range p.Blocks {
-			colStart := pb.Position.X + 1
-			rowStart := pb.Position.Y + 1
-			w := pb.Size.W
-			h := pb.Size.H
-			style := fmt.Sprintf(
-				"grid-column: %d / span %d; grid-row: %d / span %d;",
-				colStart,
-				w,
-				rowStart,
-				h,
-			)
-			// render block content
-			fmt.Fprintf(&sb, "<div class=\"report-grid-item\" style=\"%s\">%s</div>",
-				style,
-				pb.Content)
-			sb.WriteString("\n")
-		}
-
-		sb.WriteString(`</div>`) // close report-grid
-		sb.WriteString("\n")
-		sb.WriteString(`</div>`) // close report-page
-		if pi != len(pages)-1 {
-			sb.WriteString("\n")
-		}
+	var buf bytes.Buffer
+	if err := renderPages(&buf, s.renderCtx(), pages); err != nil {
+		return "", err
 	}
 
-	return template.HTML(sb.String()), nil
-}
-
-func reportBlocksClone(in []ReportBlock) []ReportBlock {
-	out := make([]ReportBlock, len(in))
-	copy(out, in)
-
-	return out
+	return template.HTML(buf.String()), nil
 }

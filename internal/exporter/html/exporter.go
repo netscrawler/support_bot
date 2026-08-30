@@ -36,52 +36,6 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 	return e.exportTemplate(data, format)
 }
 
-func (e Exporter) exportLayout(data models.Dataset, format models.Export) ([]models.Data, error) {
-	l := layoutpkg.Normalize(*format.Layout)
-
-	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
-		return nil, fmt.Errorf("html: invalid layout: %w", err)
-	}
-
-	doc, err := layoutpkg.Resolve(l, data)
-	if err != nil {
-		return nil, fmt.Errorf("html: resolve layout: %w", err)
-	}
-
-	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
-	if err != nil {
-		return nil, fmt.Errorf("html: pack layout: %w", err)
-	}
-
-	return e.Render(context.Background(), data, doc, pages, format)
-}
-
-func (e Exporter) exportTemplate(data models.Dataset, format models.Export) ([]models.Data, error) {
-	grid := newGridState()
-
-	t, err := template.New("html_tmpl").
-		Funcs(sprig.FuncMap()).
-		Funcs(grid.funcMap()).
-		Funcs(chartFuncMap).
-		Funcs(text.FuncMap).
-		Parse(format.Template.TemplateText)
-	if err != nil {
-		return nil, err
-	}
-
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return nil, err
-	}
-
-	fd, err := models.NewFileData(&buf, *format.FileName+".html")
-	if err != nil {
-		return nil, err
-	}
-
-	return []models.Data{fd}, nil
-}
-
 // Render implements render.Renderer for the pure-layout path.
 func (e Exporter) Render(
 	_ context.Context,
@@ -126,6 +80,52 @@ func (e Exporter) Render(
 	}
 
 	fd, err := models.NewFileData(&buf, name+".html")
+	if err != nil {
+		return nil, err
+	}
+
+	return []models.Data{fd}, nil
+}
+
+func (e Exporter) exportLayout(data models.Dataset, format models.Export) ([]models.Data, error) {
+	l := layoutpkg.Normalize(*format.Layout)
+
+	if err := layoutpkg.Validate(l, layoutpkg.SortedDatasetKeys(data)); err != nil {
+		return nil, fmt.Errorf("html: invalid layout: %w", err)
+	}
+
+	doc, err := layoutpkg.Resolve(l, data)
+	if err != nil {
+		return nil, fmt.Errorf("html: resolve layout: %w", err)
+	}
+
+	pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
+	if err != nil {
+		return nil, fmt.Errorf("html: pack layout: %w", err)
+	}
+
+	return e.Render(context.Background(), data, doc, pages, format)
+}
+
+func (e Exporter) exportTemplate(data models.Dataset, format models.Export) ([]models.Data, error) {
+	grid := newGridState()
+
+	t, err := template.New("html_tmpl").
+		Funcs(sprig.FuncMap()).
+		Funcs(grid.funcMap()).
+		Funcs(chartFuncMap).
+		Funcs(text.FuncMap).
+		Parse(format.Template.TemplateText)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return nil, err
+	}
+
+	fd, err := models.NewFileData(&buf, *format.FileName+".html")
 	if err != nil {
 		return nil, err
 	}

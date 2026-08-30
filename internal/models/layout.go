@@ -104,6 +104,13 @@ type ChartBlock struct {
 	XField  string    `json:"x_field"`
 	Series  []Series  `json:"series,omitempty"`
 	Stacked bool      `json:"stacked,omitempty"`
+	// Title is an optional heading rendered above the chart.
+	Title string `json:"title,omitempty"`
+	// Legend toggles the chart legend; nil leaves the renderer default.
+	Legend *bool `json:"legend,omitempty"`
+	// HeightPx is the physical canvas height in pixels; 0 uses the renderer
+	// default. Distinct from the grid height in Block.Pos.H.
+	HeightPx int `json:"height_px,omitempty"`
 }
 
 type MetricBlock struct {

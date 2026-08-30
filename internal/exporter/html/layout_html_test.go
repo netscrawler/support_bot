@@ -8,8 +8,6 @@ import (
 	"support_bot/internal/models"
 )
 
-func intPtr(v int) *int { return &v }
-
 func TestExportLayoutAllBlockTypes(t *testing.T) {
 	data := models.Dataset{
 		"daily": {
@@ -125,6 +123,7 @@ func TestExportLayoutRespectsLimit(t *testing.T) {
 		rows[i] = map[string]any{"n": i}
 	}
 
+	limit := 5
 	l := models.Layout{
 		Version: 1,
 		Blocks: []models.Block{
@@ -133,7 +132,7 @@ func TestExportLayoutRespectsLimit(t *testing.T) {
 				Pos: models.GridPosition{X: 0, Y: 0, W: 12, H: 0},
 				Table: &models.TableBlock{
 					Columns: []models.Column{{Field: "n", Title: "N"}},
-					Limit:   intPtr(5),
+					Limit:   &limit,
 				},
 			},
 		},

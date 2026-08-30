@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
-)
 
-// table-specific heuristics
-const (
-	rowsPerGridRow  = 6
-	headerRowsCount = 1
+	layoutpkg "support_bot/internal/layout"
+	"support_bot/internal/models"
 )
 
 // tableOptions accepts key/value pairs similar to chartOptions.
@@ -32,106 +29,74 @@ func tableOptions(args ...any) (map[string]any, error) {
 	return options, nil
 }
 
-// table creates a ReportBlock for a table.
+// table is the {{ table }} template helper. Inside an active {{ reportGrid }}
+// the block is collected; otherwise a standalone grid item is returned.
 // rows are dataset rows, columns are "field" or "field:Title" definitions.
 func (s *gridState) table(
 	rows []map[string]any,
 	columns []string,
 	options map[string]any,
-) (string, error) {
-	width := 12
-	if v, ok := options["w"].(int); ok {
-		width = v
-	}
-
-	if width < 1 || width > GridColumns {
-		return "", fmt.Errorf("table: option \"w\" must be between 1 and %d", GridColumns)
-	}
-
-	if len(columns) == 0 {
-		return "", fmt.Errorf("table: at least one column is required")
-	}
-
-	cols, err := parseColumns(columns)
+) (template.HTML, error) {
+	block, err := buildTableModelBlock(columns, options)
 	if err != nil {
 		return "", err
 	}
 
-	if err := validateTableFields(rows, cols); err != nil {
+	if err := validateTableFields(rows, block.Table.Columns); err != nil {
 		return "", err
 	}
 
-	headers := make([]string, 0, len(cols))
-	for _, col := range cols {
-		headers = append(headers, col.Title)
-	}
+	rb := layoutpkg.ResolvedBlockFromRows(block, rows)
 
-	tableRows := make([][]string, 0, len(rows))
-	for _, row := range rows {
-		cells := make([]string, 0, len(cols))
-
-		for _, col := range cols {
-			cells = append(cells, fmt.Sprint(row[col.Field]))
-		}
-
-		tableRows = append(tableRows, cells)
-	}
-
-	h := 0
-	explicitH := false
-	if v, ok := options["h"].(int); ok {
-		h = v
-		explicitH = true
-	}
-
-	// compute auto height if not explicit
-	if !explicitH {
-		// header + rows mapped to grid rows
-		totalDataRows := len(tableRows)
-		// each grid row can contain rowsPerGridRow data rows
-		h = headerRowsCount + (totalDataRows+rowsPerGridRow-1)/rowsPerGridRow
-		h = max(h, 1)
-	}
-
-	// Do not pre-render full content here. Store table data for layout engine to split.
-	block := ReportBlock{
-		Type:           "table",
-		Content:        "",
-		Size:           BlockSize{W: width, H: h},
-		ExplicitWidth:  true,
-		ExplicitHeight: explicitH,
-		Splittable:     true,
-		TableHeaders:   headers,
-		TableRows:      tableRows,
-	}
-
-	// If collector active - append and render nothing now
 	if len(s.stack) > 0 {
-		s.stack[len(s.stack)-1] = append(s.stack[len(s.stack)-1], block)
+		s.stack[len(s.stack)-1] = append(s.stack[len(s.stack)-1], rb)
 
 		return "", nil
 	}
 
-	// fallback: render single block immediately using full table content
-	content := renderTableChunk(headers, tableRows)
-	style := fmt.Sprintf("grid-column: span %d;", width)
-	page := fmt.Sprintf(`<div class="report-grid-item" style="%s">%s</div>`, style, content)
-
-	return page, nil
+	return standaloneGridItem(rb, s.renderCtx())
 }
 
-type columnDefinition struct {
-	Field string
-	Title string
+func buildTableModelBlock(columns []string, options map[string]any) (models.Block, error) {
+	if len(columns) == 0 {
+		return models.Block{}, fmt.Errorf("table: at least one column is required")
+	}
+
+	cols, err := parseColumns(columns)
+	if err != nil {
+		return models.Block{}, err
+	}
+
+	width := layoutpkg.GridColumns
+	if v, ok := options["w"].(int); ok {
+		width = v
+	}
+
+	if width < 1 || width > layoutpkg.GridColumns {
+		return models.Block{}, fmt.Errorf(
+			"table: option %q must be between 1 and %d", "w", layoutpkg.GridColumns,
+		)
+	}
+
+	height := 0
+	if v, ok := options["h"].(int); ok {
+		height = v
+	}
+
+	return models.Block{
+		ID:    "grid-table",
+		Type:  models.BlockTypeTable,
+		Pos:   models.GridPosition{W: width, H: height},
+		Table: &models.TableBlock{Columns: cols},
+	}, nil
 }
 
 // parseColumns parses "field" or "field:Title" column definitions.
-func parseColumns(values []string) ([]columnDefinition, error) {
-	result := make([]columnDefinition, 0, len(values))
+func parseColumns(values []string) ([]models.Column, error) {
+	result := make([]models.Column, 0, len(values))
 
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-
 		if value == "" {
 			return nil, fmt.Errorf("table: empty column definition")
 		}
@@ -144,25 +109,20 @@ func parseColumns(values []string) ([]columnDefinition, error) {
 		}
 
 		title := field
-
 		if len(parts) == 2 {
 			title = strings.TrimSpace(parts[1])
-
 			if title == "" {
 				return nil, fmt.Errorf("table: empty column title in %q", value)
 			}
 		}
 
-		result = append(result, columnDefinition{
-			Field: field,
-			Title: title,
-		})
+		result = append(result, models.Column{Field: field, Title: title})
 	}
 
 	return result, nil
 }
 
-func validateTableFields(rows []map[string]any, cols []columnDefinition) error {
+func validateTableFields(rows []map[string]any, cols []models.Column) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -189,32 +149,30 @@ func validateTableFields(rows []map[string]any, cols []columnDefinition) error {
 // renderTableChunk generates HTML for a table given headers and a subset of rows.
 func renderTableChunk(headers []string, rows [][]string) string {
 	var sb strings.Builder
+
 	sb.WriteString("<div class=\"chart-card\">\n")
 	sb.WriteString("<table style=\"width:100%;border-collapse:collapse;\">\n")
 	sb.WriteString("<thead><tr>")
 
 	for _, hname := range headers {
-		sb.WriteString(
-			fmt.Sprintf(
-				"<th style=\"text-align:left;padding:6px;border-bottom:1px solid #e5e9f0;\">%s</th>",
-				template.HTMLEscapeString(hname),
-			),
+		fmt.Fprintf(
+			&sb,
+			"<th style=\"text-align:left;padding:6px;border-bottom:1px solid #e5e9f0;\">%s</th>",
+			template.HTMLEscapeString(hname),
 		)
 	}
 
 	sb.WriteString("</tr></thead>\n")
-
 	sb.WriteString("<tbody>\n")
 
 	for _, row := range rows {
 		sb.WriteString("<tr>")
 
 		for _, cell := range row {
-			sb.WriteString(
-				fmt.Sprintf(
-					"<td style=\"padding:6px;border-bottom:1px solid #f3f4f6;\">%s</td>",
-					template.HTMLEscapeString(cell),
-				),
+			fmt.Fprintf(
+				&sb,
+				"<td style=\"padding:6px;border-bottom:1px solid #f3f4f6;\">%s</td>",
+				template.HTMLEscapeString(cell),
 			)
 		}
 

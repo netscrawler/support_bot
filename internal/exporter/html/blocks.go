@@ -89,6 +89,14 @@ func renderChartBlock(w io.Writer, rc *render.RenderContext, pb layoutpkg.Placed
 		opts["stacked"] = true
 	}
 
+	if ch.Title != "" {
+		opts["title"] = ch.Title
+	}
+
+	if ch.Legend != nil {
+		opts["legend"] = *ch.Legend
+	}
+
 	if colors := seriesColors(ch.Series); len(colors) > 0 {
 		opts["colors"] = colors
 	} else {
@@ -98,7 +106,7 @@ func renderChartBlock(w io.Writer, rc *render.RenderContext, pb layoutpkg.Placed
 	cfg := chartConfig{
 		Type:    chartType(ch.Kind),
 		Data:    chartData{Labels: labels, Datasets: datasets},
-		Options: buildChartJSOptions(chartType(ch.Kind), opts),
+		Options: buildChartJSOptions(opts),
 	}
 
 	cfgJSON, err := json.Marshal(cfg)
@@ -108,9 +116,14 @@ func renderChartBlock(w io.Writer, rc *render.RenderContext, pb layoutpkg.Placed
 
 	id := rc.NextID()
 
+	canvasHeight := ch.HeightPx
+	if canvasHeight <= 0 {
+		canvasHeight = defaultChartCanvasPx
+	}
+
 	fmt.Fprintf(
 		w, chartCardTemplate,
-		escapeHTML(""), defaultChartCanvasPx, id, mustJSONQuote(id), id, cfgJSON,
+		escapeHTML(ch.Title), canvasHeight, id, mustJSONQuote(id), id, cfgJSON,
 	)
 
 	return nil

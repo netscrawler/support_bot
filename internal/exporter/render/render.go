@@ -5,6 +5,7 @@ package render
 import (
 	"context"
 	"html/template"
+	"maps"
 	"strconv"
 
 	"github.com/Masterminds/sprig/v3"
@@ -47,14 +48,8 @@ type RenderContext struct {
 // all of Sprig plus the project helpers in internal/pkg/text.
 func FuncMap() template.FuncMap {
 	fm := make(template.FuncMap)
-
-	for name, fn := range sprig.FuncMap() {
-		fm[name] = fn
-	}
-
-	for name, fn := range text.FuncMap {
-		fm[name] = fn
-	}
+	maps.Copy(fm, sprig.FuncMap())
+	maps.Copy(fm, text.FuncMap)
 
 	return fm
 }
