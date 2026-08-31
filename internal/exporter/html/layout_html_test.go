@@ -148,10 +148,68 @@ func TestExportLayoutTableAlignmentAndFormat(t *testing.T) {
 
 	got := out[0].Data.String()
 	for _, want := range []string{
-		`<th class="align-right">Доля</th>`,
-		`<td class="align-right">46%</td>`,
+		`<th class="align-right col-num">Доля</th>`,
+		`<td class="align-right col-num">46%</td>`,
 		`<td class="align-left">Веб</td>`,
 	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
+
+func TestExportLayoutTableAutoAlignsAndSizesNumericColumns(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "d",
+		Pos: models.GridPosition{W: 12, H: 0},
+		// "name" is text -> align-left; "count" is numeric with no explicit
+		// align -> align-right + col-num.
+		Table: &models.TableBlock{Columns: []models.Column{
+			{Field: "name", Title: "Имя"},
+			{Field: "count", Title: "Всего", Format: "number"},
+		}},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"d": {{"name": "web", "count": 1234}}},
+		models.Export{Layout: &l, FileName: new("num")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	for _, want := range []string{
+		`<th class="align-left">Имя</th>`,
+		`<th class="align-right col-num">Всего</th>`,
+		`<td class="align-right col-num">1 234</td>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
+
+func TestExportLayoutTableHonorsColumnWidth(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "d",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{Columns: []models.Column{
+			{Field: "a", Title: "A", Width: 160},
+			{Field: "b", Title: "B"},
+		}},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"d": {{"a": "x", "b": "y"}}},
+		models.Export{Layout: &l, FileName: new("w")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	for _, want := range []string{`<colgroup>`, `<col style="width: 160px">`, `<col>`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q", want)
 		}

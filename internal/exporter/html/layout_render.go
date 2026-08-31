@@ -300,13 +300,18 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
 	win := pb.Rows[pb.RowOffset:end]
 
-	// No overflow clamp on the card: a table is never boxed smaller than its
-	// content — the packer gives every table its own full-width row.
-	out.str(`<div class="card" style="padding: 0;">`)
-	out.str(`<table class="report-table"><thead><tr>`)
+	// overflow: hidden clips only the rounded corners — the card auto-sizes to
+	// the table height (rows are never hidden) and every table owns a
+	// full-width row so nothing is clipped horizontally.
+	out.str(`<div class="card" style="padding: 0; overflow: hidden;">`)
+	out.str(`<table class="report-table">`)
+
+	writeColGroup(out, tb.Columns)
+
+	out.str(`<thead><tr>`)
 
 	for _, c := range tb.Columns {
-		out.printf(`<th class="%s">%s</th>`, alignClass(c.Align), escapeHTML(c.Title))
+		out.printf(`<th class="%s">%s</th>`, columnClasses(c), escapeHTML(c.Title))
 	}
 
 	out.str(`</tr></thead><tbody>`)
@@ -317,7 +322,7 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 		for _, c := range tb.Columns {
 			out.printf(
 				`<td class="%s">%s</td>`,
-				alignClass(c.Align),
+				columnClasses(c),
 				htmltemplate.HTMLEscapeString(layoutpkg.FormatValue(r[c.Field], c.Format)),
 			)
 		}
@@ -330,14 +335,76 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	return out.err
 }
 
-func alignClass(a models.ColumnAlign) string {
-	switch a {
+// writeColGroup emits a <colgroup> only when at least one column pins an
+// explicit width; the tight numeric columns are sized from a cell class
+// instead (a <col> cannot carry white-space).
+func writeColGroup(out *errWriter, cols []models.Column) {
+	pinned := false
+
+	for _, c := range cols {
+		if c.Width > 0 {
+			pinned = true
+
+			break
+		}
+	}
+
+	if !pinned {
+		return
+	}
+
+	out.str(`<colgroup>`)
+
+	for _, c := range cols {
+		if c.Width > 0 {
+			out.printf(`<col style="width: %dpx">`, c.Width)
+
+			continue
+		}
+
+		out.str(`<col>`)
+	}
+
+	out.str(`</colgroup>`)
+}
+
+// columnClasses is the class list for a column's <th> and <td>: an alignment
+// class (explicit Align, else right for a numeric Format, else left) plus
+// col-num for an auto-width numeric column so it shrinks to its content and
+// the label column keeps the slack.
+func columnClasses(c models.Column) string {
+	cls := alignClass(c)
+
+	if c.Width == 0 && isNumericFormat(c.Format) {
+		cls += " col-num"
+	}
+
+	return cls
+}
+
+func alignClass(c models.Column) string {
+	switch c.Align {
 	case models.ColumnAlignRight:
 		return "align-right"
 	case models.ColumnAlignCenter:
 		return "align-center"
-	default:
+	case models.ColumnAlignLeft:
 		return "align-left"
+	}
+
+	if isNumericFormat(c.Format) {
+		return "align-right"
+	}
+
+	return "align-left"
+}
+
+func isNumericFormat(format string) bool {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "number", "percent", "money":
+		return true
+	default:
+		return false
 	}
 }
 

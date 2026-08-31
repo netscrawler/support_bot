@@ -151,25 +151,33 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-table {
         width: 100%%;
         border-collapse: collapse;
-        font-size: 12px;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
     }
 
     .report-table th {
-        background: #f9fafb;
-        color: #4c5773;
+        background: #f4f6f8;
+        color: #5b6572;
         font-weight: 600;
-        padding: 8px 12px;
-        border-bottom: 1px solid #e7eaee;
+        padding: 10px 14px;
+        border-bottom: 2px solid #d9dee5;
         white-space: nowrap;
+        vertical-align: bottom;
     }
 
     .report-table td {
-        padding: 7px 12px;
-        border-top: 1px solid #f1f3f5;
+        padding: 9px 14px;
+        border-top: 1px solid #eceef1;
         color: #2e353b;
     }
 
     .report-table tbody tr:first-child td { border-top: none; }
+    .report-table tbody tr:nth-child(even) { background: #fbfcfd; }
+    .report-table tbody td:first-child { font-weight: 500; }
+
+    /* Numeric columns never wrap; they also shrink toward their content so a
+       row's values stay near its label instead of drifting to the edge. */
+    .report-table .col-num { white-space: nowrap; width: 8em; }
 
     .align-left { text-align: left; }
     .align-center { text-align: center; }

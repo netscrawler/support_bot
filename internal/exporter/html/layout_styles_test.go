@@ -20,6 +20,9 @@ func TestLayoutStylesPortrait(t *testing.T) {
 		".metric-value {",
 		".report-row {",
 		".report-table th {",
+		"font-variant-numeric: tabular-nums;",
+		"tbody tr:nth-child(even)",
+		".report-table .col-num {",
 		".align-right { text-align: right; }",
 		"break-after: page;",
 	} {
