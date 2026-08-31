@@ -233,6 +233,50 @@ func TestValidate(t *testing.T) {
 			datasets: []string{"daily"},
 		},
 		{
+			name: "conditional rule with a colour preset",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Columns: []models.Column{{Field: "accepted"}},
+							Conditional: []models.CondRule{{
+								When:   "value > 0",
+								Target: models.CondTargetRow,
+								Style:  models.CondStyleTeal,
+							}},
+						},
+					},
+				},
+			},
+			datasets: []string{"daily"},
+		},
+		{
+			name: "conditional rule with an unknown style",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Columns: []models.Column{{Field: "accepted"}},
+							Conditional: []models.CondRule{{
+								When:   "value > 0",
+								Target: models.CondTargetRow,
+								Style:  "chartreuse",
+							}},
+						},
+					},
+				},
+			},
+			datasets:    []string{"daily"},
+			wantErr:     true,
+			errContains: "unknown style",
+		},
+		{
 			name: "conditional cell rule with unknown column",
 			layout: models.Layout{
 				Blocks: []models.Block{

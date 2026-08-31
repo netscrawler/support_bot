@@ -161,6 +161,27 @@ func TestBrokenRuleWarnsAndDoesNotMatch(t *testing.T) {
 	}
 }
 
+func TestEveryStyleHasColours(t *testing.T) {
+	for _, name := range models.CondStyles {
+		rows := []map[string]any{{"n": 1}}
+		rules := []models.CondRule{{
+			When:   "true",
+			Target: models.CondTargetRow,
+			Style:  name,
+		}}
+
+		f, err := condfmt.New(newEngine(t), rules, rows)
+		if err != nil {
+			t.Fatalf("style %q: new: %v", name, err)
+		}
+
+		got := f.Row(context.Background(), rows[0])
+		if got.BG == "" || got.FG == "" {
+			t.Errorf("style %q resolved to no colour: %+v", name, got)
+		}
+	}
+}
+
 func TestCompileErrorIsFatal(t *testing.T) {
 	rules := []models.CondRule{{
 		When:   "value <",

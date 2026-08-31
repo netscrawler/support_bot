@@ -341,13 +341,7 @@ func validateCondRule(idx int, rule models.CondRule, columns map[string]struct{}
 		}
 	}
 
-	switch rule.Style {
-	case "",
-		models.CondStyleGood,
-		models.CondStyleWarning,
-		models.CondStyleBad,
-		models.CondStyleMuted:
-	default:
+	if rule.Style != "" && !rule.Style.Valid() {
 		return fmt.Errorf("conditional rule %d: unknown style %q", idx, rule.Style)
 	}
 

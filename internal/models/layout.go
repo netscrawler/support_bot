@@ -90,15 +90,53 @@ const (
 	CondTargetRow  CondTarget = "row"
 )
 
-// CondStyle names a built-in colour preset for a CondRule.
+// CondStyle names a built-in colour preset for a CondRule: a semantic name or,
+// when the meaning is just "tint it", a plain colour from the report palette.
 type CondStyle string
 
 const (
+	// Semantic presets.
 	CondStyleGood    CondStyle = "good"
 	CondStyleWarning CondStyle = "warning"
 	CondStyleBad     CondStyle = "bad"
 	CondStyleMuted   CondStyle = "muted"
+
+	// Plain colour presets — soft tints that stay inside the report style.
+	CondStyleRed    CondStyle = "red"
+	CondStyleOrange CondStyle = "orange"
+	CondStyleAmber  CondStyle = "amber"
+	CondStyleYellow CondStyle = "yellow"
+	CondStyleGreen  CondStyle = "green"
+	CondStyleTeal   CondStyle = "teal"
+	CondStyleBlue   CondStyle = "blue"
+	CondStyleIndigo CondStyle = "indigo"
+	CondStylePurple CondStyle = "purple"
+	CondStylePink   CondStyle = "pink"
 )
+
+// CondStyles lists every recognised preset name, in declaration order.
+var CondStyles = []CondStyle{
+	CondStyleGood, CondStyleWarning, CondStyleBad, CondStyleMuted,
+	CondStyleRed, CondStyleOrange, CondStyleAmber, CondStyleYellow, CondStyleGreen,
+	CondStyleTeal, CondStyleBlue, CondStyleIndigo, CondStylePurple, CondStylePink,
+}
+
+var condStyleSet = func() map[CondStyle]struct{} {
+	m := make(map[CondStyle]struct{}, len(CondStyles))
+	for _, s := range CondStyles {
+		m[s] = struct{}{}
+	}
+
+	return m
+}()
+
+// Valid reports whether s is a recognised preset name. The empty string is not
+// valid here; callers treat it as "no preset".
+func (s CondStyle) Valid() bool {
+	_, ok := condStyleSet[s]
+
+	return ok
+}
 
 // CondRule is one conditional-formatting rule on a TableBlock. When the CEL
 // expression When evaluates true for a row, Target decides whether the whole

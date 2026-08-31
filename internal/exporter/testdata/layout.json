@@ -105,7 +105,8 @@
         "sort": [{"field": "requests", "desc": true}],
         "limit": 10,
         "conditional": [
-          {"when": "value < 0.1", "target": "cell", "columns": ["share"], "style": "bad"}
+          {"when": "value < 0.1", "target": "cell", "columns": ["share"], "style": "bad"},
+          {"when": "value > 300", "target": "cell", "columns": ["resolved"], "style": "blue"}
         ]
       }
     },

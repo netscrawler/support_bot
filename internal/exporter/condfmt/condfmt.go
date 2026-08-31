@@ -161,12 +161,26 @@ func (f *Formatter) match(ctx context.Context, idx int, row map[string]any, valu
 	return ok
 }
 
-// presetColours maps a semantic style to its background / foreground.
+// presetColours maps a style name to its background / foreground. Every
+// models.CondStyle has an entry here — TestEveryStyleHasColours guards the two
+// lists staying in step. All tints are soft and low-chroma so a coloured row
+// stays inside the report's palette.
 var presetColours = map[models.CondStyle]Decoration{
 	models.CondStyleGood:    {BG: "#E6F4EA", FG: "#1E7E34", Set: true},
 	models.CondStyleWarning: {BG: "#FFF4E5", FG: "#A15C00", Set: true},
 	models.CondStyleBad:     {BG: "#FDECEA", FG: "#B42318", Set: true},
 	models.CondStyleMuted:   {BG: "#F1F3F5", FG: "#6B7280", Set: true},
+
+	models.CondStyleRed:    {BG: "#FCEBEA", FG: "#B42318", Set: true},
+	models.CondStyleOrange: {BG: "#FDEEE3", FG: "#C2410C", Set: true},
+	models.CondStyleAmber:  {BG: "#FBF1DC", FG: "#92600E", Set: true},
+	models.CondStyleYellow: {BG: "#FAF6DA", FG: "#846A12", Set: true},
+	models.CondStyleGreen:  {BG: "#E7F4EA", FG: "#1E7E34", Set: true},
+	models.CondStyleTeal:   {BG: "#E3F2F1", FG: "#0F766E", Set: true},
+	models.CondStyleBlue:   {BG: "#E9F1FB", FG: "#1D4ED8", Set: true},
+	models.CondStyleIndigo: {BG: "#ECEDFA", FG: "#4338CA", Set: true},
+	models.CondStylePurple: {BG: "#F2ECFA", FG: "#6D28D9", Set: true},
+	models.CondStylePink:   {BG: "#FBEBF2", FG: "#BE185D", Set: true},
 }
 
 // decorationFor resolves a rule to its concrete Decoration: the preset, then
