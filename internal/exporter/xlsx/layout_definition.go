@@ -24,11 +24,17 @@ const (
 	layoutSheet       = "Отчёт"
 	layoutDataSheet   = "_source"
 	layoutContentCols = 8 // section content spans columns A..H
-	layoutChartRows   = 13
+	layoutChartRows   = 16
+	layoutChartWidth  = 720 // spans the printable content width
+	layoutChartHeight = 300
 	layoutColWidth    = 13.0
 	layoutFirstColW   = 20.0
 	xlsxPaperA4       = 9
 )
+
+// horizNames maps an alignment slot (see alignByName) to an excelize
+// horizontal-alignment keyword.
+var horizNames = [3]string{"left", "center", "right"}
 
 var htmlTagRE = regexp.MustCompile(`<[^>]*>`)
 
@@ -51,13 +57,14 @@ func buildLayoutWorkbook(
 	}
 
 	w := &layoutWriter{
-		f:       f,
-		sheet:   layoutSheet,
-		data:    data,
-		styles:  styles,
-		row:     1,
-		maxCol:  1,
-		dataRow: 1,
+		f:         f,
+		sheet:     layoutSheet,
+		data:      data,
+		styles:    styles,
+		row:       1,
+		maxCol:    1,
+		dataRow:   1,
+		cellCache: make(map[cellStyleKey]int),
 	}
 
 	if s := w.sectionText(doc.Page.Header); s != "" {
@@ -122,7 +129,101 @@ type layoutWriter struct {
 	dataRow int // next free row on the hidden data sheet
 	hasData bool
 
+	// cellCache memoises composed table-cell styles. excelize NewStyle is
+	// wholesale (a decorated cell must restate its border and alignment), so
+	// one style id is built per distinct alignment / zebra / header /
+	// decoration combination and reused for every matching cell.
+	cellCache map[cellStyleKey]int
+
 	err error
+}
+
+// cellDecor is a format-neutral cell decoration. The conditional-format layer
+// fills it in; an undecorated cell passes the zero value.
+type cellDecor struct {
+	bg, fg string
+	bold   bool
+	italic bool
+}
+
+type cellStyleKey struct {
+	align  int
+	zebra  bool
+	header bool
+	decor  cellDecor
+}
+
+// cellStyle returns a memoised style id for a table cell. header cells get the
+// fill + rule band; body cells get a hairline box and, on odd rows, the zebra
+// fill. A non-zero cellDecor is applied wholesale on top: its background
+// replaces the zebra fill and its colour replaces the ink.
+func (w *layoutWriter) cellStyle(align int, zebra, header bool, dec cellDecor) int {
+	key := cellStyleKey{align: align, zebra: zebra, header: header, decor: dec}
+	if id, ok := w.cellCache[key]; ok {
+		return id
+	}
+
+	horiz := horizNames[0]
+	if align >= 0 && align < len(horizNames) {
+		horiz = horizNames[align]
+	}
+
+	font := &excelize.Font{Color: inkColor}
+	style := &excelize.Style{
+		Font:      font,
+		Alignment: &excelize.Alignment{Horizontal: horiz, Vertical: "center"},
+	}
+
+	if header {
+		font.Bold = true
+		font.Color = headerInkColor
+		style.Alignment.WrapText = true
+		style.Fill = excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{headerFill}}
+		style.Border = boxBorder(headerRule)
+	} else {
+		style.Border = boxBorder(hairline)
+		if zebra {
+			style.Fill = excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{zebraFill}}
+		}
+	}
+
+	if dec.bg != "" {
+		style.Fill = excelize.Fill{
+			Type: "pattern", Pattern: 1, Color: []string{strings.TrimPrefix(dec.bg, "#")},
+		}
+	}
+
+	if dec.fg != "" {
+		font.Color = strings.TrimPrefix(dec.fg, "#")
+	}
+
+	if dec.bold {
+		font.Bold = true
+	}
+
+	if dec.italic {
+		font.Italic = true
+	}
+
+	id, err := w.f.NewStyle(style)
+	if err != nil {
+		w.err = err
+
+		return 0
+	}
+
+	w.cellCache[key] = id
+
+	return id
+}
+
+func boxBorder(color string) []excelize.Border {
+	return []excelize.Border{
+		{Type: "top", Color: color, Style: 1},
+		{Type: "bottom", Color: color, Style: 1},
+		{Type: "left", Color: color, Style: 1},
+		{Type: "right", Color: color, Style: 1},
+	}
 }
 
 func (w *layoutWriter) touch(col int) {
@@ -178,7 +279,8 @@ func (w *layoutWriter) writeTitle(text string) {
 }
 
 func (w *layoutWriter) writeHeading(text string) {
-	w.mergeRange(1, layoutContentCols, w.row, text, w.styles.heading)
+	w.mergeRange(1, layoutContentCols, w.row, text, w.styles.band)
+	w.rowHeight(w.row, 20)
 	w.row++
 }
 
@@ -235,12 +337,15 @@ func (w *layoutWriter) writeMetricStrip(metrics []layoutpkg.ResolvedBlock) {
 				label = mb.Field
 			}
 
+			// The kpiLabel (fill + box top) and kpiValue (box sides +
+			// bottom) styles together frame each metric as a card.
 			// Uppercase mirrors the html .metric-label.
 			w.mergeRange(startCol, endCol, labelRow, strings.ToUpper(label), w.styles.kpiLabel)
 			w.mergeRange(startCol, endCol, valueRow, metricValue(rb.Rows, mb), w.styles.kpiValue)
 		}
 
-		w.rowHeight(valueRow, 28)
+		w.rowHeight(labelRow, 16)
+		w.rowHeight(valueRow, 30)
 		w.row += 3
 	}
 }
@@ -263,6 +368,10 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 		return
 	}
 
+	if title := strings.TrimSpace(tb.Title); title != "" {
+		w.writeHeading(title)
+	}
+
 	cols := tb.Columns
 	headerRow := w.row
 
@@ -272,7 +381,7 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 			title = c.Field
 		}
 
-		w.set(i+1, headerRow, title, w.styles.header[alignIndex(c)])
+		w.set(i+1, headerRow, title, w.cellStyle(alignIndex(c), false, true, cellDecor{}))
 	}
 
 	for r, row := range rb.Rows {
@@ -281,7 +390,7 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 				i+1,
 				headerRow+1+r,
 				layoutpkg.FormatValue(row[c.Field], c.Format),
-				w.styles.body[alignIndex(c)][r%2],
+				w.cellStyle(alignIndex(c), r%2 == 1, false, cellDecor{}),
 			)
 		}
 	}
@@ -358,13 +467,12 @@ func (w *layoutWriter) writeChart(rb layoutpkg.ResolvedBlock) {
 
 	cats := chartRef(sheet, 1, start+1, 1, start+n)
 
-	// No chart.Title: the heading row above already labels it, and an in-plot
-	// title just overflows the anchored chart box.
+	// A plain Excel chart: default series colours, no 3-D, no stacking, and no
+	// in-plot title (the heading band above already labels it).
 	chart := &excelize.Chart{
-		Type:       chartType(ch.Kind, ch.Stacked),
-		Dimension:  excelize.ChartDimension{Width: 460, Height: 240},
-		Legend:     excelize.ChartLegend{Position: legendPosition(ch.Legend)},
-		VaryColors: boolPtr(ch.Kind == models.ChartKindPie),
+		Type:      chartType(ch.Kind),
+		Dimension: excelize.ChartDimension{Width: layoutChartWidth, Height: layoutChartHeight},
+		Legend:    excelize.ChartLegend{Position: legendPosition(ch.Legend)},
 	}
 
 	for i := range ch.Series {
@@ -553,13 +661,12 @@ func textRowHeight(s string) float64 {
 	return 20
 }
 
-func chartType(kind models.ChartKind, stacked bool) excelize.ChartType {
+// chartType maps a chart kind to the plainest matching Excel chart. A block's
+// Stacked flag is intentionally ignored here: the workbook charts stay vanilla
+// clustered columns (the html export keeps the stacking).
+func chartType(kind models.ChartKind) excelize.ChartType {
 	switch kind {
 	case models.ChartKindBar:
-		if stacked {
-			return excelize.ColStacked
-		}
-
 		return excelize.Col
 	case models.ChartKindPie:
 		return excelize.Pie
@@ -601,21 +708,18 @@ var alignByName = map[models.ColumnAlign]int{
 	models.ColumnAlignRight:  2,
 }
 
-// layoutStyles holds every cell style id the linear renderer needs. The table
-// header and body are hand-painted (fill, hairline, zebra) to mirror the html
-// table — excelize's built-in table styles carry no dxf, so viewers such as
-// LibreOffice render them blank.
+// layoutStyles holds the fixed (non-table) cell style ids. Table header and
+// body cells are composed on demand by layoutWriter.cellStyle and memoised —
+// excelize's built-in table styles carry no dxf, so viewers such as
+// LibreOffice render them blank, and a conditional-format decoration multiplies
+// the combinations too far for a fixed set.
 type layoutStyles struct {
 	title    int
-	heading  int
-	kpiLabel int
-	kpiValue int
-
-	header [3]int    // by alignment: left, center, right
-	body   [3][2]int // [alignment][zebra row]
-
-	text int
-	note int
+	band     int // section-heading band: muted bold on the header fill
+	kpiLabel int // KPI card label sub-row: fill + box top and sides
+	kpiValue int // KPI card value sub-row: box sides and bottom
+	text     int
+	note     int
 }
 
 func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
@@ -632,58 +736,40 @@ func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 		return st, err
 	}
 
-	if st.heading, err = mk(&excelize.Style{
+	if st.band, err = mk(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 12, Color: mutedInkColor},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{headerFill}},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: headerRule, Style: 2},
+		},
+		Alignment: &excelize.Alignment{Vertical: "center"},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.kpiLabel, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 9, Color: subtleInkColor},
+		Font: &excelize.Font{Bold: true, Size: 9, Color: subtleInkColor},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{headerFill}},
+		Border: []excelize.Border{
+			{Type: "top", Color: headerRule, Style: 1},
+			{Type: "left", Color: headerRule, Style: 1},
+			{Type: "right", Color: headerRule, Style: 1},
+		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.kpiValue, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 20, Color: inkColor},
+		Font: &excelize.Font{Bold: true, Size: 20, Color: inkColor},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: headerRule, Style: 1},
+			{Type: "left", Color: headerRule, Style: 1},
+			{Type: "right", Color: headerRule, Style: 1},
+		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	}); err != nil {
 		return st, err
-	}
-
-	horizontals := [3]string{"left", "center", "right"}
-
-	for i, h := range horizontals {
-		if st.header[i], err = mk(&excelize.Style{
-			Font: &excelize.Font{Bold: true, Color: headerInkColor},
-			Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{headerFill}},
-			Border: []excelize.Border{
-				{Type: "top", Color: hairline, Style: 1},
-				{Type: "bottom", Color: headerRule, Style: 2},
-			},
-			Alignment: &excelize.Alignment{Horizontal: h, Vertical: "center", WrapText: true},
-		}); err != nil {
-			return st, err
-		}
-
-		for zebra := range 2 {
-			style := &excelize.Style{
-				Border: []excelize.Border{{Type: "bottom", Color: hairline, Style: 1}},
-				Alignment: &excelize.Alignment{
-					Horizontal: h, Vertical: "center", WrapText: true,
-				},
-			}
-			if zebra == 1 {
-				style.Fill = excelize.Fill{
-					Type: "pattern", Pattern: 1, Color: []string{zebraFill},
-				}
-			}
-
-			if st.body[i][zebra], err = mk(style); err != nil {
-				return st, err
-			}
-		}
 	}
 
 	if st.text, err = mk(&excelize.Style{
