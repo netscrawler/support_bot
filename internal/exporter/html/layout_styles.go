@@ -92,9 +92,11 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-row {
         display: flex;
         gap: 14px;
-        /* Cards keep their natural height: a short card next to a tall one is
-           not stretched, so a fixed-height chart never leaves a white band. */
-        align-items: flex-start;
+        /* Cards in a row match the tallest one; a chart grows its canvas into
+           the extra height (see .report-chart) rather than leaving a band. A
+           row is only as tall as its content, so a lone or last chart is not
+           stretched. */
+        align-items: stretch;
         break-inside: avoid;
         page-break-inside: avoid;
     }
@@ -141,9 +143,17 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-chart {
         position: relative;
         width: 100%%;
+        /* Grows into a row stretched by a taller sibling; the inline
+           min-height is the requested size and the floor. The canvas is
+           taken out of flow below so a responsive Chart.js redraw can never
+           feed back into this box's height (that loop is what balloons a
+           lone chart). */
+        flex: 1 1 auto;
     }
 
     .report-chart canvas {
+        position: absolute;
+        inset: 0;
         width: 100%% !important;
         height: 100%% !important;
     }

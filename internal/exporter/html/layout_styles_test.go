@@ -19,6 +19,7 @@ func TestLayoutStylesPortrait(t *testing.T) {
 		".card-title {",
 		".metric-value {",
 		".report-row {",
+		"align-items: stretch;",
 		".report-table th {",
 		"font-variant-numeric: tabular-nums;",
 		"tbody tr:nth-child(even)",
