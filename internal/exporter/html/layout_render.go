@@ -300,10 +300,15 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
 	win := pb.Rows[pb.RowOffset:end]
 
-	// overflow: hidden clips only the rounded corners — the card auto-sizes to
-	// the table height (rows are never hidden) and every table owns a
-	// full-width row so nothing is clipped horizontally.
-	out.str(`<div class="card" style="padding: 0; overflow: hidden;">`)
+	// .table-card zeroes the card padding and clips the rounded corners; the
+	// card still auto-sizes to the table height (rows are never hidden) and
+	// every table owns a full-width row so nothing is clipped horizontally.
+	out.str(`<div class="card table-card">`)
+
+	if title := strings.TrimSpace(tb.Title); title != "" {
+		out.printf(`<h3 class="card-title">%s</h3>`, escapeHTML(title))
+	}
+
 	out.str(`<table class="report-table">`)
 
 	writeColGroup(out, tb.Columns)

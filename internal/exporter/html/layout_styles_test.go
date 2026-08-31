@@ -25,6 +25,9 @@ func TestLayoutStylesPortrait(t *testing.T) {
 		"tbody tr:nth-child(even)",
 		".report-table .col-num {",
 		".align-right { text-align: right; }",
+		// Every cell carries a full border so the grid reads as a table.
+		"border: 1px solid #e6e9ee;",
+		".table-card {",
 		"break-after: page;",
 	} {
 		if !strings.Contains(got, want) {
@@ -32,15 +35,21 @@ func TestLayoutStylesPortrait(t *testing.T) {
 		}
 	}
 
-	for _, notWant := range []string{
-		// The print block must not clamp a page's height: an overflowing page
-		// spills onto another sheet, it is never clipped.
-		"max-height:",
-		"overflow: hidden",
-	} {
-		if strings.Contains(got, notWant) {
-			t.Errorf("layoutStyles must not contain %q", notWant)
-		}
+	// The print block must not clamp a page's height: an overflowing page
+	// spills onto another sheet, it is never clipped.
+	if strings.Contains(got, "max-height:") {
+		t.Error("layoutStyles clamps height with max-height")
+	}
+
+	// A table card may clip its own rounded corners, but the print block must
+	// never hide page overflow.
+	_, printBlock, ok := strings.Cut(got, "@media print {")
+	if !ok {
+		t.Fatal("layoutStyles has no @media print block")
+	}
+
+	if strings.Contains(printBlock, "overflow: hidden") {
+		t.Errorf("@media print hides page overflow: %q", printBlock)
 	}
 
 	// The .report-table th rule must not hard-code an alignment, or it would

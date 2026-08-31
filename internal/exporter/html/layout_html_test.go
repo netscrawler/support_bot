@@ -216,6 +216,34 @@ func TestExportLayoutTableHonorsColumnWidth(t *testing.T) {
 	}
 }
 
+func TestExportLayoutTableRendersTitle(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "d",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{
+			Title:   "Каналы обращений",
+			Columns: []models.Column{{Field: "a", Title: "A"}},
+		},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"d": {{"a": "x"}}},
+		models.Export{Layout: &l, FileName: new("title")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+	if !strings.Contains(got, `<div class="card table-card">`) {
+		t.Error("titled table missing the table-card class")
+	}
+
+	if !strings.Contains(got, `<h3 class="card-title">Каналы обращений</h3>`) {
+		t.Error("table title not rendered as a card heading")
+	}
+}
+
 func TestExportLayoutMetricFormat(t *testing.T) {
 	l := models.Layout{Version: 1, Blocks: []models.Block{{
 		ID: "m", Type: models.BlockTypeMetric, Dataset: "kpi",

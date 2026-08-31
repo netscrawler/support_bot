@@ -159,35 +159,43 @@ func layoutStyles(page models.PageConfig) template.HTML {
     }
 
     .report-table {
-        width: 100%%;
+        /* Auto width, capped at the card: columns size to their content so a
+           value sits directly under its header instead of being pushed to a
+           far edge. A short table just leaves white space to its right. */
+        width: auto;
+        max-width: 100%%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 12px;
         font-variant-numeric: tabular-nums;
     }
 
     .report-table th {
-        background: #f4f6f8;
-        color: #5b6572;
+        background: #eef1f4;
+        color: #4c5773;
         font-weight: 600;
-        padding: 10px 14px;
-        border-bottom: 2px solid #d9dee5;
+        padding: 6px 10px;
+        border: 1px solid #d9dee5;
         white-space: nowrap;
         vertical-align: bottom;
     }
 
     .report-table td {
-        padding: 9px 14px;
-        border-top: 1px solid #eceef1;
+        padding: 6px 10px;
+        border: 1px solid #e6e9ee;
         color: #2e353b;
     }
 
-    .report-table tbody tr:first-child td { border-top: none; }
-    .report-table tbody tr:nth-child(even) { background: #fbfcfd; }
+    .report-table tbody tr:nth-child(even) { background: #f7f9fb; }
     .report-table tbody td:first-child { font-weight: 500; }
 
-    /* Numeric columns never wrap; they also shrink toward their content so a
-       row's values stay near its label instead of drifting to the edge. */
-    .report-table .col-num { white-space: nowrap; width: 8em; }
+    /* Numeric values never wrap onto a second line. */
+    .report-table .col-num { white-space: nowrap; }
+
+    /* A titled table keeps the heading padded while the table itself runs
+       edge to edge inside the card. align-items keeps the flex column from
+       stretching the auto-width table back to full width. */
+    .table-card { padding: 0; overflow: hidden; align-items: flex-start; }
+    .table-card .card-title { padding: 14px 16px 0; }
 
     .align-left { text-align: left; }
     .align-center { text-align: center; }
