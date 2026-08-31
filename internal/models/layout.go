@@ -73,9 +73,49 @@ type TableSort struct {
 }
 
 type TableBlock struct {
-	Columns []Column    `json:"columns,omitempty"`
-	Sort    []TableSort `json:"sort,omitempty"`
-	Limit   *int        `json:"limit,omitempty"`
+	// Title is an optional heading rendered above the table, matching
+	// ChartBlock.Title.
+	Title       string      `json:"title,omitempty"`
+	Columns     []Column    `json:"columns,omitempty"`
+	Sort        []TableSort `json:"sort,omitempty"`
+	Limit       *int        `json:"limit,omitempty"`
+	Conditional []CondRule  `json:"conditional,omitempty"`
+}
+
+// CondTarget selects what a CondRule paints when its expression matches a row.
+type CondTarget string
+
+const (
+	CondTargetCell CondTarget = "cell"
+	CondTargetRow  CondTarget = "row"
+)
+
+// CondStyle names a built-in colour preset for a CondRule.
+type CondStyle string
+
+const (
+	CondStyleGood    CondStyle = "good"
+	CondStyleWarning CondStyle = "warning"
+	CondStyleBad     CondStyle = "bad"
+	CondStyleMuted   CondStyle = "muted"
+)
+
+// CondRule is one conditional-formatting rule on a TableBlock. When the CEL
+// expression When evaluates true for a row, Target decides whether the whole
+// row or the named Columns are decorated. Style names a preset; BG, FG, Bold
+// and Italic override it. Rules apply in declaration order, last match wins per
+// cell, and a cell rule out-ranks a row rule on the same cell. The expression
+// sees row (this row's fields), value (the current cell) and rows (every row in
+// the block).
+type CondRule struct {
+	When    string     `json:"when"`
+	Target  CondTarget `json:"target,omitempty"`
+	Columns []string   `json:"columns,omitempty"`
+	Style   CondStyle  `json:"style,omitempty"`
+	BG      string     `json:"bg,omitempty"`
+	FG      string     `json:"fg,omitempty"`
+	Bold    bool       `json:"bold,omitempty"`
+	Italic  bool       `json:"italic,omitempty"`
 }
 
 type ChartKind string

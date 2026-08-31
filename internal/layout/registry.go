@@ -152,6 +152,7 @@ func cloneBlock(block models.Block) models.Block {
 		table := *block.Table
 		table.Columns = append([]models.Column(nil), block.Table.Columns...)
 		table.Sort = append([]models.TableSort(nil), block.Table.Sort...)
+		table.Conditional = append([]models.CondRule(nil), block.Table.Conditional...)
 		clone.Table = &table
 	}
 
@@ -302,6 +303,84 @@ func validateTableBlock(block models.Block) error {
 
 	if block.Table.Limit != nil && *block.Table.Limit < 0 {
 		return fmt.Errorf("table limit must not be negative")
+	}
+
+	for i, rule := range block.Table.Conditional {
+		if err := validateCondRule(i, rule, seen); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateCondRule checks one conditional-format rule. columns is the set of
+// column fields declared on the table, so a cell rule cannot name a column that
+// does not exist. The CEL expression itself is compiled by the exporter, not
+// here — cel-go must stay out of this package.
+func validateCondRule(idx int, rule models.CondRule, columns map[string]struct{}) error {
+	if strings.TrimSpace(rule.When) == "" {
+		return fmt.Errorf("conditional rule %d: when must not be empty", idx)
+	}
+
+	switch rule.Target {
+	case "", models.CondTargetCell, models.CondTargetRow:
+	default:
+		return fmt.Errorf("conditional rule %d: unsupported target %q", idx, rule.Target)
+	}
+
+	if rule.Target != models.CondTargetRow {
+		if len(rule.Columns) == 0 {
+			return fmt.Errorf("conditional rule %d: cell target needs at least one column", idx)
+		}
+
+		for _, field := range rule.Columns {
+			if _, ok := columns[strings.TrimSpace(field)]; !ok {
+				return fmt.Errorf("conditional rule %d: unknown column %q", idx, field)
+			}
+		}
+	}
+
+	switch rule.Style {
+	case "",
+		models.CondStyleGood,
+		models.CondStyleWarning,
+		models.CondStyleBad,
+		models.CondStyleMuted:
+	default:
+		return fmt.Errorf("conditional rule %d: unknown style %q", idx, rule.Style)
+	}
+
+	if err := validateHexColor(rule.BG); err != nil {
+		return fmt.Errorf("conditional rule %d: bg %w", idx, err)
+	}
+
+	if err := validateHexColor(rule.FG); err != nil {
+		return fmt.Errorf("conditional rule %d: fg %w", idx, err)
+	}
+
+	if rule.Style == "" && rule.BG == "" && rule.FG == "" && !rule.Bold && !rule.Italic {
+		return fmt.Errorf("conditional rule %d: rule applies no styling", idx)
+	}
+
+	return nil
+}
+
+func validateHexColor(s string) error {
+	if s == "" {
+		return nil
+	}
+
+	if len(s) != 7 || s[0] != '#' {
+		return fmt.Errorf("must be #rrggbb")
+	}
+
+	for _, r := range s[1:] {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f', r >= 'A' && r <= 'F':
+		default:
+			return fmt.Errorf("must be #rrggbb")
+		}
 	}
 
 	return nil

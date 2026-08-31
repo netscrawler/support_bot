@@ -201,6 +201,105 @@ func TestValidate(t *testing.T) {
 			wantErr:     true,
 			errContains: "pie chart supports exactly one series",
 		},
+		{
+			name: "table with valid conditional rules",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Title:   "Заявки по дням",
+							Columns: []models.Column{{Field: "accepted"}, {Field: "target"}},
+							Conditional: []models.CondRule{
+								{
+									When:    "value < 100",
+									Target:  models.CondTargetCell,
+									Columns: []string{"accepted"},
+									Style:   models.CondStyleBad,
+								},
+								{
+									When:   "row.accepted < row.target",
+									Target: models.CondTargetRow,
+									BG:     "#FFF4E5",
+									Bold:   true,
+								},
+							},
+						},
+					},
+				},
+			},
+			datasets: []string{"daily"},
+		},
+		{
+			name: "conditional cell rule with unknown column",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Columns: []models.Column{{Field: "accepted"}},
+							Conditional: []models.CondRule{
+								{
+									When:    "value < 100",
+									Target:  models.CondTargetCell,
+									Columns: []string{"missing"},
+									Style:   models.CondStyleBad,
+								},
+							},
+						},
+					},
+				},
+			},
+			datasets:    []string{"daily"},
+			wantErr:     true,
+			errContains: "unknown column",
+		},
+		{
+			name: "conditional rule with no styling",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Columns: []models.Column{{Field: "accepted"}},
+							Conditional: []models.CondRule{
+								{When: "value < 100", Target: models.CondTargetRow},
+							},
+						},
+					},
+				},
+			},
+			datasets:    []string{"daily"},
+			wantErr:     true,
+			errContains: "applies no styling",
+		},
+		{
+			name: "conditional rule with bad hex colour",
+			layout: models.Layout{
+				Blocks: []models.Block{
+					{
+						ID:      "daily",
+						Type:    models.BlockTypeTable,
+						Dataset: "daily",
+						Table: &models.TableBlock{
+							Columns: []models.Column{{Field: "accepted"}},
+							Conditional: []models.CondRule{
+								{When: "value < 100", Target: models.CondTargetRow, BG: "red"},
+							},
+						},
+					},
+				},
+			},
+			datasets:    []string{"daily"},
+			wantErr:     true,
+			errContains: "#rrggbb",
+		},
 	}
 
 	for _, tt := range tests {
