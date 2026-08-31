@@ -159,11 +159,10 @@ func layoutStyles(page models.PageConfig) template.HTML {
     }
 
     .report-table {
-        /* Auto width, capped at the card: columns size to their content so a
-           value sits directly under its header instead of being pushed to a
-           far edge. A short table just leaves white space to its right. */
-        width: auto;
-        max-width: 100%%;
+        /* Fill the card. Numeric columns then collapse to their content
+           (see .col-num) so a value stays tight under its header and the
+           freed width flows to the label column, not a blank gap. */
+        width: 100%%;
         border-collapse: collapse;
         font-size: 12px;
         font-variant-numeric: tabular-nums;
@@ -188,13 +187,14 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-table tbody tr:nth-child(even) { background: #f7f9fb; }
     .report-table tbody td:first-child { font-weight: 500; }
 
-    /* Numeric values never wrap onto a second line. */
-    .report-table .col-num { white-space: nowrap; }
+    /* Short-token columns collapse to their content: the 1%% is a floor the
+       auto layout rounds up to the widest cell, so the label columns keep
+       the remaining width. */
+    .report-table .col-num { width: 1%%; white-space: nowrap; }
 
     /* A titled table keeps the heading padded while the table itself runs
-       edge to edge inside the card. align-items keeps the flex column from
-       stretching the auto-width table back to full width. */
-    .table-card { padding: 0; overflow: hidden; align-items: flex-start; }
+       edge to edge inside the card. */
+    .table-card { padding: 0; overflow: hidden; }
     .table-card .card-title { padding: 14px 16px 0; }
 
     .align-left { text-align: left; }

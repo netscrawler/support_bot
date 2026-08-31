@@ -432,12 +432,17 @@ func writeColGroup(out *errWriter, cols []models.Column) {
 
 // columnClasses is the class list for a column's <th> and <td>: an alignment
 // class (explicit Align, else right for a numeric Format, else left) plus
-// col-num for an auto-width numeric column so it shrinks to its content and
-// the label column keeps the slack.
+// col-num for a short-token column so it shrinks to its content and the label
+// column keeps the slack. A numeric Format or an explicit right/centre
+// alignment both mark such a column.
 func columnClasses(c models.Column) string {
 	cls := alignClass(c)
 
-	if c.Width == 0 && isNumericFormat(c.Format) {
+	tight := isNumericFormat(c.Format) ||
+		c.Align == models.ColumnAlignRight ||
+		c.Align == models.ColumnAlignCenter
+
+	if c.Width == 0 && tight {
 		cls += " col-num"
 	}
 
