@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"support_bot/internal/evaluator"
 	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
 )
@@ -116,7 +117,9 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 	return nil
 }
 
-// validateLayout validates a Layout using the block registry (Phase 3.4)
+// validateLayout validates a Layout using the block registry, then compiles
+// every conditional-format expression so a malformed rule fails here rather
+// than at export time, where it would abort the whole report send.
 func (r *ReportValidation) validateLayout(layout models.Layout, report models.Report) error {
 	// Collect dataset keys from report queries
 	datasetKeys := make([]string, 0, len(report.Queries))
@@ -127,6 +130,37 @@ func (r *ReportValidation) validateLayout(layout models.Layout, report models.Re
 	// Use the layout registry to validate (package-level function)
 	if err := layoutpkg.Validate(layout, datasetKeys); err != nil {
 		return err
+	}
+
+	return validateCondExpressions(layout)
+}
+
+// validateCondExpressions compiles every table conditional-format rule so a
+// syntax or type error is reported at author time.
+func validateCondExpressions(layout models.Layout) error {
+	var exprs []string
+
+	for _, b := range layout.Blocks {
+		if b.Table == nil {
+			continue
+		}
+
+		for _, rule := range b.Table.Conditional {
+			exprs = append(exprs, rule.When)
+		}
+	}
+
+	if len(exprs) == 0 {
+		return nil
+	}
+
+	engine, err := evaluator.NewRowEngine()
+	if err != nil {
+		return fmt.Errorf("conditional-format engine: %w", err)
+	}
+
+	if err := engine.Compile(exprs...); err != nil {
+		return fmt.Errorf("conditional-format rule: %w", err)
 	}
 
 	return nil
