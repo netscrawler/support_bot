@@ -92,7 +92,9 @@ func layoutStyles(page models.PageConfig) template.HTML {
     .report-row {
         display: flex;
         gap: 14px;
-        align-items: stretch;
+        /* Cards keep their natural height: a short card next to a tall one is
+           not stretched, so a fixed-height chart never leaves a white band. */
+        align-items: flex-start;
         break-inside: avoid;
         page-break-inside: avoid;
     }
