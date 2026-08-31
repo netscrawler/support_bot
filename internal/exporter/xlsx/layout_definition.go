@@ -25,8 +25,8 @@ const (
 	layoutDataSheet   = "_source"
 	layoutContentCols = 8 // section content spans columns A..H
 	layoutChartRows   = 13
-	layoutColWidth    = 10.0
-	layoutFirstColW   = 16.0
+	layoutColWidth    = 13.0
+	layoutFirstColW   = 20.0
 	xlsxPaperA4       = 9
 )
 
