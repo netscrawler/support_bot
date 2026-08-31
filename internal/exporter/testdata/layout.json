@@ -95,14 +95,18 @@
       "dataset": "channels",
       "pos": {"x": 8, "y": 6, "w": 4, "h": 0},
       "table": {
+        "title": "Каналы обращений",
         "columns": [
           {"field": "channel",  "title": "Канал",     "align": "left",   "width": 160},
-          {"field": "requests", "title": "Обращений", "align": "right"},
-          {"field": "resolved", "title": "Решено",    "align": "right"},
+          {"field": "requests", "title": "Обращений", "align": "right",  "format": "number"},
+          {"field": "resolved", "title": "Решено",    "align": "right",  "format": "number"},
           {"field": "share",    "title": "Доля",      "align": "center", "format": "percent"}
         ],
         "sort": [{"field": "requests", "desc": true}],
-        "limit": 10
+        "limit": 10,
+        "conditional": [
+          {"when": "value < 0.1", "target": "cell", "columns": ["share"], "style": "bad"}
+        ]
       }
     },
     {
@@ -111,16 +115,30 @@
       "dataset": "daily",
       "pos": {"x": 0, "y": 10, "w": 12, "h": 0},
       "table": {
+        "title": "Заявки по дням",
         "columns": [
           {"field": "date",     "title": "Дата"},
           {"field": "channel",  "title": "Канал",     "align": "center"},
-          {"field": "accepted", "title": "Принято",   "align": "right"},
-          {"field": "rejected", "title": "Отклонено", "align": "right"},
-          {"field": "target",   "title": "План",      "align": "right"}
+          {"field": "accepted", "title": "Принято",   "align": "right", "format": "number"},
+          {"field": "rejected", "title": "Отклонено", "align": "right", "format": "number"},
+          {"field": "target",   "title": "План",      "align": "right", "format": "number"}
         ],
         "sort": [
           {"field": "channel"},
           {"field": "accepted", "desc": true}
+        ],
+        "conditional": [
+          {
+            "when": "has(row.accepted) && has(row.target) && row.accepted < row.target",
+            "target": "row",
+            "style": "warning"
+          },
+          {
+            "when": "has(row.accepted) && has(row.target) && row.accepted >= row.target",
+            "target": "cell",
+            "columns": ["accepted"],
+            "style": "good"
+          }
         ]
       }
     },

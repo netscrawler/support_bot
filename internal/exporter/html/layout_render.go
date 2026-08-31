@@ -1,12 +1,14 @@
 package html
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	htmltemplate "html/template"
 	"io"
 	"strings"
 
+	"support_bot/internal/exporter/condfmt"
 	"support_bot/internal/exporter/render"
 	"support_bot/internal/models"
 
@@ -59,6 +61,7 @@ func (e *errWriter) printf(format string, a ...any) {
 // one .report-page per packed page, each block placed on its flow row inside a
 // flex .report-grid. Pages carry min-height, not height, so nothing is clipped.
 func renderLayoutDocument(
+	ctx context.Context,
 	w io.Writer,
 	rc *render.RenderContext,
 	pages []layoutpkg.Page,
@@ -94,7 +97,7 @@ func renderLayoutDocument(
 
 			out.printf(`<div class="report-grid-item" style="flex-grow: %d;">`, pb.Pos.W)
 
-			if err := renderLayoutBlock(out, rc, pb); err != nil {
+			if err := renderLayoutBlock(ctx, out, rc, pb); err != nil {
 				return err
 			}
 
@@ -117,12 +120,17 @@ func renderLayoutDocument(
 	return out.err
 }
 
-func renderLayoutBlock(out *errWriter, rc *render.RenderContext, pb layoutpkg.PlacedBlock) error {
+func renderLayoutBlock(
+	ctx context.Context,
+	out *errWriter,
+	rc *render.RenderContext,
+	pb layoutpkg.PlacedBlock,
+) error {
 	switch pb.Block.Type {
 	case models.BlockTypeChart:
 		return renderLayoutChartBlock(out, rc, pb)
 	case models.BlockTypeTable:
-		return renderLayoutTableBlock(out, pb)
+		return renderLayoutTableBlock(ctx, out, rc, pb)
 	case models.BlockTypeMetric:
 		return renderLayoutMetricBlock(out, pb)
 	case models.BlockTypeText:
@@ -291,10 +299,22 @@ func buildLayoutChartOptions(ch *models.ChartBlock) map[string]any {
 	return opts
 }
 
-func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
+func renderLayoutTableBlock(
+	ctx context.Context,
+	out *errWriter,
+	rc *render.RenderContext,
+	pb layoutpkg.PlacedBlock,
+) error {
 	tb := pb.Block.Table
 	if tb == nil {
 		return fmt.Errorf("html: table block %q missing table config", pb.Block.ID)
+	}
+
+	// pb.Rows is the block's full row set; the conditional-format rules see all
+	// of it even though only win is rendered on this page.
+	fm, err := condfmt.New(rc.CondEngine, tb.Conditional, pb.Rows)
+	if err != nil {
+		return fmt.Errorf("html: table block %q: %w", pb.Block.ID, err)
 	}
 
 	end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
@@ -322,12 +342,14 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	out.str(`</tr></thead><tbody>`)
 
 	for _, r := range win {
-		out.str(`<tr>`)
+		rowDec := fm.Row(ctx, r)
+		out.printf(`<tr%s>`, condStyleAttr(rowDec, true))
 
 		for _, c := range tb.Columns {
 			out.printf(
-				`<td class="%s">%s</td>`,
+				`<td class="%s"%s>%s</td>`,
 				columnClasses(c),
+				condStyleAttr(fm.Cell(ctx, c.Field, r, rowDec), false),
 				htmltemplate.HTMLEscapeString(layoutpkg.FormatValue(r[c.Field], c.Format)),
 			)
 		}
@@ -338,6 +360,41 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	out.str(`</tbody></table></div>`)
 
 	return out.err
+}
+
+// condStyleAttr renders a Decoration as an inline style attribute (with a
+// leading space) or "" when there is nothing to emit. bgOnly keeps a row band
+// to its background so per-cell colour/weight still wins on the td.
+func condStyleAttr(d condfmt.Decoration, bgOnly bool) string {
+	if !d.Set {
+		return ""
+	}
+
+	var decls strings.Builder
+
+	if d.BG != "" {
+		fmt.Fprintf(&decls, "background:%s;", d.BG)
+	}
+
+	if !bgOnly {
+		if d.FG != "" {
+			fmt.Fprintf(&decls, "color:%s;", d.FG)
+		}
+
+		if d.Bold {
+			decls.WriteString("font-weight:600;")
+		}
+
+		if d.Italic {
+			decls.WriteString("font-style:italic;")
+		}
+	}
+
+	if decls.Len() == 0 {
+		return ""
+	}
+
+	return ` style="` + decls.String() + `"`
 }
 
 // writeColGroup emits a <colgroup> only when at least one column pins an

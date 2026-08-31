@@ -244,6 +244,105 @@ func TestExportLayoutTableRendersTitle(t *testing.T) {
 	}
 }
 
+func TestExportLayoutTableConditionalFormat(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "d",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{
+			Columns: []models.Column{
+				{Field: "channel", Title: "Канал"},
+				{Field: "share", Title: "Доля", Format: "percent"},
+			},
+			Conditional: []models.CondRule{
+				{
+					When:   "has(row.share) && row.share < 0.2",
+					Target: models.CondTargetRow,
+					Style:  models.CondStyleWarning,
+				},
+				{
+					When:    "value < 0.1",
+					Target:  models.CondTargetCell,
+					Columns: []string{"share"},
+					Style:   models.CondStyleBad,
+				},
+			},
+		},
+	}}}
+
+	data := models.Dataset{"d": {
+		{"channel": "Веб", "share": 0.60},
+		{"channel": "Почта", "share": 0.08},
+	}}
+
+	out, err := html.Exporter{}.Export(data, models.Export{Layout: &l, FileName: new("cf")})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+
+	// The low-share row carries the warning background...
+	if !strings.Contains(got, `<tr style="background:#FFF4E5;">`) {
+		t.Error("row rule did not colour the low-share row")
+	}
+
+	// ...and its share cell is overridden by the more specific bad rule.
+	if !strings.Contains(got, `background:#FDECEA;color:#B42318;`) {
+		t.Error("cell rule did not out-rank the row rule on the share cell")
+	}
+
+	// The healthy row is untouched.
+	if strings.Count(got, "<tr>") < 1 {
+		t.Error("a row with no matching rule should have a plain <tr>")
+	}
+}
+
+func TestExportLayoutConditionalRowsSeesFullSetAcrossPages(t *testing.T) {
+	rows := make([]map[string]any, 120)
+	for i := range rows {
+		rows[i] = map[string]any{"n": i}
+	}
+	// The maximum (n = 119) lands well past the first page.
+
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "big",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{
+			Columns: []models.Column{{Field: "n", Title: "N", Format: "number"}},
+			Conditional: []models.CondRule{{
+				When:    "rows.all(r, r.n <= value)",
+				Target:  models.CondTargetCell,
+				Columns: []string{"n"},
+				Style:   models.CondStyleGood,
+			}},
+		},
+	}}}
+
+	out, err := html.Exporter{}.Export(
+		models.Dataset{"big": rows},
+		models.Export{Layout: &l, FileName: new("cfpg")},
+	)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+
+	got := out[0].Data.String()
+
+	if pages := strings.Count(got, `class="report-page"`); pages < 2 {
+		t.Fatalf("expected the table to paginate, got %d page(s)", pages)
+	}
+
+	// Exactly one cell (the global maximum) is highlighted, proving `rows`
+	// bound to the full set rather than the current page window.
+	if n := strings.Count(got, "background:#E6F4EA;"); n != 1 {
+		t.Fatalf("want the single global-max cell highlighted, got %d", n)
+	}
+
+	if !strings.Contains(got, `background:#E6F4EA;color:#1E7E34;">119</td>`) {
+		t.Error("the highlighted cell is not the global maximum (119)")
+	}
+}
+
 func TestExportLayoutMetricFormat(t *testing.T) {
 	l := models.Layout{Version: 1, Blocks: []models.Block{{
 		ID: "m", Type: models.BlockTypeMetric, Dataset: "kpi",

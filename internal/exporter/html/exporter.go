@@ -10,6 +10,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 
+	"support_bot/internal/evaluator"
 	"support_bot/internal/exporter/render"
 	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
@@ -44,7 +45,7 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 
 // Render implements render.Renderer for the pure-layout path.
 func (e Exporter) Render(
-	_ context.Context,
+	ctx context.Context,
 	data models.Dataset,
 	doc layoutpkg.ResolvedDocument,
 	pages []layoutpkg.Page,
@@ -63,6 +64,15 @@ func (e Exporter) Render(
 		NextID: render.Counter("report-chart"),
 	}
 
+	if render.LayoutHasCondRules(doc) {
+		engine, err := evaluator.NewRowEngine()
+		if err != nil {
+			return nil, fmt.Errorf("html: conditional-format engine: %w", err)
+		}
+
+		rc.CondEngine = engine
+	}
+
 	buf.WriteString("<!doctype html>\n<html lang=\"ru\">\n<head>\n<meta charset=\"utf-8\">\n")
 	buf.WriteString(string(layoutStyles(doc.Page)))
 	buf.WriteString("\n")
@@ -74,7 +84,7 @@ func (e Exporter) Render(
 
 	buf.WriteString("</head>\n<body>\n")
 
-	if err := renderLayoutDocument(&buf, rc, pages, doc.Page); err != nil {
+	if err := renderLayoutDocument(ctx, &buf, rc, pages, doc.Page); err != nil {
 		return nil, err
 	}
 

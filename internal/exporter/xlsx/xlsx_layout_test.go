@@ -2,6 +2,7 @@ package xlsx_test
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"support_bot/internal/exporter/xlsx"
@@ -175,6 +176,57 @@ func TestExporterLayoutFormatsAndAligns(t *testing.T) {
 
 	if st.Alignment == nil || st.Alignment.Horizontal != "right" {
 		t.Errorf("share cell not right-aligned: %+v", st.Alignment)
+	}
+}
+
+func TestExporterLayoutConditionalFormat(t *testing.T) {
+	l := models.Layout{Version: 1, Blocks: []models.Block{{
+		ID: "t", Type: models.BlockTypeTable, Dataset: "ch",
+		Pos: models.GridPosition{W: 12, H: 0},
+		Table: &models.TableBlock{
+			Title: "Каналы",
+			Columns: []models.Column{
+				{Field: "channel", Title: "Канал", Align: models.ColumnAlignLeft},
+				{Field: "share", Title: "Доля", Align: models.ColumnAlignRight, Format: "percent"},
+			},
+			Conditional: []models.CondRule{{
+				When:    "value < 0.1",
+				Target:  models.CondTargetCell,
+				Columns: []string{"share"},
+				Style:   models.CondStyleBad,
+			}},
+		},
+	}}}
+
+	data := models.Dataset{"ch": {
+		{"channel": "Веб", "share": 0.6},
+		{"channel": "Почта", "share": 0.07},
+	}}
+
+	f := openLayout(t, mustExport(t, data, "cf", l))
+
+	low := cellFinder(t, f, "7%")
+	styleID, err := f.GetCellStyle(layoutSheet, low)
+	if err != nil {
+		t.Fatalf("get cell style: %v", err)
+	}
+
+	st, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatalf("get style: %v", err)
+	}
+
+	if st.Fill.Type != "pattern" || len(st.Fill.Color) == 0 ||
+		!strings.EqualFold(st.Fill.Color[0], "FDECEA") {
+		t.Errorf("bad-rule cell not filled with the preset colour: %+v", st.Fill)
+	}
+
+	high := cellFinder(t, f, "60%")
+	highStyleID, _ := f.GetCellStyle(layoutSheet, high)
+	highSt, _ := f.GetStyle(highStyleID)
+
+	if len(highSt.Fill.Color) > 0 && strings.EqualFold(highSt.Fill.Color[0], "FDECEA") {
+		t.Error("the healthy cell was coloured by the rule")
 	}
 }
 

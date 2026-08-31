@@ -8,6 +8,7 @@ import (
 	"maps"
 	"strconv"
 
+	"support_bot/internal/evaluator"
 	"support_bot/internal/layout"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
@@ -42,6 +43,9 @@ type RenderContext struct {
 	Funcs template.FuncMap
 	// NextID yields deterministic per-render element ids.
 	NextID func() string
+	// CondEngine evaluates table conditional-format rules. It is nil when no
+	// table block declares any rule.
+	CondEngine *evaluator.RowEngine
 }
 
 // FuncMap is the shared template-function set for text / metric go-templates:
@@ -52,6 +56,19 @@ func FuncMap() template.FuncMap {
 	maps.Copy(fm, text.FuncMap)
 
 	return fm
+}
+
+// LayoutHasCondRules reports whether any table block in the document declares a
+// conditional-format rule, so a renderer only builds a RowEngine when one is
+// needed.
+func LayoutHasCondRules(doc layout.ResolvedDocument) bool {
+	for i := range doc.Blocks {
+		if tb := doc.Blocks[i].Block.Table; tb != nil && len(tb.Conditional) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Counter returns a deterministic id generator yielding "<prefix>-1",

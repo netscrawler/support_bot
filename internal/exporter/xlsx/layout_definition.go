@@ -2,11 +2,14 @@ package xlsx
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
 	texttemplate "text/template"
 
+	"support_bot/internal/evaluator"
+	"support_bot/internal/exporter/condfmt"
 	"support_bot/internal/models"
 
 	"github.com/xuri/excelize/v2"
@@ -41,6 +44,7 @@ var htmlTagRE = regexp.MustCompile(`<[^>]*>`)
 // buildLayoutWorkbook renders a resolved declarative document to a single-sheet
 // workbook.
 func buildLayoutWorkbook(
+	ctx context.Context,
 	data models.Dataset,
 	doc layoutpkg.ResolvedDocument,
 ) (*bytes.Buffer, error) {
@@ -59,12 +63,19 @@ func buildLayoutWorkbook(
 	w := &layoutWriter{
 		f:         f,
 		sheet:     layoutSheet,
+		ctx:       ctx,
 		data:      data,
 		styles:    styles,
 		row:       1,
 		maxCol:    1,
 		dataRow:   1,
 		cellCache: make(map[cellStyleKey]int),
+	}
+
+	if anyCondRules(doc) {
+		if w.cond, err = evaluator.NewRowEngine(); err != nil {
+			return nil, fmt.Errorf("conditional-format engine: %w", err)
+		}
 	}
 
 	if s := w.sectionText(doc.Page.Header); s != "" {
@@ -119,8 +130,10 @@ func buildLayoutWorkbook(
 type layoutWriter struct {
 	f      *excelize.File
 	sheet  string
+	ctx    context.Context //nolint:containedctx // per-render bag, mirrors render.RenderContext
 	data   models.Dataset
 	styles layoutStyles
+	cond   *evaluator.RowEngine // nil unless a table declares a rule
 
 	row      int // next free 1-based worksheet row
 	maxCol   int // widest column index written, for the final width pass
@@ -368,6 +381,13 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 		return
 	}
 
+	fm, err := condfmt.New(w.cond, tb.Conditional, rb.Rows)
+	if err != nil {
+		w.err = fmt.Errorf("table block %q: %w", rb.Block.ID, err)
+
+		return
+	}
+
 	if title := strings.TrimSpace(tb.Title); title != "" {
 		w.writeHeading(title)
 	}
@@ -385,12 +405,15 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 	}
 
 	for r, row := range rb.Rows {
+		rowDec := fm.Row(w.ctx, row)
+
 		for i, c := range cols {
+			dec := toCellDecor(fm.Cell(w.ctx, c.Field, row, rowDec))
 			w.set(
 				i+1,
 				headerRow+1+r,
 				layoutpkg.FormatValue(row[c.Field], c.Format),
-				w.cellStyle(alignIndex(c), r%2 == 1, false, cellDecor{}),
+				w.cellStyle(alignIndex(c), r%2 == 1, false, dec),
 			)
 		}
 	}
@@ -436,6 +459,28 @@ func isNumericFormat(format string) bool {
 	default:
 		return false
 	}
+}
+
+// anyCondRules reports whether some table block carries a conditional-format
+// rule, so the CEL engine is only built when it will be used.
+func anyCondRules(doc layoutpkg.ResolvedDocument) bool {
+	for i := range doc.Blocks {
+		if tb := doc.Blocks[i].Block.Table; tb != nil && len(tb.Conditional) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// toCellDecor narrows a condfmt.Decoration to the cell-style key fields; an
+// unset decoration becomes the zero value so it shares the plain style.
+func toCellDecor(d condfmt.Decoration) cellDecor {
+	if !d.Set {
+		return cellDecor{}
+	}
+
+	return cellDecor{bg: d.BG, fg: d.FG, bold: d.Bold, italic: d.Italic}
 }
 
 func (w *layoutWriter) writeChart(rb layoutpkg.ResolvedBlock) {

@@ -59,13 +59,13 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 // resolved document as a linear single-sheet workbook; the packed pages are
 // unused.
 func (e Exporter) Render(
-	_ context.Context,
+	ctx context.Context,
 	data models.Dataset,
 	doc layoutpkg.ResolvedDocument,
 	_ []layoutpkg.Page,
 	format models.Export,
 ) ([]models.Data, error) {
-	buf, err := buildLayoutWorkbook(data, doc)
+	buf, err := buildLayoutWorkbook(ctx, data, doc)
 	if err != nil {
 		return nil, err
 	}
