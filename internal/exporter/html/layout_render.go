@@ -300,7 +300,9 @@ func renderLayoutTableBlock(out *errWriter, pb layoutpkg.PlacedBlock) error {
 	end := min(pb.RowOffset+pb.RowCount, len(pb.Rows))
 	win := pb.Rows[pb.RowOffset:end]
 
-	out.str(`<div class="card" style="padding: 0; overflow: hidden;">`)
+	// No overflow clamp on the card: a table is never boxed smaller than its
+	// content — the packer gives every table its own full-width row.
+	out.str(`<div class="card" style="padding: 0;">`)
 	out.str(`<table class="report-table"><thead><tr>`)
 
 	for _, c := range tb.Columns {

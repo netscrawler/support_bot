@@ -241,6 +241,42 @@ func TestPackFlowPosYForcesNewRow(t *testing.T) {
 	}
 }
 
+func TestPackFlowTableTakesOwnRow(t *testing.T) {
+	// A chart (w=6) then a table (w=6) would share a row by width, but a table
+	// always gets its own full-width row so a narrow column can never clip it;
+	// the block after the table also starts fresh.
+	tbl := models.Block{
+		ID:      "t",
+		Type:    models.BlockTypeTable,
+		Dataset: "d",
+		Pos:     models.GridPosition{W: 6},
+		Table:   &models.TableBlock{Columns: []models.Column{{Field: "y"}}},
+	}
+
+	pages, err := Pack(
+		resolvedDoc(t, chartBlock("c", 6, 4), tbl, chartBlock("d2", 6, 4)),
+		flowGeometry(),
+	)
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+
+	got := pages[0].Blocks
+	if len(got) != 3 {
+		t.Fatalf("want 3 blocks, got %d", len(got))
+	}
+
+	for i, wantRow := range []int{0, 1, 2} {
+		if got[i].Row != wantRow {
+			t.Fatalf("block %d on row %d, want %d", i, got[i].Row, wantRow)
+		}
+	}
+
+	if got[1].Pos.W != GridColumns || got[1].Pos.X != 0 {
+		t.Fatalf("table row not full width: X=%d W=%d", got[1].Pos.X, got[1].Pos.W)
+	}
+}
+
 func TestPackFlowPaginatesByEstimatedHeight(t *testing.T) {
 	blocks := make([]models.Block, 8)
 	for i := range blocks {

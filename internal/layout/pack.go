@@ -448,9 +448,10 @@ func packFlow(doc ResolvedDocument, cols int, geom PageGeometry) []Page {
 }
 
 // formFlowRows groups blocks into rows: a new row starts when the next block
-// would overflow the column count, or when its authored Pos.Y is greater than
-// the previous block's (a grouping hint). Each closed row is grown to the full
-// column count in fillRow.
+// would overflow the column count, when its authored Pos.Y is greater than the
+// previous block's (a grouping hint), or when either block is a table (a table
+// always occupies its own full-width row so a narrow column can never clip it).
+// Each closed row is grown to the full column count in fillRow.
 func formFlowRows(blocks []ResolvedBlock, cols int) []flowRow {
 	var (
 		rows  []flowRow
@@ -481,8 +482,13 @@ func formFlowRows(blocks []ResolvedBlock, cols int) []flowRow {
 		}
 
 		y := rb.Block.Pos.Y
+		isTable := rb.Block.Type == models.BlockTypeTable
 
-		if len(cur) > 0 && (curW+w > cols || (hasY && y > prevY)) {
+		lastIsTable := len(cur) > 0 &&
+			cur[len(cur)-1].rb.Block.Type == models.BlockTypeTable
+
+		if len(cur) > 0 &&
+			(isTable || lastIsTable || curW+w > cols || (hasY && y > prevY)) {
 			flush()
 		}
 
@@ -491,7 +497,7 @@ func formFlowRows(blocks []ResolvedBlock, cols int) []flowRow {
 		prevY = y
 		hasY = true
 
-		if curW >= cols {
+		if isTable || curW >= cols {
 			flush()
 		}
 	}

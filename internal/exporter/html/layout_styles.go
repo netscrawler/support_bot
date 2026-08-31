@@ -15,7 +15,8 @@ const fontStack = `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, 
 // deliberately separate from styles(): that one belongs to the hand-written
 // template escape-hatch and must stay byte-stable. The look here is a flat,
 // card-based dashboard (white cards on a light ground, muted ink), and nothing
-// clips — pages grow past their nominal A4 height rather than hiding overflow.
+// clips — pages grow past their nominal A4 height rather than hiding overflow,
+// and a mis-estimated page spills onto another sheet instead of losing content.
 func layoutStyles(page models.PageConfig) template.HTML {
 	orientation := "portrait"
 	widthMM, heightMM := 210, 297
@@ -44,17 +45,17 @@ func layoutStyles(page models.PageConfig) template.HTML {
         margin: 0;
         background: #f6f7f9;
         color: #2e353b;
-        font: 14px/1.5 %[4]s;
+        font: 14px/1.5 %[3]s;
     }
 
     @media screen { body { padding: 24px; } }
 
     .report-page {
         width: %[2]dmm;
-        min-height: %[6]dmm;
+        min-height: %[5]dmm;
         box-sizing: border-box;
         margin: 0 auto;
-        padding: %[5]dmm;
+        padding: %[4]dmm;
         background: #ffffff;
         overflow: visible;
         display: flex;
@@ -65,7 +66,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
 
     .report-header {
         flex: 0 0 auto;
-        font: 600 13px/1.4 %[4]s;
+        font: 600 13px/1.4 %[3]s;
         color: #4c5773;
         border-bottom: 1px solid #e7eaee;
         padding-bottom: 10px;
@@ -74,7 +75,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
 
     .report-footer {
         flex: 0 0 auto;
-        font: 400 10px/1.4 %[4]s;
+        font: 400 10px/1.4 %[3]s;
         color: #9aa1ab;
         border-top: 1px solid #e7eaee;
         padding-top: 8px;
@@ -116,14 +117,14 @@ func layoutStyles(page models.PageConfig) template.HTML {
 
     .card-title {
         margin: 0 0 12px;
-        font: 600 13px/1.3 %[4]s;
+        font: 600 13px/1.3 %[3]s;
         color: #4c5773;
     }
 
     .metric-card { justify-content: center; }
 
     .metric-label {
-        font: 600 11px/1.2 %[4]s;
+        font: 600 11px/1.2 %[3]s;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: #949aab;
@@ -131,7 +132,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
     }
 
     .metric-value {
-        font: 700 30px/1.1 %[4]s;
+        font: 700 30px/1.1 %[3]s;
         color: #2e353b;
     }
 
@@ -158,7 +159,6 @@ func layoutStyles(page models.PageConfig) template.HTML {
         padding: 8px 12px;
         border-bottom: 1px solid #e7eaee;
         white-space: nowrap;
-        text-align: left;
     }
 
     .report-table td {
@@ -184,11 +184,8 @@ func layoutStyles(page models.PageConfig) template.HTML {
         .report-page {
             margin: 0;
             box-shadow: none;
-            /* Never let a page exceed one physical sheet: with a good height
-               estimate this is slack, and if one is off the page clips a few
-               mm rather than fragmenting into a second sheet. */
-            max-height: %[3]dmm;
-            overflow: hidden;
+            /* No max-height / overflow clamp: a page the estimator got wrong
+               spills onto another sheet rather than clipping its content. */
             break-after: page;
             page-break-after: always;
         }
@@ -197,7 +194,7 @@ func layoutStyles(page models.PageConfig) template.HTML {
             page-break-after: auto;
         }
     }
-</style>`, orientation, widthMM, heightMM, fontStack, pad, pageMinMM)
+</style>`, orientation, widthMM, fontStack, pad, pageMinMM)
 
 	return template.HTML(css) //nolint:gosec // static stylesheet, no user data
 }
