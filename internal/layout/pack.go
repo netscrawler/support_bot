@@ -311,21 +311,26 @@ func ceilDiv(a, b int) int {
 }
 
 // Millimetre estimates for the flow packer. Server-side rendering cannot measure
-// content, so these are deliberately biased to over-estimate: an under-filled
-// page is cosmetic, an over-filled .report-page div spills past its A4 @page box
-// and doubles the PDF page count. Calibrated against A4 at 96 dpi (1123 px).
+// content, so these are set from the rendered px height of each block kind in
+// headless Chromium (see TestFixtureLayoutFitsA4), plus a slim margin: they must
+// stay slightly *over* reality, since an over-filled .report-page div spills
+// past its A4 @page box and doubles the PDF page count. Measured at 96 dpi.
 const (
 	pxPerMM = 3.779527559
 
-	metricBlockMM    = 34.0
-	chartChromeMM    = 26.0 // card padding + title band
-	chartMinBodyMM   = 52.0
+	metricBlockMM    = 26.0 // measured 23mm
+	chartChromeMM    = 19.0 // card padding + title band; measured 17mm
+	chartMinBodyMM   = 50.0
 	defaultChartPx   = 240
-	tableHeaderMM    = 15.0 // header row + card padding
-	tableRowMM       = 9.0
-	textDefaultMM    = 24.0
-	rawHTMLDefaultMM = 20.0
-	rowGapMM         = 7.0
+	tableHeaderMM    = 12.0 // header row + card padding; measured 9.5mm
+	tableRowMM       = 9.0  // measured 8.7mm
+	textDefaultMM    = 17.0 // measured 14mm
+	rawHTMLDefaultMM = 15.0
+	rowGapMM         = 5.0 // .report-grid gap is 3.7mm
+
+	// breakSlackMM lets a row overflow the work-area by a hair rather than
+	// opening a near-empty page for a few millimetres of rounding.
+	breakSlackMM = 3.0
 )
 
 // flowItem is one block on a flow row, with its final column span and (for a
@@ -399,7 +404,8 @@ func packFlow(doc ResolvedDocument, cols int, geom PageGeometry) []Page {
 
 		splittable := len(r.items) == 1 && r.items[0].rb.Splittable
 
-		if usedMM > 0 && usedMM+r.heightMM > availMM && (!splittable || r.heightMM <= availMM) {
+		if usedMM > 0 && usedMM+r.heightMM > availMM+breakSlackMM &&
+			(!splittable || r.heightMM <= availMM) {
 			newPage()
 		}
 
