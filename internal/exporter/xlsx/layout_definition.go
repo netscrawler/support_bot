@@ -3,11 +3,11 @@ package xlsx
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 	texttemplate "text/template"
 
 	"support_bot/internal/models"
-	"support_bot/internal/pkg"
 
 	"github.com/xuri/excelize/v2"
 
@@ -16,67 +16,32 @@ import (
 	textfuncs "support_bot/internal/pkg/text"
 )
 
-type layoutRenderState struct {
-	chartDataSheet string
-	chartDataRow   int
-}
-
-// xlsxBlock is the per-block context passed to every block renderer.
-type xlsxBlock struct {
-	f             *excelize.File
-	sheet         string
-	data          models.Dataset
-	pb            layoutpkg.PlacedBlock
-	styles        layoutStyles
-	state         *layoutRenderState
-	pageRowOffset int
-}
-
+// The declarative-layout workbook is a linear document: one sheet, blocks
+// stacked top to bottom in declaration order. A grid-coordinate emulation was
+// tried and abandoned — a spreadsheet is not a canvas, so absolute placement
+// only produced overlapping charts and colliding column widths.
 const (
-	xlsxRowsPerGridRow  = layoutpkg.RowsPerGridRow
-	xlsxPageGapRows     = 3
-	xlsxGridColumnWidth = 12.0
+	layoutSheet       = "Отчёт"
+	layoutDataSheet   = "_source"
+	layoutContentCols = 8 // section content spans columns A..H
+	layoutChartRows   = 13
+	layoutColWidth    = 10.0
+	layoutFirstColW   = 16.0
+	xlsxPaperA4       = 9
 )
 
-func (b xlsxBlock) block() models.Block {
-	block := b.pb.Block
-	block.Pos = b.pb.Pos
-	block.Pos.Y = b.pb.Pos.Y*xlsxRowsPerGridRow + b.pageRowOffset
-	block.Pos.H = b.pb.Pos.H * xlsxRowsPerGridRow
-	if b.pb.RowOffset > 0 {
-		block.ID = fmt.Sprintf("%s_%d", block.ID, b.pb.RowOffset)
-	}
+var htmlTagRE = regexp.MustCompile(`<[^>]*>`)
 
-	return block
-}
-
-func (b xlsxBlock) rows() []map[string]any {
-	end := min(b.pb.RowOffset+b.pb.RowCount, len(b.pb.Rows))
-
-	return b.pb.Rows[b.pb.RowOffset:end]
-}
-
-type xlsxBlockFn func(xlsxBlock) error
-
-var xlsxBlockRenderers = map[models.BlockType]xlsxBlockFn{
-	models.BlockTypeTable: func(b xlsxBlock) error { return renderLayoutTable(b.f, b.sheet, b.rows(), b.block(), b.styles) },
-	models.BlockTypeChart: func(b xlsxBlock) error {
-		return renderLayoutChart(b.f, b.sheet, b.rows(), b.block(), b.styles, b.state)
-	},
-	models.BlockTypeMetric:  func(b xlsxBlock) error { return renderLayoutMetric(b.f, b.sheet, b.rows(), b.block(), b.styles) },
-	models.BlockTypeText:    func(b xlsxBlock) error { return renderLayoutText(b.f, b.sheet, b.data, b.block(), b.styles) },
-	models.BlockTypeRawHTML: func(b xlsxBlock) error { return renderLayoutRawHTML(b.f, b.sheet, b.block(), b.styles) },
-}
-
+// buildLayoutWorkbook renders a resolved declarative document to a single-sheet
+// workbook.
 func buildLayoutWorkbook(
 	data models.Dataset,
-	pages []layoutpkg.Page,
+	doc layoutpkg.ResolvedDocument,
 ) (*bytes.Buffer, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	sheetName := "layout"
-	if err := f.SetSheetName("Sheet1", sheetName); err != nil {
+	if err := f.SetSheetName("Sheet1", layoutSheet); err != nil {
 		return nil, fmt.Errorf("set sheet name: %w", err)
 	}
 
@@ -85,78 +50,541 @@ func buildLayoutWorkbook(
 		return nil, err
 	}
 
-	state := layoutRenderState{}
+	w := &layoutWriter{
+		f:       f,
+		sheet:   layoutSheet,
+		data:    data,
+		styles:  styles,
+		row:     1,
+		maxCol:  1,
+		dataRow: 1,
+	}
 
-	for _, page := range pages {
-		pageRowOffset := page.Index * (layoutpkg.GridRows*xlsxRowsPerGridRow + xlsxPageGapRows)
-		for _, pb := range page.Blocks {
-			fn, ok := xlsxBlockRenderers[pb.Block.Type]
-			if !ok {
-				return nil, fmt.Errorf("xlsx: no renderer for block type %q", pb.Block.Type)
+	if s := w.sectionText(doc.Page.Header); s != "" {
+		w.writeTitle(s)
+	}
+
+	blocks := doc.Blocks
+	for i := 0; i < len(blocks); {
+		if blocks[i].Block.Type == models.BlockTypeMetric {
+			j := i
+			for j < len(blocks) && blocks[j].Block.Type == models.BlockTypeMetric {
+				j++
 			}
 
-			ctx := xlsxBlock{
-				f:             f,
-				sheet:         sheetName,
-				data:          data,
-				pb:            pb,
-				styles:        styles,
-				state:         &state,
-				pageRowOffset: pageRowOffset,
-			}
-			if err := fn(ctx); err != nil {
-				return nil, fmt.Errorf("render block %q: %w", pb.Block.ID, err)
-			}
+			w.writeMetricStrip(blocks[i:j])
+			i = j
+
+			continue
+		}
+
+		w.writeBlock(blocks[i])
+		i++
+	}
+
+	if s := w.sectionText(doc.Page.Footer); s != "" {
+		w.writeNoteText(s)
+	}
+
+	if w.err != nil {
+		return nil, w.err
+	}
+
+	if w.hasData {
+		if err := f.SetSheetVisible(layoutDataSheet, false); err != nil {
+			return nil, fmt.Errorf("hide data sheet: %w", err)
 		}
 	}
 
-	if state.chartDataSheet != "" {
-		if err := f.SetSheetVisible(state.chartDataSheet, false); err != nil {
-			return nil, fmt.Errorf("hide chart data sheet: %w", err)
-		}
+	w.finish(doc.Page.Orientation)
+	if w.err != nil {
+		return nil, w.err
 	}
 
-	f.DeleteSheet("Sheet1")
 	f.SetActiveSheet(0)
-
-	f.SetAppProps(&excelize.AppProperties{
-		Application: "SendyStats",
-		Company:     "Sendy",
-	})
+	f.SetAppProps(&excelize.AppProperties{Application: "SendyStats", Company: "Sendy"})
 
 	return f.WriteToBuffer()
 }
 
+// layoutWriter walks the blocks with a downward row cursor, accumulating the
+// first write error so the many small excelize calls need no inline checks.
+type layoutWriter struct {
+	f      *excelize.File
+	sheet  string
+	data   models.Dataset
+	styles layoutStyles
+
+	row      int // next free 1-based worksheet row
+	maxCol   int // widest column index written, for the final width pass
+	tableSeq int
+
+	dataRow int // next free row on the hidden data sheet
+	hasData bool
+
+	err error
+}
+
+func (w *layoutWriter) touch(col int) {
+	if col > w.maxCol {
+		w.maxCol = col
+	}
+}
+
+// set writes one styled cell.
+func (w *layoutWriter) set(col, row int, value any, style int) {
+	if w.err != nil {
+		return
+	}
+
+	cell := cellName(col, row)
+	if w.err = w.f.SetCellValue(w.sheet, cell, value); w.err != nil {
+		return
+	}
+
+	w.err = w.f.SetCellStyle(w.sheet, cell, cell, style)
+	w.touch(col)
+}
+
+// mergeRange writes value into a horizontal merge from startCol to endCol.
+func (w *layoutWriter) mergeRange(startCol, endCol, row int, value any, style int) {
+	if w.err != nil {
+		return
+	}
+
+	a, b := cellName(startCol, row), cellName(endCol, row)
+	if w.err = w.f.MergeCell(w.sheet, a, b); w.err != nil {
+		return
+	}
+
+	if w.err = w.f.SetCellValue(w.sheet, a, value); w.err != nil {
+		return
+	}
+
+	w.err = w.f.SetCellStyle(w.sheet, a, b, style)
+	w.touch(endCol)
+}
+
+func (w *layoutWriter) rowHeight(row int, h float64) {
+	if w.err == nil {
+		w.err = w.f.SetRowHeight(w.sheet, row, h)
+	}
+}
+
+func (w *layoutWriter) writeTitle(text string) {
+	w.mergeRange(1, layoutContentCols, w.row, text, w.styles.title)
+	w.rowHeight(w.row, 26)
+	w.row += 2
+}
+
+func (w *layoutWriter) writeHeading(text string) {
+	w.mergeRange(1, layoutContentCols, w.row, text, w.styles.heading)
+	w.row++
+}
+
+func (w *layoutWriter) writeNoteText(text string) {
+	w.mergeRange(1, layoutContentCols, w.row, text, w.styles.note)
+	w.row += 2
+}
+
+func (w *layoutWriter) writeBlock(rb layoutpkg.ResolvedBlock) {
+	if w.err != nil {
+		return
+	}
+
+	switch rb.Block.Type {
+	case models.BlockTypeChart:
+		w.writeChart(rb)
+	case models.BlockTypeTable:
+		w.writeTable(rb)
+	case models.BlockTypeText:
+		w.writeText(rb)
+	case models.BlockTypeRawHTML:
+		w.writeRawHTML(rb)
+	case models.BlockTypeMetric:
+		w.writeMetricStrip([]layoutpkg.ResolvedBlock{rb})
+	default:
+		w.err = fmt.Errorf("no renderer for block type %q", rb.Block.Type)
+	}
+}
+
+// writeMetricStrip lays a run of metric blocks out as label / value bands, up
+// to four per row.
+func (w *layoutWriter) writeMetricStrip(metrics []layoutpkg.ResolvedBlock) {
+	const perStrip = 4
+
+	for off := 0; off < len(metrics); off += perStrip {
+		grp := metrics[off:min(off+perStrip, len(metrics))]
+		span := max(layoutContentCols/len(grp), 1)
+
+		labelRow, valueRow := w.row, w.row+1
+
+		for k, rb := range grp {
+			mb := rb.Block.Metric
+			if mb == nil {
+				w.err = fmt.Errorf("metric block %q missing config", rb.Block.ID)
+
+				return
+			}
+
+			startCol := k*span + 1
+			endCol := startCol + span - 1
+
+			label := mb.Label
+			if label == "" {
+				label = mb.Field
+			}
+
+			w.mergeRange(startCol, endCol, labelRow, label, w.styles.kpiLabel)
+			w.mergeRange(startCol, endCol, valueRow, metricValue(rb.Rows, mb), w.styles.kpiValue)
+		}
+
+		w.rowHeight(valueRow, 28)
+		w.row += 3
+	}
+}
+
+func metricValue(rows []map[string]any, mb *models.MetricBlock) string {
+	for _, r := range rows {
+		if v, ok := r[mb.Field]; ok {
+			return layoutpkg.FormatValue(v, mb.Format)
+		}
+	}
+
+	return ""
+}
+
+func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
+	tb := rb.Block.Table
+	if tb == nil {
+		w.err = fmt.Errorf("table block %q missing config", rb.Block.ID)
+
+		return
+	}
+
+	cols := tb.Columns
+	headerRow := w.row
+
+	for i, c := range cols {
+		title := c.Title
+		if title == "" {
+			title = c.Field
+		}
+
+		w.set(i+1, headerRow, title, w.styles.header)
+	}
+
+	for r, row := range rb.Rows {
+		for i, c := range cols {
+			w.set(
+				i+1,
+				headerRow+1+r,
+				layoutpkg.FormatValue(row[c.Field], c.Format),
+				w.bodyStyle(c.Align),
+			)
+		}
+	}
+
+	endRow := headerRow + len(rb.Rows)
+
+	if len(rb.Rows) > 0 && w.err == nil {
+		w.tableSeq++
+		w.err = w.f.AddTable(w.sheet, &excelize.Table{
+			Range:          cellRange(1, headerRow, len(cols), endRow),
+			Name:           fmt.Sprintf("tbl%d", w.tableSeq),
+			StyleName:      "TableStyleMedium2",
+			ShowHeaderRow:  boolPtr(true),
+			ShowRowStripes: boolPtr(true),
+		})
+	}
+
+	w.touch(len(cols))
+	w.row = endRow + 2
+}
+
+func (w *layoutWriter) bodyStyle(align models.ColumnAlign) int {
+	switch align {
+	case models.ColumnAlignRight:
+		return w.styles.bodyRight
+	case models.ColumnAlignCenter:
+		return w.styles.bodyCenter
+	default:
+		return w.styles.body
+	}
+}
+
+func (w *layoutWriter) writeChart(rb layoutpkg.ResolvedBlock) {
+	ch := rb.Block.Chart
+	if ch == nil {
+		w.err = fmt.Errorf("chart block %q missing config", rb.Block.ID)
+
+		return
+	}
+
+	if len(ch.Series) == 0 {
+		w.err = fmt.Errorf("chart block %q has no series", rb.Block.ID)
+
+		return
+	}
+
+	if title := strings.TrimSpace(ch.Title); title != "" {
+		w.writeHeading(title)
+	}
+
+	sheet := w.ensureDataSheet()
+	start := w.dataRow
+	n := len(rb.Rows)
+
+	w.writeSeriesData(sheet, start, rb.Rows, ch)
+	if w.err != nil {
+		return
+	}
+
+	cats := chartRef(sheet, 1, start+1, 1, start+n)
+
+	// No chart.Title: the heading row above already labels it, and an in-plot
+	// title just overflows the anchored chart box.
+	chart := &excelize.Chart{
+		Type:       chartType(ch.Kind, ch.Stacked),
+		Dimension:  excelize.ChartDimension{Width: 460, Height: 240},
+		Legend:     excelize.ChartLegend{Position: legendPosition(ch.Legend)},
+		VaryColors: boolPtr(ch.Kind == models.ChartKindPie),
+	}
+
+	for i := range ch.Series {
+		col := i + 2
+		chart.Series = append(chart.Series, excelize.ChartSeries{
+			Name:       chartRef(sheet, col, start, col, start),
+			Categories: cats,
+			Values:     chartRef(sheet, col, start+1, col, start+n),
+		})
+	}
+
+	if w.err = w.f.AddChart(w.sheet, cellName(1, w.row), chart); w.err != nil {
+		return
+	}
+
+	w.touch(layoutContentCols)
+	w.row += layoutChartRows + 1
+}
+
+func (w *layoutWriter) writeText(rb layoutpkg.ResolvedBlock) {
+	tb := rb.Block.Text
+	if tb == nil {
+		w.err = fmt.Errorf("text block %q missing config", rb.Block.ID)
+
+		return
+	}
+
+	rendered, err := renderTextTemplate(tb.Text, w.data)
+	if err != nil {
+		w.err = err
+
+		return
+	}
+
+	rendered = strings.TrimSpace(rendered)
+
+	w.mergeRange(1, layoutContentCols, w.row, rendered, w.styles.text)
+	w.rowHeight(w.row, textRowHeight(rendered))
+	w.row += 2
+}
+
+func (w *layoutWriter) writeRawHTML(rb layoutpkg.ResolvedBlock) {
+	rh := rb.Block.RawHTML
+	if rh == nil {
+		w.err = fmt.Errorf("raw_html block %q missing config", rb.Block.ID)
+
+		return
+	}
+
+	w.writeNoteText(stripTags(rh.HTML))
+}
+
+// sectionText resolves a page header / footer to plain text: raw HTML is
+// tag-stripped, a Text template is executed over the dataset.
+func (w *layoutWriter) sectionText(sec *models.PageSection) string {
+	if sec == nil {
+		return ""
+	}
+
+	if strings.TrimSpace(sec.HTML) != "" {
+		return stripTags(sec.HTML)
+	}
+
+	if strings.TrimSpace(sec.Text) == "" {
+		return ""
+	}
+
+	rendered, err := renderTextTemplate(sec.Text, w.data)
+	if err != nil {
+		return strings.TrimSpace(sec.Text)
+	}
+
+	return strings.TrimSpace(rendered)
+}
+
+func (w *layoutWriter) ensureDataSheet() string {
+	if w.hasData {
+		return layoutDataSheet
+	}
+
+	if idx, _ := w.f.GetSheetIndex(layoutDataSheet); idx == -1 {
+		if _, err := w.f.NewSheet(layoutDataSheet); err != nil {
+			w.err = err
+
+			return layoutDataSheet
+		}
+	}
+
+	w.hasData = true
+	w.dataRow = 1
+
+	return layoutDataSheet
+}
+
+func (w *layoutWriter) writeSeriesData(
+	sheet string,
+	start int,
+	rows []map[string]any,
+	ch *models.ChartBlock,
+) {
+	if w.err != nil {
+		return
+	}
+
+	headers := make([]string, 0, len(ch.Series)+1)
+	headers = append(headers, ch.XField)
+
+	for _, s := range ch.Series {
+		headers = append(headers, s.TitleOrField())
+	}
+
+	for i, h := range headers {
+		if w.err = w.f.SetCellValue(sheet, cellName(1+i, start), h); w.err != nil {
+			return
+		}
+	}
+
+	for r, row := range rows {
+		if w.err = w.f.SetCellValue(sheet, cellName(1, start+1+r), row[ch.XField]); w.err != nil {
+			return
+		}
+
+		for s, series := range ch.Series {
+			if w.err = w.f.SetCellValue(
+				sheet, cellName(2+s, start+1+r), row[series.Field],
+			); w.err != nil {
+				return
+			}
+		}
+	}
+
+	w.dataRow = start + len(rows) + 3
+}
+
+// finish sets column widths from the widest column written, then the page
+// layout so a printout fits the page width and never chops columns off.
+func (w *layoutWriter) finish(orientation string) {
+	if w.err != nil {
+		return
+	}
+
+	for c := 1; c <= w.maxCol; c++ {
+		width := layoutColWidth
+		if c == 1 {
+			width = layoutFirstColW
+		}
+
+		name := cellColumn(c)
+		if w.err = w.f.SetColWidth(w.sheet, name, name, width); w.err != nil {
+			return
+		}
+	}
+
+	if w.err = w.f.SetSheetProps(w.sheet, &excelize.SheetPropsOptions{
+		FitToPage: boolPtr(true),
+	}); w.err != nil {
+		return
+	}
+
+	size := xlsxPaperA4
+	orient := "portrait"
+
+	if strings.EqualFold(strings.TrimSpace(orientation), "landscape") {
+		orient = "landscape"
+	}
+
+	fitWidth, fitHeight := 1, 0
+	w.err = w.f.SetPageLayout(w.sheet, &excelize.PageLayoutOptions{
+		Size:        &size,
+		Orientation: &orient,
+		FitToWidth:  &fitWidth,
+		FitToHeight: &fitHeight,
+	})
+}
+
+func stripTags(s string) string {
+	return strings.Join(strings.Fields(htmlTagRE.ReplaceAllString(s, " ")), " ")
+}
+
+func textRowHeight(s string) float64 {
+	lines := strings.Count(s, "\n") + 1
+	if h := float64(lines) * 16; h > 20 {
+		return h
+	}
+
+	return 20
+}
+
+func chartType(kind models.ChartKind, stacked bool) excelize.ChartType {
+	switch kind {
+	case models.ChartKindBar:
+		if stacked {
+			return excelize.ColStacked
+		}
+
+		return excelize.Col
+	case models.ChartKindPie:
+		return excelize.Pie
+	default:
+		return excelize.Line
+	}
+}
+
+func legendPosition(legend *bool) string {
+	if legend != nil && !*legend {
+		return "none"
+	}
+
+	return "bottom"
+}
+
+func chartRef(sheet string, c1, r1, c2, r2 int) string {
+	return fmt.Sprintf(
+		"'%s'!$%s$%d:$%s$%d",
+		sheet, cellColumn(c1), r1, cellColumn(c2), r2,
+	)
+}
+
+// layoutStyles holds every cell style id the linear renderer needs.
 type layoutStyles struct {
+	title    int
+	heading  int
+	kpiLabel int
+	kpiValue int
+
 	header     int
 	body       int
 	bodyCenter int
 	bodyRight  int
-	label      int
-	value      int
-	text       int
-	rawHTML    int
+
+	text int
+	note int
 }
 
 func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
-	header, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Color: "172033"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"D9E2F3"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "D0D5DD", Style: 1},
-			{Type: "right", Color: "D0D5DD", Style: 1},
-			{Type: "top", Color: "D0D5DD", Style: 1},
-			{Type: "bottom", Color: "D0D5DD", Style: 1},
-		},
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "center",
-			WrapText:   true,
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
+	mk := func(s *excelize.Style) (int, error) { return f.NewStyle(s) }
 
 	bodyBorder := []excelize.Border{
 		{Type: "left", Color: "E5E9F0", Style: 1},
@@ -165,502 +593,93 @@ func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 		{Type: "bottom", Color: "E5E9F0", Style: 1},
 	}
 
-	body, err := f.NewStyle(&excelize.Style{
-		Border: bodyBorder,
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "center",
-			WrapText:   true,
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	bodyCenter, err := f.NewStyle(&excelize.Style{
-		Border:    bodyBorder,
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	bodyRight, err := f.NewStyle(&excelize.Style{
-		Border:    bodyBorder,
-		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center", WrapText: true},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	label, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Color: "344054"},
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "center",
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	value, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 18, Color: "111827"},
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "center",
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	textStyle, err := f.NewStyle(&excelize.Style{
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "top",
-			WrapText:   true,
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	rawHTMLStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "667085"},
-		Alignment: &excelize.Alignment{
-			Horizontal: "left",
-			Vertical:   "top",
-			WrapText:   true,
-		},
-	})
-	if err != nil {
-		return layoutStyles{}, err
-	}
-
-	return layoutStyles{
-		header:     header,
-		body:       body,
-		bodyCenter: bodyCenter,
-		bodyRight:  bodyRight,
-		label:      label,
-		value:      value,
-		text:       textStyle,
-		rawHTML:    rawHTMLStyle,
-	}, nil
-}
-
-func renderLayoutTable(
-	f *excelize.File,
-	sheet string,
-	rows []map[string]any,
-	block models.Block,
-	styles layoutStyles,
-) error {
-	if block.Table == nil {
-		return fmt.Errorf("table configuration is required")
-	}
-
-	columns := block.Table.Columns
-	fields := make([]string, 0, len(columns))
-	for _, column := range columns {
-		fields = append(fields, column.Field)
-	}
-
-	matrix := pkg.ConvertSortedRows(rows, fields)
-	if len(matrix) == 0 {
-		matrix = [][]any{make([]any, len(columns))}
-		for i, column := range columns {
-			matrix[0][i] = column.Title
+	bodyAlign := func(h string) *excelize.Style {
+		return &excelize.Style{
+			Border:    bodyBorder,
+			Alignment: &excelize.Alignment{Horizontal: h, Vertical: "center", WrapText: true},
 		}
 	}
 
-	// Pre-format every body cell so Column.Format applies and a missing value
-	// is an empty cell rather than "<nil>". The header row is left untouched.
-	for r := 1; r < len(matrix); r++ {
-		for c, column := range columns {
-			matrix[r][c] = layoutpkg.FormatValue(matrix[r][c], column.Format)
-		}
-	}
+	var (
+		st  layoutStyles
+		err error
+	)
 
-	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
-	if err := writeMatrix(
-		f,
-		sheet,
-		startCol,
-		startRow,
-		matrix,
-		styles.body,
-		styles.header,
-	); err != nil {
-		return err
-	}
-
-	endCol := startCol + len(columns) - 1
-	endRow := startRow + len(matrix) - 1
-	if endCol < startCol || endRow < startRow {
-		return nil
-	}
-
-	tableName := sanitizeSheetName(block.ID)
-	if tableName == "" {
-		tableName = "layout_table"
-	}
-
-	if err := f.AddTable(sheet, &excelize.Table{
-		Range:             cellRange(startCol, startRow, endCol, endRow),
-		Name:              tableName,
-		StyleName:         "TableStyleMedium9",
-		ShowColumnStripes: false,
-		ShowFirstColumn:   false,
-		ShowHeaderRow:     boolPtr(true),
-		ShowLastColumn:    false,
-		ShowRowStripes:    boolPtr(true),
+	if st.title, err = mk(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 15, Color: "172033"},
 	}); err != nil {
-		return fmt.Errorf("add table: %w", err)
+		return st, err
 	}
 
-	columnWidth := xlsxGridColumnWidth * float64(max(block.Pos.W, 1)) / float64(len(columns))
-	for idx, column := range columns {
-		col := startCol + idx
-
-		colName, _ := excelize.ColumnNumberToName(col)
-		if err := f.SetColWidth(sheet, colName, colName, columnWidth); err != nil {
-			return fmt.Errorf("set column width: %w", err)
-		}
-
-		style, ok := alignedBodyStyle(styles, column.Align)
-		if !ok || endRow <= startRow {
-			continue
-		}
-
-		if err := f.SetCellStyle(
-			sheet,
-			cellName(col, startRow+1),
-			cellName(col, endRow),
-			style,
-		); err != nil {
-			return fmt.Errorf("set column alignment: %w", err)
-		}
+	if st.heading, err = mk(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12, Color: "344054"},
+	}); err != nil {
+		return st, err
 	}
 
-	return nil
-}
-
-// alignedBodyStyle maps a column alignment to its body style; ok is false for
-// the default (left), which keeps the style writeMatrix already applied.
-func alignedBodyStyle(styles layoutStyles, align models.ColumnAlign) (int, bool) {
-	switch align {
-	case models.ColumnAlignRight:
-		return styles.bodyRight, true
-	case models.ColumnAlignCenter:
-		return styles.bodyCenter, true
-	default:
-		return 0, false
-	}
-}
-
-func renderLayoutMetric(
-	f *excelize.File,
-	sheet string,
-	rows []map[string]any,
-	block models.Block,
-	styles layoutStyles,
-) error {
-	if block.Metric == nil {
-		return fmt.Errorf("metric configuration is required")
+	if st.kpiLabel, err = mk(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 9, Color: "667085"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	}); err != nil {
+		return st, err
 	}
 
-	value := ""
-	for _, row := range rows {
-		if v, ok := row[block.Metric.Field]; ok {
-			value = layoutpkg.FormatValue(v, block.Metric.Format)
-			break
-		}
+	if st.kpiValue, err = mk(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 20, Color: "111827"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	}); err != nil {
+		return st, err
 	}
 
-	if value == "" && len(rows) == 0 {
-		return fmt.Errorf("metric dataset %q is empty", block.Dataset)
-	}
-
-	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
-	endCol := startCol + max(block.Pos.W, 1) - 1
-
-	label := block.Metric.Label
-	if label == "" {
-		label = block.Metric.Field
-	}
-
-	if err := f.MergeCell(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-	); err != nil {
-		return fmt.Errorf("merge metric label: %w", err)
-	}
-	if err := f.SetCellValue(sheet, cellName(startCol, startRow), label); err != nil {
-		return err
-	}
-	if err := f.SetCellStyle(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-		styles.label,
-	); err != nil {
-		return err
-	}
-
-	if err := f.MergeCell(
-		sheet,
-		cellName(startCol, startRow+1),
-		cellName(endCol, startRow+1),
-	); err != nil {
-		return fmt.Errorf("merge metric value: %w", err)
-	}
-	if err := f.SetCellValue(sheet, cellName(startCol, startRow+1), value); err != nil {
-		return err
-	}
-	if err := f.SetCellStyle(
-		sheet,
-		cellName(startCol, startRow+1),
-		cellName(endCol, startRow+1),
-		styles.value,
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func renderLayoutText(
-	f *excelize.File,
-	sheet string,
-	data models.Dataset,
-	block models.Block,
-	styles layoutStyles,
-) error {
-	if block.Text == nil {
-		return fmt.Errorf("text configuration is required")
-	}
-
-	rendered, err := renderTextTemplate(block.Text.Text, data)
-	if err != nil {
-		return err
-	}
-
-	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
-	endCol := startCol + max(block.Pos.W, 1) - 1
-	if err := f.MergeCell(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-	); err != nil {
-		return fmt.Errorf("merge text block: %w", err)
-	}
-
-	if err := f.SetCellValue(sheet, cellName(startCol, startRow), rendered); err != nil {
-		return err
-	}
-
-	return f.SetCellStyle(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-		styles.text,
-	)
-}
-
-func renderLayoutRawHTML(
-	f *excelize.File,
-	sheet string,
-	block models.Block,
-	styles layoutStyles,
-) error {
-	if block.RawHTML == nil {
-		return fmt.Errorf("raw_html configuration is required")
-	}
-
-	startCol, startRow := block.Pos.X+1, block.Pos.Y+1
-	endCol := startCol + max(block.Pos.W, 1) - 1
-
-	if err := f.MergeCell(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-	); err != nil {
-		return fmt.Errorf("merge raw_html block: %w", err)
-	}
-
-	if err := f.SetCellValue(sheet, cellName(startCol, startRow), block.RawHTML.HTML); err != nil {
-		return err
-	}
-
-	return f.SetCellStyle(
-		sheet,
-		cellName(startCol, startRow),
-		cellName(endCol, startRow),
-		styles.rawHTML,
-	)
-}
-
-func renderLayoutChart(
-	f *excelize.File,
-	mainSheet string,
-	rows []map[string]any,
-	block models.Block,
-	styles layoutStyles,
-	state *layoutRenderState,
-) error {
-	if block.Chart == nil {
-		return fmt.Errorf("chart configuration is required")
-	}
-
-	series := block.Chart.Series
-	if len(series) == 0 {
-		return fmt.Errorf("chart must have at least one series")
-	}
-
-	dataSheet := ensureChartDataSheet(f, state)
-	startRow := state.chartDataRow
-	startCol := 1
-
-	if err := writeChartData(
-		f,
-		dataSheet,
-		startCol,
-		startRow,
-		rows,
-		block.Chart.XField,
-		series,
-	); err != nil {
-		return err
-	}
-
-	categories := fmt.Sprintf("%s!$%s$%d:$%s$%d",
-		dataSheet, cellColumn(startCol), startRow+1, cellColumn(startCol), startRow+len(rows))
-
-	legendPos := "right"
-	if block.Chart.Legend != nil && !*block.Chart.Legend {
-		legendPos = "none"
-	}
-
-	ch := &excelize.Chart{
-		Type: chartTypeFromKind(block.Chart.Kind),
-		Dimension: excelize.ChartDimension{
-			Width:  chartWidth(block.Pos.W),
-			Height: chartHeight(block.Pos.H),
+	if st.header, err = mk(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Color: "172033"},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"D9E2F3"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "D0D5DD", Style: 1},
+			{Type: "right", Color: "D0D5DD", Style: 1},
+			{Type: "top", Color: "D0D5DD", Style: 1},
+			{Type: "bottom", Color: "D0D5DD", Style: 1},
 		},
-		Legend: excelize.ChartLegend{Position: legendPos},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
+	}); err != nil {
+		return st, err
 	}
 
-	if title := strings.TrimSpace(block.Chart.Title); title != "" {
-		ch.Title = []excelize.RichTextRun{{Text: title}}
+	if st.body, err = mk(bodyAlign("left")); err != nil {
+		return st, err
 	}
 
-	for idx, s := range series {
-		valueCol := startCol + idx + 1
-		valueRange := fmt.Sprintf("%s!$%s$%d:$%s$%d",
-			dataSheet, cellColumn(valueCol), startRow+1, cellColumn(valueCol), startRow+len(rows))
-		nameRef := fmt.Sprintf("%s!$%s$%d", dataSheet, cellColumn(valueCol), startRow)
-		if idx == 0 && block.Chart.Kind == models.ChartKindPie {
-			valueRange = fmt.Sprintf(
-				"%s!$%s$%d:$%s$%d",
-				dataSheet,
-				cellColumn(valueCol),
-				startRow+1,
-				cellColumn(valueCol),
-				startRow+len(rows),
-			)
-			categories = fmt.Sprintf(
-				"%s!$%s$%d:$%s$%d",
-				dataSheet,
-				cellColumn(startCol),
-				startRow+1,
-				cellColumn(startCol),
-				startRow+len(rows),
-			)
-		}
-
-		ch.Series = append(ch.Series, excelize.ChartSeries{
-			Name:       nameRef,
-			Categories: categories,
-			Values:     valueRange,
-		})
-		_ = s
+	if st.bodyCenter, err = mk(bodyAlign("center")); err != nil {
+		return st, err
 	}
 
-	startCell := cellName(block.Pos.X+1, block.Pos.Y+1)
-	if err := f.AddChart(mainSheet, startCell, ch); err != nil {
-		return fmt.Errorf("add chart: %w", err)
+	if st.bodyRight, err = mk(bodyAlign("right")); err != nil {
+		return st, err
 	}
 
-	state.chartDataRow = startRow + len(rows) + 3
-	return nil
-}
-
-func ensureChartDataSheet(f *excelize.File, state *layoutRenderState) string {
-	if state.chartDataSheet != "" {
-		return state.chartDataSheet
+	if st.text, err = mk(&excelize.Style{
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "top", WrapText: true},
+	}); err != nil {
+		return st, err
 	}
 
-	const dataSheet = "_layout_data"
-	if idx, _ := f.GetSheetIndex(dataSheet); idx == -1 {
-		f.NewSheet(dataSheet)
+	if st.note, err = mk(&excelize.Style{
+		Font:      &excelize.Font{Italic: true, Size: 9, Color: "949AAB"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
+	}); err != nil {
+		return st, err
 	}
 
-	state.chartDataSheet = dataSheet
-	state.chartDataRow = 1
-	return dataSheet
-}
-
-func writeChartData(
-	f *excelize.File,
-	sheet string,
-	startCol int,
-	startRow int,
-	rows []map[string]any,
-	xField string,
-	series []models.Series,
-) error {
-	headers := make([]string, 0, len(series)+1)
-	headers = append(headers, xField)
-	for _, s := range series {
-		headers = append(headers, s.TitleOrField())
-	}
-
-	for i, header := range headers {
-		cell, _ := excelize.CoordinatesToCellName(startCol+i, startRow)
-		if err := f.SetCellValue(sheet, cell, header); err != nil {
-			return err
-		}
-	}
-
-	for rowIdx, row := range rows {
-		cell, _ := excelize.CoordinatesToCellName(startCol, startRow+rowIdx+1)
-		if err := f.SetCellValue(sheet, cell, row[xField]); err != nil {
-			return err
-		}
-
-		for seriesIdx, s := range series {
-			cell, _ := excelize.CoordinatesToCellName(startCol+seriesIdx+1, startRow+rowIdx+1)
-			if err := f.SetCellValue(sheet, cell, row[s.Field]); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return st, nil
 }
 
 func renderTextTemplate(templateText string, data models.Dataset) (string, error) {
-	funcMap := make(map[string]any)
+	funcMap := make(map[string]any, len(textfuncs.FuncMap))
 	for k, v := range textfuncs.FuncMap {
 		funcMap[k] = v
 	}
 
-	t, err := texttemplate.New("layout_text").
-		Funcs(funcMap).
-		Parse(templateText)
+	t, err := texttemplate.New("layout_text").Funcs(funcMap).Parse(templateText)
 	if err != nil {
 		return "", err
 	}
@@ -673,41 +692,15 @@ func renderTextTemplate(templateText string, data models.Dataset) (string, error
 	return buf.String(), nil
 }
 
-func writeMatrix(
-	f *excelize.File,
-	sheet string,
-	startCol, startRow int,
-	matrix [][]any,
-	bodyStyle, headerStyle int,
-) error {
-	for rowIdx, row := range matrix {
-		for colIdx, value := range row {
-			cell, _ := excelize.CoordinatesToCellName(startCol+colIdx, startRow+rowIdx)
-			if err := f.SetCellValue(sheet, cell, value); err != nil {
-				return err
-			}
-
-			styleID := bodyStyle
-			if rowIdx == 0 {
-				styleID = headerStyle
-			}
-
-			if err := f.SetCellStyle(sheet, cell, cell, styleID); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 func cellName(col, row int) string {
 	name, _ := excelize.CoordinatesToCellName(col, row)
+
 	return name
 }
 
 func cellColumn(col int) string {
 	name, _ := excelize.ColumnNumberToName(col)
+
 	return name
 }
 
@@ -715,40 +708,4 @@ func cellRange(startCol, startRow, endCol, endRow int) string {
 	return fmt.Sprintf("%s:%s", cellName(startCol, startRow), cellName(endCol, endRow))
 }
 
-func boolPtr(v bool) *bool {
-	return &v
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func chartTypeFromKind(kind models.ChartKind) excelize.ChartType {
-	switch kind {
-	case models.ChartKindBar:
-		return excelize.Bar
-	case models.ChartKindPie:
-		return excelize.Pie
-	default:
-		return excelize.Line
-	}
-}
-
-func chartWidth(w int) uint {
-	if w <= 0 {
-		return 480
-	}
-
-	return uint(60 * w)
-}
-
-func chartHeight(h int) uint {
-	if h <= 0 {
-		return 300
-	}
-
-	return uint(15 * h)
-}
+func boolPtr(v bool) *bool { return &v }

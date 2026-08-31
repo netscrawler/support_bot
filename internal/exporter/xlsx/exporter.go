@@ -21,10 +21,11 @@ type Exporter struct{}
 // Format implements render.Renderer.
 func (e Exporter) Format() string { return models.ReportFormatXlsx }
 
-// Geometry implements render.Renderer. The packer creates the same pages as
-// the visual formats; Render appends those pages on one unbounded worksheet.
-func (e Exporter) Geometry(page models.PageConfig) layoutpkg.PageGeometry {
-	return layoutpkg.PageGeometryFor(page)
+// Geometry implements render.Renderer. The linear workbook renderer walks the
+// resolved document itself and ignores the packed pages, so the geometry is an
+// unbounded single page (no pagination, no block splitting).
+func (e Exporter) Geometry(models.PageConfig) layoutpkg.PageGeometry {
+	return layoutpkg.PageGeometry{Rows: 0}
 }
 
 // Export renders one export. A declarative layout goes through the shared
@@ -43,12 +44,7 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 			return nil, fmt.Errorf("xlsx: resolve layout: %w", err)
 		}
 
-		pages, err := layoutpkg.Pack(doc, e.Geometry(doc.Page))
-		if err != nil {
-			return nil, fmt.Errorf("xlsx: pack layout: %w", err)
-		}
-
-		return e.Render(context.Background(), data, doc, pages, format)
+		return e.Render(context.Background(), data, doc, nil, format)
 	}
 
 	buf, err := e.createXlsxBook(data, format.Order)
@@ -59,15 +55,17 @@ func (e Exporter) Export(data models.Dataset, format models.Export) ([]models.Da
 	return fileData(buf, format)
 }
 
-// Render implements render.Renderer for the pure-layout path.
+// Render implements render.Renderer for the pure-layout path. It renders the
+// resolved document as a linear single-sheet workbook; the packed pages are
+// unused.
 func (e Exporter) Render(
 	_ context.Context,
 	data models.Dataset,
-	_ layoutpkg.ResolvedDocument,
-	pages []layoutpkg.Page,
+	doc layoutpkg.ResolvedDocument,
+	_ []layoutpkg.Page,
 	format models.Export,
 ) ([]models.Data, error) {
-	buf, err := buildLayoutWorkbook(data, pages)
+	buf, err := buildLayoutWorkbook(data, doc)
 	if err != nil {
 		return nil, err
 	}

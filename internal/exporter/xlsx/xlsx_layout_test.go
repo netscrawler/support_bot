@@ -1,6 +1,7 @@
 package xlsx_test
 
 import (
+	"strconv"
 	"testing"
 
 	"support_bot/internal/exporter/xlsx"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/xuri/excelize/v2"
 )
+
+const layoutSheet = "Отчёт"
 
 func layoutDataset() models.Dataset {
 	return models.Dataset{
@@ -19,20 +22,40 @@ func layoutDataset() models.Dataset {
 	}
 }
 
+func openLayout(t *testing.T, out []models.Data) *excelize.File {
+	t.Helper()
+
+	if len(out) != 1 {
+		t.Fatalf("expected one file, got %d", len(out))
+	}
+
+	f, err := excelize.OpenReader(out[0].Data)
+	if err != nil {
+		t.Fatalf("open workbook: %v", err)
+	}
+
+	t.Cleanup(func() { _ = f.Close() })
+
+	return f
+}
+
 func TestExporterLayout(t *testing.T) {
 	name := "layout_report"
 
 	l := models.Layout{
 		Version: 1,
+		Page: models.PageConfig{
+			Header: &models.PageSection{Text: "Отчёт за август"},
+		},
 		Blocks: []models.Block{
 			{
 				ID: "m", Type: models.BlockTypeMetric, Dataset: "daily",
-				Pos:    models.GridPosition{X: 0, Y: 0, W: 3, H: 2},
-				Metric: &models.MetricBlock{Field: "accepted", Label: "Принято"},
+				Pos:    models.GridPosition{W: 3, H: 2},
+				Metric: &models.MetricBlock{Field: "accepted", Label: "Принято", Format: "number"},
 			},
 			{
 				ID: "c", Type: models.BlockTypeChart, Dataset: "daily",
-				Pos: models.GridPosition{X: 4, Y: 0, W: 8, H: 6},
+				Pos: models.GridPosition{W: 8, H: 6},
 				Chart: &models.ChartBlock{
 					Kind:   models.ChartKindLine,
 					XField: "date",
@@ -43,7 +66,7 @@ func TestExporterLayout(t *testing.T) {
 			},
 			{
 				ID: "t", Type: models.BlockTypeTable, Dataset: "daily",
-				Pos: models.GridPosition{X: 0, Y: 8, W: 12, H: 0},
+				Pos: models.GridPosition{W: 12, H: 0},
 				Table: &models.TableBlock{
 					Columns: []models.Column{
 						{Field: "date", Title: "Дата"},
@@ -56,59 +79,43 @@ func TestExporterLayout(t *testing.T) {
 		},
 	}
 
-	out, err := xlsx.Exporter{}.Export(layoutDataset(), models.Export{FileName: &name, Layout: &l})
-	if err != nil {
-		t.Fatalf("export failed: %v", err)
-	}
-
-	if len(out) != 1 {
-		t.Fatalf("expected one file, got %d", len(out))
-	}
-
-	f, err := excelize.OpenReader(out[0].Data)
-	if err != nil {
-		t.Fatalf("open workbook: %v", err)
-	}
-	defer f.Close()
+	f := openLayout(t, mustExport(t, layoutDataset(), name, l))
 
 	sheets := f.GetSheetList()
-	hasLayout, hasData := false, false
-	for _, s := range sheets {
-		switch s {
-		case "layout":
-			hasLayout = true
-		case "_layout_data":
-			hasData = true
-		}
+	if len(sheets) != 2 || sheets[0] != layoutSheet {
+		t.Fatalf("want [%q _source], got %v", layoutSheet, sheets)
 	}
 
-	if !hasLayout {
-		t.Fatalf("missing 'layout' sheet, got %v", sheets)
+	if visible, _ := f.GetSheetVisible("_source"); visible {
+		t.Errorf("_source sheet should be hidden")
 	}
 
-	if !hasData {
-		t.Fatalf("missing hidden '_layout_data' sheet, got %v", sheets)
-	}
-
-	if visible, _ := f.GetSheetVisible("_layout_data"); visible {
-		t.Errorf("_layout_data sheet should be hidden")
-	}
-
-	tables, err := f.GetTables("layout")
+	// One continuous table, header from Column.Title (not the field name).
+	tables, err := f.GetTables(layoutSheet)
 	if err != nil || len(tables) != 1 {
-		t.Fatalf("expected one excelize table on 'layout', got %d (err %v)", len(tables), err)
+		t.Fatalf("expected one excelize table, got %d (err %v)", len(tables), err)
 	}
 
-	// Sort desc by accepted -> first data row of the table is date 2026-08-02 (140).
-	// The packed table starts at grid row 6. Each grid row maps to six worksheet
-	// rows, so its header is on row 37 and the first data row is on row 38.
-	got, _ := f.GetCellValue("layout", "A38")
-	if got != "2026-08-02" {
-		t.Errorf("table not sorted by accepted desc: A38 = %q, want 2026-08-02", got)
+	hdr := cellFinder(t, f, "Дата")
+	if got, _ := f.GetCellValue(layoutSheet, hdr); got != "Дата" {
+		t.Fatalf("table header not the column title: %q", got)
+	}
+
+	// Sort desc by accepted -> first data row is 2026-08-02 (140), directly
+	// under the "Дата" header.
+	col, row := splitCell(t, hdr)
+	first, _ := f.GetCellValue(layoutSheet, col+strconv.Itoa(row+1))
+	if first != "2026-08-02" {
+		t.Errorf("table not sorted by accepted desc: first row = %q", first)
+	}
+
+	// The metric value is formatted through layout.FormatValue.
+	if cells, _ := f.SearchSheet(layoutSheet, "140"); len(cells) == 0 {
+		t.Errorf("metric value 140 not found on the sheet")
 	}
 }
 
-func TestExporterLayoutAppendsPackedPagesOnOneSheet(t *testing.T) {
+func TestExporterLayoutSingleContinuousTable(t *testing.T) {
 	rows := make([]map[string]any, 200)
 	for i := range rows {
 		rows[i] = map[string]any{"n": i}
@@ -120,28 +127,21 @@ func TestExporterLayoutAppendsPackedPagesOnOneSheet(t *testing.T) {
 		Table: &models.TableBlock{Columns: []models.Column{{Field: "n", Title: "N"}}},
 	}}}
 
-	out, err := xlsx.Exporter{}.Export(
-		models.Dataset{"rows": rows},
-		models.Export{FileName: new("pages"), Layout: &l},
-	)
-	if err != nil {
-		t.Fatalf("export failed: %v", err)
+	f := openLayout(t, mustExport(t, models.Dataset{"rows": rows}, "pages", l))
+
+	// A linear workbook must not split a table into chunks.
+	tables, err := f.GetTables(layoutSheet)
+	if err != nil || len(tables) != 1 {
+		t.Fatalf("want one continuous table, got %d (err %v)", len(tables), err)
 	}
 
-	f, err := excelize.OpenReader(out[0].Data)
-	if err != nil {
-		t.Fatalf("open workbook: %v", err)
+	// 1 header + 200 data rows, contiguous.
+	if got, _ := f.GetCellValue(layoutSheet, "A201"); got == "" {
+		t.Fatal("expected 200 contiguous data rows")
 	}
-	defer f.Close()
 
-	// The final packed chunk starts after the first 12x6 grid rows and the
-	// configured page gap, so data must continue below the first visual page.
-	got, err := f.GetCellValue("layout", "A80")
-	if err != nil {
-		t.Fatalf("read continuation row: %v", err)
-	}
-	if got == "" {
-		t.Fatal("expected packed continuation on the same worksheet")
+	if got, _ := f.GetCellValue(layoutSheet, "A202"); got != "" {
+		t.Errorf("table runs longer than its data: A202 = %q", got)
 	}
 }
 
@@ -155,26 +155,15 @@ func TestExporterLayoutFormatsAndAligns(t *testing.T) {
 		}},
 	}}}
 
-	out, err := xlsx.Exporter{}.Export(
-		models.Dataset{"ch": {{"channel": "Веб", "share": 0.46}}},
-		models.Export{FileName: new("fmt"), Layout: &l},
-	)
-	if err != nil {
-		t.Fatalf("export failed: %v", err)
-	}
+	data := models.Dataset{"ch": {{"channel": "Веб", "share": 0.46}}}
+	f := openLayout(t, mustExport(t, data, "fmt", l))
 
-	f, err := excelize.OpenReader(out[0].Data)
-	if err != nil {
-		t.Fatalf("open workbook: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	cells, err := f.SearchSheet("layout", "46%")
+	cells, err := f.SearchSheet(layoutSheet, "46%")
 	if err != nil || len(cells) == 0 {
 		t.Fatalf("formatted percent value not found (err %v, cells %v)", err, cells)
 	}
 
-	styleID, err := f.GetCellStyle("layout", cells[0])
+	styleID, err := f.GetCellStyle(layoutSheet, cells[0])
 	if err != nil {
 		t.Fatalf("get cell style: %v", err)
 	}
@@ -187,4 +176,37 @@ func TestExporterLayoutFormatsAndAligns(t *testing.T) {
 	if st.Alignment == nil || st.Alignment.Horizontal != "right" {
 		t.Errorf("share cell not right-aligned: %+v", st.Alignment)
 	}
+}
+
+func mustExport(t *testing.T, data models.Dataset, name string, l models.Layout) []models.Data {
+	t.Helper()
+
+	out, err := xlsx.Exporter{}.Export(data, models.Export{FileName: &name, Layout: &l})
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+
+	return out
+}
+
+func cellFinder(t *testing.T, f *excelize.File, needle string) string {
+	t.Helper()
+
+	cells, err := f.SearchSheet(layoutSheet, needle)
+	if err != nil || len(cells) == 0 {
+		t.Fatalf("cell %q not found (err %v)", needle, err)
+	}
+
+	return cells[0]
+}
+
+func splitCell(t *testing.T, cell string) (string, int) {
+	t.Helper()
+
+	col, row, err := excelize.SplitCellName(cell)
+	if err != nil {
+		t.Fatalf("split cell %q: %v", cell, err)
+	}
+
+	return col, row
 }
