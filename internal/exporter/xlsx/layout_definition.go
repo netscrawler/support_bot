@@ -235,7 +235,8 @@ func (w *layoutWriter) writeMetricStrip(metrics []layoutpkg.ResolvedBlock) {
 				label = mb.Field
 			}
 
-			w.mergeRange(startCol, endCol, labelRow, label, w.styles.kpiLabel)
+			// Uppercase mirrors the html .metric-label.
+			w.mergeRange(startCol, endCol, labelRow, strings.ToUpper(label), w.styles.kpiLabel)
 			w.mergeRange(startCol, endCol, valueRow, metricValue(rb.Rows, mb), w.styles.kpiValue)
 		}
 
@@ -271,7 +272,7 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 			title = c.Field
 		}
 
-		w.set(i+1, headerRow, title, w.styles.header)
+		w.set(i+1, headerRow, title, w.styles.header[alignIndex(c)])
 	}
 
 	for r, row := range rb.Rows {
@@ -280,21 +281,23 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 				i+1,
 				headerRow+1+r,
 				layoutpkg.FormatValue(row[c.Field], c.Format),
-				w.bodyStyle(c.Align),
+				w.styles.body[alignIndex(c)][r%2],
 			)
 		}
 	}
 
 	endRow := headerRow + len(rb.Rows)
 
+	// AddTable supplies the autofilter and a named structured range; its
+	// visual style is left at the minimal built-in because the header and
+	// zebra are painted by the cell styles above.
 	if len(rb.Rows) > 0 && w.err == nil {
 		w.tableSeq++
 		w.err = w.f.AddTable(w.sheet, &excelize.Table{
-			Range:          cellRange(1, headerRow, len(cols), endRow),
-			Name:           fmt.Sprintf("tbl%d", w.tableSeq),
-			StyleName:      "TableStyleMedium2",
-			ShowHeaderRow:  boolPtr(true),
-			ShowRowStripes: boolPtr(true),
+			Range:         cellRange(1, headerRow, len(cols), endRow),
+			Name:          fmt.Sprintf("tbl%d", w.tableSeq),
+			StyleName:     "TableStyleLight1",
+			ShowHeaderRow: boolPtr(true),
 		})
 	}
 
@@ -302,14 +305,27 @@ func (w *layoutWriter) writeTable(rb layoutpkg.ResolvedBlock) {
 	w.row = endRow + 2
 }
 
-func (w *layoutWriter) bodyStyle(align models.ColumnAlign) int {
-	switch align {
-	case models.ColumnAlignRight:
-		return w.styles.bodyRight
-	case models.ColumnAlignCenter:
-		return w.styles.bodyCenter
+// alignIndex maps a column to a header/body style slot, mirroring the html
+// renderer: explicit Align wins, else a numeric Format reads right-aligned,
+// else left.
+func alignIndex(c models.Column) int {
+	if i, ok := alignByName[c.Align]; ok {
+		return i
+	}
+
+	if isNumericFormat(c.Format) {
+		return alignByName[models.ColumnAlignRight]
+	}
+
+	return alignByName[models.ColumnAlignLeft]
+}
+
+func isNumericFormat(format string) bool {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "number", "percent", "money":
+		return true
 	default:
-		return w.styles.body
+		return false
 	}
 }
 
@@ -567,17 +583,36 @@ func chartRef(sheet string, c1, r1, c2, r2 int) string {
 	)
 }
 
-// layoutStyles holds every cell style id the linear renderer needs.
+// HTML render tokens, reused here so the workbook matches the html export.
+const (
+	inkColor       = "2E353B"
+	mutedInkColor  = "4C5773"
+	headerInkColor = "5B6572"
+	subtleInkColor = "949AAB"
+	headerFill     = "F4F6F8"
+	zebraFill      = "FBFCFD"
+	hairline       = "ECEEF1"
+	headerRule     = "D9DEE5"
+)
+
+var alignByName = map[models.ColumnAlign]int{
+	models.ColumnAlignLeft:   0,
+	models.ColumnAlignCenter: 1,
+	models.ColumnAlignRight:  2,
+}
+
+// layoutStyles holds every cell style id the linear renderer needs. The table
+// header and body are hand-painted (fill, hairline, zebra) to mirror the html
+// table — excelize's built-in table styles carry no dxf, so viewers such as
+// LibreOffice render them blank.
 type layoutStyles struct {
 	title    int
 	heading  int
 	kpiLabel int
 	kpiValue int
 
-	header     int
-	body       int
-	bodyCenter int
-	bodyRight  int
+	header [3]int    // by alignment: left, center, right
+	body   [3][2]int // [alignment][zebra row]
 
 	text int
 	note int
@@ -586,85 +621,80 @@ type layoutStyles struct {
 func newLayoutStyles(f *excelize.File) (layoutStyles, error) {
 	mk := func(s *excelize.Style) (int, error) { return f.NewStyle(s) }
 
-	bodyBorder := []excelize.Border{
-		{Type: "left", Color: "E5E9F0", Style: 1},
-		{Type: "right", Color: "E5E9F0", Style: 1},
-		{Type: "top", Color: "E5E9F0", Style: 1},
-		{Type: "bottom", Color: "E5E9F0", Style: 1},
-	}
-
-	bodyAlign := func(h string) *excelize.Style {
-		return &excelize.Style{
-			Border:    bodyBorder,
-			Alignment: &excelize.Alignment{Horizontal: h, Vertical: "center", WrapText: true},
-		}
-	}
-
 	var (
 		st  layoutStyles
 		err error
 	)
 
 	if st.title, err = mk(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 15, Color: "172033"},
+		Font: &excelize.Font{Bold: true, Size: 15, Color: inkColor},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.heading, err = mk(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 12, Color: "344054"},
+		Font: &excelize.Font{Bold: true, Size: 12, Color: mutedInkColor},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.kpiLabel, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 9, Color: "667085"},
+		Font:      &excelize.Font{Bold: true, Size: 9, Color: subtleInkColor},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.kpiValue, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 20, Color: "111827"},
+		Font:      &excelize.Font{Bold: true, Size: 20, Color: inkColor},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	}); err != nil {
 		return st, err
 	}
 
-	if st.header, err = mk(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Color: "172033"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"D9E2F3"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "D0D5DD", Style: 1},
-			{Type: "right", Color: "D0D5DD", Style: 1},
-			{Type: "top", Color: "D0D5DD", Style: 1},
-			{Type: "bottom", Color: "D0D5DD", Style: 1},
-		},
-		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
-	}); err != nil {
-		return st, err
-	}
+	horizontals := [3]string{"left", "center", "right"}
 
-	if st.body, err = mk(bodyAlign("left")); err != nil {
-		return st, err
-	}
+	for i, h := range horizontals {
+		if st.header[i], err = mk(&excelize.Style{
+			Font: &excelize.Font{Bold: true, Color: headerInkColor},
+			Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{headerFill}},
+			Border: []excelize.Border{
+				{Type: "top", Color: hairline, Style: 1},
+				{Type: "bottom", Color: headerRule, Style: 2},
+			},
+			Alignment: &excelize.Alignment{Horizontal: h, Vertical: "center", WrapText: true},
+		}); err != nil {
+			return st, err
+		}
 
-	if st.bodyCenter, err = mk(bodyAlign("center")); err != nil {
-		return st, err
-	}
+		for zebra := range 2 {
+			style := &excelize.Style{
+				Border: []excelize.Border{{Type: "bottom", Color: hairline, Style: 1}},
+				Alignment: &excelize.Alignment{
+					Horizontal: h, Vertical: "center", WrapText: true,
+				},
+			}
+			if zebra == 1 {
+				style.Fill = excelize.Fill{
+					Type: "pattern", Pattern: 1, Color: []string{zebraFill},
+				}
+			}
 
-	if st.bodyRight, err = mk(bodyAlign("right")); err != nil {
-		return st, err
+			if st.body[i][zebra], err = mk(style); err != nil {
+				return st, err
+			}
+		}
 	}
 
 	if st.text, err = mk(&excelize.Style{
+		Font:      &excelize.Font{Color: inkColor},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "top", WrapText: true},
 	}); err != nil {
 		return st, err
 	}
 
 	if st.note, err = mk(&excelize.Style{
-		Font:      &excelize.Font{Italic: true, Size: 9, Color: "949AAB"},
+		Font:      &excelize.Font{Italic: true, Size: 9, Color: subtleInkColor},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
 	}); err != nil {
 		return st, err
