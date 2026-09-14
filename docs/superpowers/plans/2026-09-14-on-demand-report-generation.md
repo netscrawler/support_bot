@@ -343,15 +343,9 @@ git commit -m "refactor(generator): extract generate/deliver out of createReport
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `internal/generator/generator_test.go`:
+Append to `internal/generator/generator_test.go`. First add `"errors"` and `"time"` to the existing `import (...)` block at the top of the file (do not add a second import block — merge them in alongside `"context"`, `"log/slog"`, `"support_bot/internal/models"`, `"testing"`), then append these test functions after the ones Task 1 added:
 
 ```go
-import (
-	// ...existing imports...
-	"errors"
-	"time"
-)
-
 func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
 	g := &Generator{
 		clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
@@ -680,7 +674,22 @@ Change both send sites — in `processGenReportEvent` (was `case o.ReportC <- re
 		}
 ```
 
-and identically in `processGenReportSpecialEvent` (same replacement, `o.ReportC <- generator.Job{Report: report}`).
+and the same one-line change in `processGenReportSpecialEvent`, which has the identical `select` block (was `case o.ReportC <- report:`, becomes `case o.ReportC <- generator.Job{Report: report}:`) — only the channel send line changes, the rest of that `select` (the `<-ctx.Done()` case and the `o.log.DebugContext(...)` call) is untouched:
+
+```go
+		select {
+		case <-ctx.Done():
+			o.log.InfoContext(ctx, "context cancelled. stopping")
+
+			return
+		case o.ReportC <- generator.Job{Report: report}:
+			o.log.DebugContext(
+				ctx,
+				"sending report to generator",
+				slog.Any("report", report.Name),
+			)
+		}
+```
 
 - [ ] **Step 2: Fix `internal/service/report_generator.go`'s error mapping**
 
