@@ -172,3 +172,57 @@ func TestGenerateOnDemand_SharesWorkerPoolWithScheduledJobs(t *testing.T) {
 		}
 	}
 }
+
+func TestReportGeneratorAdapter_Generate_ReturnsFirstExport(t *testing.T) {
+	g := &Generator{
+		c:          make(chan Job),
+		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+		eval:       fakeEvaluator{approve: true},
+		numWorkers: 1,
+		log:        slog.New(slog.DiscardHandler),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	g.Start(ctx)
+
+	adapter := ReportGeneratorAdapter{Gen: g}
+
+	report := models.Report{
+		Name:       "r1",
+		Evaluation: "true",
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+	}
+
+	data, err := adapter.Generate(ctx, report)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if data.FileName != "out_q1.csv" {
+		t.Fatalf("Generate() = %+v, want FileName out_q1.csv", data)
+	}
+}
+
+func TestReportGeneratorAdapter_Generate_NegativeEvaluationIsNotFound(t *testing.T) {
+	g := &Generator{
+		c:          make(chan Job),
+		clct:       fakeCollector{data: models.Dataset{}},
+		eval:       fakeEvaluator{approve: false},
+		numWorkers: 1,
+		log:        slog.New(slog.DiscardHandler),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	g.Start(ctx)
+
+	adapter := ReportGeneratorAdapter{Gen: g}
+
+	_, err := adapter.Generate(ctx, models.Report{Name: "r1", Evaluation: "false"})
+	if !errors.Is(err, models.ErrNotFound) {
+		t.Fatalf("Generate() error = %v, want models.ErrNotFound", err)
+	}
+}
