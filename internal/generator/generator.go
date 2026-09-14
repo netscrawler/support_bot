@@ -28,7 +28,7 @@ type Evaluator interface {
 }
 
 type Generator struct {
-	c chan models.Report
+	c chan Job
 
 	clct Collector
 
@@ -46,7 +46,7 @@ type Generator struct {
 }
 
 func New(
-	c chan models.Report,
+	c chan Job,
 	clct Collector,
 	snd models.SenderProvider,
 	sendRepo SentMsgRepository,
@@ -79,7 +79,7 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id uint8) {
+func (g *Generator) worker(ctx context.Context, jobs <-chan Job, id uint8) {
 	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
 
 	for {
@@ -96,9 +96,17 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 			}
 
 			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Name))
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Report.Name))
 
-			err := g.createReport(rvCtx, j)
+			if j.Result != nil {
+				res, err := g.generateOnDemand(rvCtx, j.Report)
+				j.Result <- JobResult{Data: res, Err: err}
+				cancel()
+
+				continue
+			}
+
+			err := g.createReport(rvCtx, j.Report)
 			if err != nil {
 				g.log.ErrorContext(rvCtx, "error create report", slog.Any("error", err))
 			}

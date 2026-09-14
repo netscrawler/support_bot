@@ -2,9 +2,11 @@ package generator
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"support_bot/internal/models"
 	"testing"
+	"time"
 )
 
 type fakeCollector struct {
@@ -82,5 +84,91 @@ func TestGenerate_NegativeEvaluationSkipsExport(t *testing.T) {
 
 	if res != nil {
 		t.Fatalf("generate() res = %+v, want nil", res)
+	}
+}
+
+func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
+	g := &Generator{
+		clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+		eval: fakeEvaluator{approve: true},
+		log:  slog.New(slog.DiscardHandler),
+	}
+
+	report := models.Report{
+		Name:       "r1",
+		Evaluation: "true",
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+	}
+
+	res, err := g.generateOnDemand(context.Background(), report)
+	if err != nil {
+		t.Fatalf("generateOnDemand() error = %v", err)
+	}
+
+	if len(res) != 1 || res[0].FileName != "out_q1.csv" {
+		t.Fatalf("generateOnDemand() res = %+v", res)
+	}
+}
+
+func TestGenerateOnDemand_NegativeEvaluationIsNotFound(t *testing.T) {
+	g := &Generator{
+		clct: fakeCollector{data: models.Dataset{}},
+		eval: fakeEvaluator{approve: false},
+		log:  slog.New(slog.DiscardHandler),
+	}
+
+	_, err := g.generateOnDemand(context.Background(), models.Report{Name: "r1", Evaluation: "false"})
+	if !errors.Is(err, models.ErrNotFound) {
+		t.Fatalf("generateOnDemand() error = %v, want models.ErrNotFound", err)
+	}
+}
+
+func TestGenerateOnDemand_SharesWorkerPoolWithScheduledJobs(t *testing.T) {
+	g := &Generator{
+		c:          make(chan Job),
+		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+		eval:       fakeEvaluator{approve: true},
+		numWorkers: 1,
+		log:        slog.New(slog.DiscardHandler),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	g.Start(ctx)
+
+	report := models.Report{
+		Name:       "r1",
+		Evaluation: "true",
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+	}
+
+	type outcome struct {
+		res []models.Data
+		err error
+	}
+
+	results := make(chan outcome, 2)
+
+	for range 2 {
+		go func() {
+			res, err := g.GenerateOnDemand(context.Background(), report)
+			results <- outcome{res: res, err: err}
+		}()
+	}
+
+	for range 2 {
+		select {
+		case o := <-results:
+			if o.err != nil {
+				t.Errorf("GenerateOnDemand() error = %v", o.err)
+			}
+
+			if len(o.res) != 1 || o.res[0].FileName != "out_q1.csv" {
+				t.Errorf("GenerateOnDemand() res = %+v", o.res)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for GenerateOnDemand result")
+		}
 	}
 }
