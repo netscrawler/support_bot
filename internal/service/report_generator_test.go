@@ -29,7 +29,7 @@ func (f fakeReportGenerator) Generate(_ context.Context, _ models.Report) (model
 func TestGenerateReport_NotFoundFromDB(t *testing.T) {
 	r := NewReport(fakeReportDB{err: models.ErrNotFound}, fakeReportGenerator{}, slog.New(slog.DiscardHandler))
 
-	_, err := r.GenerateReport("some-id")
+	_, err := r.GenerateReport(context.Background(), "some-id")
 	if err != errorz.ErrNotFound {
 		t.Fatalf("GenerateReport() error = %v, want errorz.ErrNotFound", err)
 	}
@@ -42,7 +42,7 @@ func TestGenerateReport_NotFoundFromGenerator(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 	)
 
-	_, err := r.GenerateReport("some-id")
+	_, err := r.GenerateReport(context.Background(), "some-id")
 	if err != errorz.ErrNotFound {
 		t.Fatalf("GenerateReport() error = %v, want errorz.ErrNotFound", err)
 	}
@@ -56,7 +56,7 @@ func TestGenerateReport_ReturnsGeneratedData(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 	)
 
-	got, err := r.GenerateReport("some-id")
+	got, err := r.GenerateReport(context.Background(), "some-id")
 	if err != nil {
 		t.Fatalf("GenerateReport() error = %v", err)
 	}

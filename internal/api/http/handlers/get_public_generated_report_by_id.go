@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"support_bot/internal/api/http/common"
 	"support_bot/internal/errorz"
@@ -18,17 +19,17 @@ func (h *Handler) GetGeneratedReportByID(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	report, err := h.rp.GenerateReport(reportID)
+	report, err := h.rp.GenerateReport(r.Context(), reportID)
 	if err != nil {
 		if errors.Is(err, errorz.ErrNotFound) {
 			httplib.ErrNotFound.Write(w)
 			return
 		}
 
-		httplib.NewHTTPError(http.StatusInternalServerError, err.Error()).Write(w)
+		h.log.ErrorContext(r.Context(), "generate report failed", slog.Any("error", err))
+		httplib.ErrInternal.Write(w)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	httplib.File(w, report.FileName, report.Data)
 }

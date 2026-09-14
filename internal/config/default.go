@@ -41,7 +41,7 @@ func Default() *Config {
 			MaxMemoryMB:      256,
 			AllowedModules: []string{
 				"json",    // JSON кодирование/декодирование
-				"httplib", // HTTP запросы
+				"http",    // HTTP запросы
 				"url",     // парсинг URL
 				"time",    // работа со временем
 				"strings", // строковые операции
@@ -95,7 +95,7 @@ func Default() *Config {
 			Port:              8080,
 			ReadTimeout:       5 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
-			WriteTimeout:      10 * time.Second,
+			WriteTimeout:      6 * time.Minute,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20,
 			MaxBodyBytes:      10 << 20,

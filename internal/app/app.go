@@ -135,6 +135,12 @@ func (a *app) GracefulShutdown(ctx context.Context) {
 }
 
 func (a *app) close(ctx context.Context) error {
+	var err error
+
+	if a.http != nil {
+		err = errors.Join(err, a.http.Shutdown(ctx))
+	}
+
 	a.cancel()
 
 	if a.tgBot != nil {
@@ -143,12 +149,6 @@ func (a *app) close(ctx context.Context) error {
 
 	if a.report != nil {
 		a.report.stop(ctx)
-	}
-
-	var err error
-
-	if a.http != nil {
-		err = errors.Join(err, a.http.Shutdown(ctx))
 	}
 
 	if a.smb != nil {

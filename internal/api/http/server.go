@@ -14,6 +14,7 @@ type Server struct {
 	router *httplib.Router
 
 	cfg *Config
+	log *slog.Logger
 }
 
 func New(cfg *Config, log *slog.Logger) *Server {
@@ -41,6 +42,7 @@ func New(cfg *Config, log *slog.Logger) *Server {
 		},
 		cfg:    cfg,
 		router: router,
+		log:    log,
 	}
 }
 
@@ -63,7 +65,11 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Start() {
-	go s.Run()
+	go func() {
+		if err := s.Run(); err != nil {
+			s.log.Error("http server stopped", slog.Any("error", err))
+		}
+	}()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
