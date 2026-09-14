@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"sync"
 	"time"
@@ -17,7 +18,7 @@ type Orchestrator struct {
 	EventC        chan models.Event
 	SpecialEventC chan models.SpecialEventForLK
 
-	ReportC chan models.Report
+	ReportC chan generator.Job
 	DeleteC chan models.Event
 
 	rL ReportLoader
@@ -31,7 +32,7 @@ type Orchestrator struct {
 func New(
 	evC chan models.Event,
 	specialEventC chan models.SpecialEventForLK,
-	reportC chan models.Report,
+	reportC chan generator.Job,
 	delC chan models.Event,
 	rl ReportLoader,
 	log *slog.Logger,
@@ -118,7 +119,7 @@ func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) 
 			o.log.InfoContext(ctx, "context cancelled. stopping")
 
 			return
-		case o.ReportC <- report:
+		case o.ReportC <- generator.Job{Report: report}:
 			o.log.DebugContext(
 				ctx,
 				"sending report to generator",
@@ -149,7 +150,7 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 			o.log.InfoContext(ctx, "context cancelled. stopping")
 
 			return
-		case o.ReportC <- report:
+		case o.ReportC <- generator.Job{Report: report}:
 			o.log.DebugContext(
 				ctx,
 				"sending report to generator",

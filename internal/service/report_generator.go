@@ -41,6 +41,10 @@ func (r *Report) GenerateReport(reportID string) (models.Data, error) {
 
 	data, err := r.gen.Generate(ctx, *report)
 	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return models.Data{}, errorz.ErrNotFound
+		}
+
 		return models.Data{},
 			fmt.Errorf("%w: generate report: %w", errorz.ErrInternal, err)
 	}

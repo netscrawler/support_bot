@@ -22,6 +22,8 @@ import (
 	"support_bot/internal/processor"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/processor/pipeline"
+	reportrepo "support_bot/internal/repository"
+	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
@@ -59,6 +61,8 @@ type app struct {
 
 	tgBot *telegramBot
 	smb   *smb.SMB
+
+	reportGenSvc *reportsvc.Report
 }
 
 type reportApp struct {
@@ -275,7 +279,7 @@ func (a *app) init(ctx context.Context) error {
 	sheduleEvents := make(chan models.Event, channelBufferSize)
 	eventChan := make(chan models.Event, channelBufferSize)
 	delChan := make(chan models.Event, channelBufferSize)
-	reportChan := make(chan models.Report, channelBufferSize)
+	reportChan := make(chan generator.Job, channelBufferSize)
 	specialEventChan := make(chan models.SpecialEventForLK, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
@@ -317,6 +321,9 @@ func (a *app) init(ctx context.Context) error {
 
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
 	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
+
+	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
+	reportGenSvc := reportsvc.NewReport(reportDBRepo, generator.ReportGeneratorAdapter{Gen: gen}, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
 	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)
@@ -376,6 +383,7 @@ func (a *app) init(ctx context.Context) error {
 
 	a.report = report
 	a.tgBot = tgBotUser
+	a.reportGenSvc = reportGenSvc
 
 	return nil
 }
