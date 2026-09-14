@@ -14,3 +14,10 @@ type Handler struct {
 
 	rp ReportProvider
 }
+
+func NewHandler(rp ReportProvider, log *slog.Logger) *Handler {
+	return &Handler{
+		rp:  rp,
+		log: log.With(slog.Any("module", "http_handler")),
+	}
+}

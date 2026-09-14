@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	apihandlers "support_bot/internal/api/http/handlers"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
@@ -16,6 +17,7 @@ import (
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
+	"support_bot/internal/pkg/httplib"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
@@ -30,6 +32,8 @@ import (
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 	"time"
+
+	apihttp "support_bot/internal/api/http"
 
 	maxadp "support_bot/internal/delivery/max"
 
@@ -63,6 +67,7 @@ type app struct {
 	smb   *smb.SMB
 
 	reportGenSvc *reportsvc.Report
+	http         *apihttp.Server
 }
 
 type reportApp struct {
@@ -111,6 +116,7 @@ func New(ctx context.Context, cfg *config.Config) (*app, error) {
 
 func (a *app) Start(_ context.Context) error {
 	a.tgBot.start()
+	a.http.Start()
 
 	return a.report.start(a.ctx)
 }
@@ -140,6 +146,10 @@ func (a *app) close(ctx context.Context) error {
 	}
 
 	var err error
+
+	if a.http != nil {
+		err = errors.Join(err, a.http.Shutdown(ctx))
+	}
 
 	if a.smb != nil {
 		err = errors.Join(err, a.smb.Close())
@@ -384,6 +394,15 @@ func (a *app) init(ctx context.Context) error {
 	a.report = report
 	a.tgBot = tgBotUser
 	a.reportGenSvc = reportGenSvc
+
+	httpSrv := apihttp.New(&cfg.HTTP, log)
+
+	reportHandler := apihandlers.NewHandler(reportGenSvc, log)
+	httpSrv.Router().Group("/api/v1/public", func(r *httplib.Router) {
+		r.Get("/report/{report_id}", reportHandler.GetGeneratedReportByID)
+	})
+
+	a.http = httpSrv
 
 	return nil
 }

@@ -48,6 +48,12 @@ func (s *Server) Addr() string {
 	return s.srv.Addr
 }
 
+// Router returns the underlying router so callers can register routes
+// after construction, once all handler dependencies are built.
+func (s *Server) Router() *httplib.Router {
+	return s.router
+}
+
 func (s *Server) Run() error {
 	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
