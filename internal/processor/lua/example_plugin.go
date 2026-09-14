@@ -17,7 +17,7 @@ function process(params)
     -- 1. Подключение стандартных и внешних модулей
     -- -------------------------------------------------------------------------
     local json = require("json")       -- JSON кодирование/декодирование
-    local httplib = require("httplib")       -- Выполнение HTTP запросов
+    local http = require("http")       -- Выполнение HTTP запросов
     local url = require("url")         -- Парсинг и построение URL
     local strings = require("strings") -- Расширенная работа со строками
     local time = require("time")       -- Работа со временем (тикеры, форматирование)
@@ -82,7 +82,7 @@ function process(params)
     -- 6. HTTP Запросы
     -- -------------------------------------------------------------------------
     
-    -- local resp, http_err = httplib.get("httplib://example.com/api/v1/info")
+    -- local resp, http_err = http.get("http://example.com/api/v1/info")
     -- if not http_err and resp.status_code == 200 then
     --     local data = json.decode(resp.body)
     -- end

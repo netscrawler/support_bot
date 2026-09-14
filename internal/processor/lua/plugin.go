@@ -179,12 +179,12 @@ func (p *LuaPlugin) preloadModules() {
 
 	// HTTP - выполнение HTTP запросов (GET, POST, PUT, DELETE)
 	// создаем HTTP клиент с разумными таймаутами
-	// важно: preload после libs.Preload, чтобы переопределить модуль "httplib"
+	// важно: preload после libs.Preload, чтобы переопределить модуль "http"
 	// из gopher-lua-libs и гарантировать API gluahttp.
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	p.vm.PreloadModule("httplib", gluahttp.NewHttpModule(httpClient).Loader)
+	p.vm.PreloadModule("http", gluahttp.NewHttpModule(httpClient).Loader)
 
 	// Регистрируем stdlib если он передан
 	if p.stdlib != nil {

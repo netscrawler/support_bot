@@ -26,7 +26,7 @@ func DefaultRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
 		AllowedModules: []string{
 			"json",    // JSON кодирование/декодирование
-			"httplib", // HTTP запросы
+			"http",    // HTTP запросы
 			"url",     // парсинг URL
 			"time",    // работа со временем
 			"strings", // строковые операции
