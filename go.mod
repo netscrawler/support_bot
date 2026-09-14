@@ -1,6 +1,6 @@
 module support_bot
 
-go 1.25.10
+go 1.27.0
 
 require github.com/jackc/pgx/v5 v5.8.0
 

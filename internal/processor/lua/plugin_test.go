@@ -72,9 +72,9 @@ end
 		plug := `
 		-- Пример Lua плагина с использованием stdlib
 function getOperatorFromNumber(number)
-    local http = require("http")
+    local httplib = require("httplib")
     local json = require("json")
-    local response, err = http.request("GET", "https://num.voxlink.ru/get/", {
+    local response, err = httplib.request("GET", "https://num.voxlink.ru/get/", {
         query = "num=" .. tostring(number):sub(2),
         headers = { ["Accept"] = "application/json" },
         timeout = "30s",

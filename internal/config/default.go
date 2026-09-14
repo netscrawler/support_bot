@@ -39,7 +39,7 @@ func Default() *Config {
 			MaxMemoryMB:      256,
 			AllowedModules: []string{
 				"json",    // JSON кодирование/декодирование
-				"http",    // HTTP запросы
+				"httplib", // HTTP запросы
 				"url",     // парсинг URL
 				"time",    // работа со временем
 				"strings", // строковые операции

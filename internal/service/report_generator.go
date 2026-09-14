@@ -1,0 +1,49 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"support_bot/internal/errorz"
+	"support_bot/internal/models"
+)
+
+type ReportDB interface {
+	GetPublicReportByID(ctx context.Context, reportID string) (*models.Report, error)
+}
+
+type ReportGenerator interface {
+	Generate(ctx context.Context, report models.Report) (models.Data, error)
+}
+
+type Report struct {
+	db  ReportDB
+	gen ReportGenerator
+	log *slog.Logger
+}
+
+func NewReport(db ReportDB, gen ReportGenerator, log *slog.Logger) *Report {
+	return &Report{db: db, gen: gen, log: log.With(slog.Any("module", "report_generator"))}
+}
+
+func (r *Report) GenerateReport(reportID string) (models.Data, error) {
+	ctx := context.Background()
+
+	report, err := r.db.GetPublicReportByID(ctx, reportID)
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return models.Data{}, errorz.ErrNotFound
+		}
+
+		return models.Data{}, fmt.Errorf("get report: %w", err)
+	}
+
+	data, err := r.gen.Generate(ctx, *report)
+	if err != nil {
+		return models.Data{},
+			fmt.Errorf("%w: generate report: %w", errorz.ErrInternal, err)
+	}
+
+	return data, nil
+}

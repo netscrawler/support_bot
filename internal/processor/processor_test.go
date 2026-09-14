@@ -25,7 +25,7 @@ func TestProcessor_Process_WithLua(t *testing.T) {
 		MaxMemoryMB:      256,
 		AllowedModules: []string{
 			"json",
-			"http",
+			"httplib",
 			"url",
 			"time",
 			"strings",

@@ -132,10 +132,10 @@ func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
 type RecipientType string
 
 const (
-	emailRecipient    = "email"
+	EmailRecipient    = "email"
 	TelegramRecipient = "tg"
-	sambaRecipient    = "smb"
-	maxRecipient      = "max"
+	SambaRecipient    = "smb"
+	MaxRecipient      = "max"
 )
 
 type Recipient struct {

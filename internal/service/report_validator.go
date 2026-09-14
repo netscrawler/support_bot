@@ -57,11 +57,19 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		if rec.Type == "" {
 			return fmt.Errorf("recipient %q type is empty", rec.Name)
 		}
+
+		if err := r.validateRecipient(ctx, rec); err != nil {
+			return fmt.Errorf("recipient %q: %w", rec.Name, err)
+		}
 	}
 
 	for _, exp := range report.Exports {
 		if exp.Format == "" {
 			return fmt.Errorf("export format is empty in report %s", report.Name)
+		}
+
+		if err := r.validateExport(ctx, exp); err != nil {
+			return fmt.Errorf("export %q in report %s: %w", exp.Format, report.Name, err)
 		}
 	}
 
@@ -98,64 +106,103 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 	return nil
 }
 
-func (r *ReportValidation) validateReport(ctx context.Context, report models.Report) error {
-	return nil
-}
-
-func (r *ReportValidation) validateQuery(ctx context.Context, query models.Card) error {
-	return nil
-}
-
-func (r *ReportValidation) validateQueryParams(
-	ctx context.Context,
-	params map[string]string,
-) error {
-	return nil
-}
-
+// validateRecipient checks that a recipient carries the fields its delivery
+// channel (models.Message.Send) will dereference unconditionally, so a bad
+// report fails validation instead of panicking at send time.
 func (r *ReportValidation) validateRecipient(
 	ctx context.Context,
 	recipient models.Recipient,
 ) error {
-	return nil
+	switch recipient.Type {
+	case models.TelegramRecipient:
+		return r.validateRecipientChat(ctx, recipient.Chat, models.ChatTypeTg)
+	case models.MaxRecipient:
+		return r.validateRecipientChat(ctx, recipient.Chat, models.ChatTypeMax)
+	case models.EmailRecipient:
+		return r.validateRecipientEmailTemplate(ctx, recipient.Email)
+	case models.SambaRecipient:
+		return r.validateRecipientRemotePath(ctx, recipient.RemotePath)
+	default:
+		return fmt.Errorf("unsupported recipient type %q", recipient.Type)
+	}
 }
 
 func (r *ReportValidation) validateRecipientRemotePath(
 	ctx context.Context,
-	remotePath string,
+	remotePath *string,
 ) error {
+	if remotePath == nil || *remotePath == "" {
+		return fmt.Errorf("remote_path is required for smb recipients")
+	}
+
 	return nil
 }
 
-func (r *ReportValidation) validateRecipientChat(ctx context.Context, ch models.Chat) error {
+func (r *ReportValidation) validateRecipientChat(
+	ctx context.Context,
+	ch *models.Chat,
+	wantChatType string,
+) error {
+	if ch == nil {
+		return fmt.Errorf("chat is required for %s recipients", wantChatType)
+	}
+
+	if ch.ChType != wantChatType {
+		return fmt.Errorf("chat type %q does not match recipient type %q", ch.ChType, wantChatType)
+	}
+
 	return nil
 }
 
 func (r *ReportValidation) validateRecipientEmailTemplate(
 	ctx context.Context,
-	tmpl models.EmailTemplate,
+	tmpl *models.EmailTemplate,
 ) error {
+	if tmpl == nil {
+		return fmt.Errorf("email is required for email recipients")
+	}
+
+	if len(tmpl.Dest) == 0 {
+		return fmt.Errorf("email recipient has no destination addresses")
+	}
+
 	return nil
 }
 
+// validateExport checks fields that internal/exporter.Export dereferences
+// unconditionally per format, so a bad report fails validation instead of
+// panicking at export time.
 func (r *ReportValidation) validateExport(ctx context.Context, export models.Export) error {
-	return nil
+	switch export.Format {
+	case models.ReportFormatCsv, models.ReportFormatXlsx, models.ReportFormatPng,
+		models.ReportFormatHTML, models.ReportFormatPdf:
+		if export.FileName == nil || *export.FileName == "" {
+			return fmt.Errorf("file_name is required for format %q", export.Format)
+		}
+	case models.ReportFormatText:
+	default:
+		return fmt.Errorf("unsupported export format %q", export.Format)
+	}
+
+	switch export.Format {
+	case models.ReportFormatHTML, models.ReportFormatPdf, models.ReportFormatText:
+		return r.validateExportTemplate(ctx, export.Template)
+	default:
+		return nil
+	}
 }
 
-func (r *ReportValidation) validateExportTemplate(ctx context.Context, tmpl models.Template) error {
-	return nil
-}
-
-func (r *ReportValidation) validatePipeline(
+func (r *ReportValidation) validateExportTemplate(
 	ctx context.Context,
-	pipeline models.Pipeline,
+	tmpl *models.Template,
 ) error {
-	return nil
-}
+	if tmpl == nil {
+		return fmt.Errorf("template is required for this export format")
+	}
 
-func (r *ReportValidation) validateEvaluation(
-	ctx context.Context,
-	evaluation string,
-) error {
+	if tmpl.TemplateText == "" {
+		return fmt.Errorf("template %q has empty template_text", tmpl.Title)
+	}
+
 	return nil
 }

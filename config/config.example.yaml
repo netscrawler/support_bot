@@ -27,7 +27,7 @@ lua:
     # Разрешенные луа модули
     allowed_modules:
         - json
-        - http
+        - httplib
         - url
         - time
         - strings
