@@ -131,7 +131,7 @@ WHERE sm.id = last_msgs.id;`
 
 	tx, err := rr.db.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		rr.log.ErrorContext(ctx, "begin tx failed, continue without tx", err)
+		rr.log.ErrorContext(ctx, "begin tx failed, continue without tx", slog.Any("error", err))
 
 		_, err = rr.db.ExecContext(ctx, query)
 		if err != nil {

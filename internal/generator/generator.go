@@ -109,6 +109,27 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id ui
 }
 
 func (g *Generator) createReport(ctx context.Context, report models.Report) error {
+	data, res, approve, err := g.generate(ctx, report)
+	if err != nil {
+		return err
+	}
+
+	if !approve {
+		return nil
+	}
+
+	return g.deliver(ctx, report, data, res)
+}
+
+// generate runs the shared report pipeline: resolve query params, collect
+// data, run the processing pipeline (if any), evaluate the report
+// condition, and export the result. It stops short of delivering anything,
+// so both the scheduled path (createReport) and the on-demand path
+// (generateOnDemand, added in on_demand.go) can reuse it unchanged.
+func (g *Generator) generate(
+	ctx context.Context,
+	report models.Report,
+) (data models.Dataset, res []models.Data, approve bool, err error) {
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
@@ -128,11 +149,11 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		queries = append(queries, q)
 	}
 
-	data, err := g.clct.Collect(ctx, queries...)
+	data, err = g.clct.Collect(ctx, queries...)
 	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 
-		return err
+		return nil, nil, false, err
 	}
 
 	if report.Pipeline != nil {
@@ -151,25 +172,25 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 				slog.Any("error", err),
 			)
 
-			return err
+			return nil, nil, false, err
 		}
 		data = processed
 	}
 
-	approve, err := g.eval.Evaluate(ctx, data, report.Evaluation)
+	approve, err = g.eval.Evaluate(ctx, data, report.Evaluation)
 	if err != nil {
 		l.ErrorContext(ctx, "error while evaluate report", slog.Any("error", err))
 
-		return err
+		return nil, nil, false, err
 	}
 
 	if !approve {
 		l.InfoContext(ctx, "negative result of evaluating, don`t send report")
 
-		return nil
+		return data, nil, false, nil
 	}
 
-	res := make([]models.Data, 0, len(report.Exports))
+	res = make([]models.Data, 0, len(report.Exports))
 
 	for _, e := range report.Exports {
 		r, err := exporter.Export(data, e)
@@ -186,6 +207,20 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 
 		res = append(res, r...)
 	}
+
+	return data, res, true, nil
+}
+
+// deliver sends a generated report to its configured recipients and records
+// the resulting message state. This is the original tail end of
+// createReport, unchanged, used only by the scheduled path.
+func (g *Generator) deliver(
+	ctx context.Context,
+	report models.Report,
+	data models.Dataset,
+	res []models.Data,
+) error {
+	l := g.log
 
 	if len(report.Recipients) == 0 {
 		l.ErrorContext(ctx, "empty targets list")
