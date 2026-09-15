@@ -8,9 +8,12 @@ import (
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
-	"sync"
-	"time"
 )
+
+// ponytail: fixed-size semaphore, not wired to the generator's actual worker
+// count (hardcoded 4 in app.go, itself slated to move under fx) — sync the
+// two or thread this through New() if throughput needs tuning.
+const maxInFlightGenerations = 8
 
 type ReportLoader interface {
 	Load(ctx context.Context) ([]models.Report, error)
@@ -35,8 +38,7 @@ type Orchestrator struct {
 	snd         models.SenderProvider
 	sentMsgRepo SentMsgSaver
 
-	mu    sync.RWMutex
-	cache map[string][]models.Report
+	genSem chan struct{}
 
 	log *slog.Logger
 }
@@ -52,7 +54,6 @@ func New(
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
-	cache := make(map[string][]models.Report)
 
 	return &Orchestrator{
 		EventC:        evC,
@@ -62,7 +63,7 @@ func New(
 		gen:           gen,
 		snd:           snd,
 		sentMsgRepo:   sentMsgRepo,
-		cache:         cache,
+		genSem:        make(chan struct{}, maxInFlightGenerations),
 		log:           l,
 	}
 }
@@ -71,14 +72,28 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	o.log.InfoContext(ctx, "starting...")
 
 	go o.run(ctx)
-
-	o.cleaner(ctx)
 }
 
-func (o *Orchestrator) reLoad() {
-	o.mu.Lock()
-	clear(o.cache)
-	o.mu.Unlock()
+// Generate implements service.ReportGenerator's single-file Generate
+// signature (internal/service/report_generator.go), routing an on-demand
+// request through the exact same generate step as the event-driven path —
+// the orchestrator doesn't distinguish "send it" from "return it", only
+// what happens with the result differs. On-demand reports are expected to
+// declare exactly one export; if more are configured, the first is
+// returned — a known simplification. A negative evaluation result, or no
+// exports, is surfaced as models.ErrNotFound, matching the "not found"
+// semantics the HTTP layer expects.
+func (o *Orchestrator) Generate(ctx context.Context, report models.Report) (models.Data, error) {
+	_, data, approve, err := o.generate(ctx, report)
+	if err != nil {
+		return models.Data{}, err
+	}
+
+	if !approve || len(data) == 0 {
+		return models.Data{}, models.ErrNotFound
+	}
+
+	return data[0], nil
 }
 
 func (o *Orchestrator) run(ctx context.Context) {
@@ -100,7 +115,7 @@ func (o *Orchestrator) run(ctx context.Context) {
 				o.processDelReportEvent(ctx, event.Name)
 
 			default:
-				o.processGenReportEvent(ctx, event.Name)
+				o.processGenReportEvent(ctx, event.Name, true, nil)
 
 			}
 		case event, ok := <-o.SpecialEventC:
@@ -112,35 +127,27 @@ func (o *Orchestrator) run(ctx context.Context) {
 
 			switch event.Event.Type {
 			case models.EventTypeGenReportForTG:
-				o.processGenReportSpecialEvent(ctx, event)
+				o.processGenReportEvent(ctx, event.Event.Name, false, &event.Recipient)
 			case models.EventTypeGenReport:
-				o.processGenReportSpecialEvent(ctx, event)
+				o.processGenReportEvent(ctx, event.Event.Name, false, nil)
 			default:
 			}
 		}
 	}
 }
 
-func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) {
-	reports, err := o.getReportByEvent(ctx, event, true)
-	if err != nil {
-		o.log.ErrorContext(ctx, "error loading report", slog.Any("error", err))
-
-		return
-	}
-
-	for _, report := range reports {
-		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
-
-		go o.generateAndDeliver(ctx, report)
-	}
-}
-
-func (o *Orchestrator) processGenReportSpecialEvent(
+// processGenReportEvent loads the report(s) registered for event and
+// delivers each one — the caller doesn't distinguish which channel or event
+// type triggered this beyond the two things that actually vary: whether the
+// event only targets active reports, and an optional recipient override for
+// a special one-off (e.g. "generate for this LK chat right now").
+func (o *Orchestrator) processGenReportEvent(
 	ctx context.Context,
-	event models.SpecialEventForLK,
+	event string,
+	active bool,
+	recipientOverride *models.Recipient,
 ) {
-	reports, err := o.getReportByEvent(ctx, event.Event.Name, false)
+	reports, err := o.getReportByEvent(ctx, event, active)
 	if err != nil {
 		o.log.ErrorContext(ctx, "error loading report", slog.Any("error", err))
 
@@ -148,26 +155,45 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 	}
 
 	for _, report := range reports {
-		if event.Event.Type == models.EventTypeGenReportForTG {
-			report.Recipients = []models.Recipient{event.Recipient}
+		if recipientOverride != nil {
+			report.Recipients = []models.Recipient{*recipientOverride}
 		}
 
 		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
 
-		go o.generateAndDeliver(ctx, report)
+		select {
+		case o.genSem <- struct{}{}:
+			go func(report models.Report) {
+				defer func() { <-o.genSem }()
+
+				o.generateAndDeliver(ctx, report)
+			}(report)
+		case <-ctx.Done():
+			return
+		}
 	}
+}
+
+// generate runs report through the generator's shared worker pool under a
+// log context. The per-report timeout budget is the worker pool's own
+// concern (internal/generator/generator.go), not duplicated here. It stops
+// short of doing anything with the result — handing that off, either by
+// delivering it (generateAndDeliver) or returning it to an on-demand caller
+// (Generate), is up to the callers below.
+func (o *Orchestrator) generate(
+	ctx context.Context,
+	report models.Report,
+) (models.Dataset, []models.Data, bool, error) {
+	ctx = logger.AppendCtx(ctx, slog.Any("report_name", report.Name))
+
+	return o.gen.Generate(ctx, report)
 }
 
 // generateAndDeliver runs report through the generator's shared worker pool
 // and, on a positive evaluation, delivers it to report's recipients. It
 // runs in its own goroutine so a busy pool never blocks the event loop.
 func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Report) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	ctx = logger.AppendCtx(ctx, slog.Any("report_name", report.Name))
-
-	dataset, data, approve, err := o.gen.Generate(ctx, report)
+	dataset, data, approve, err := o.generate(ctx, report)
 	if err != nil {
 		o.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
 
@@ -247,24 +273,6 @@ func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) 
 	}
 }
 
-func (o *Orchestrator) cleaner(ctx context.Context) {
-	tick := time.NewTicker(5 * time.Minute)
-
-	go func() {
-		defer tick.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				o.reLoad()
-				o.log.DebugContext(ctx, "cache cleaned")
-			}
-		}
-	}()
-}
-
 func (o *Orchestrator) getReportByEvent(
 	ctx context.Context,
 	event string,
@@ -272,18 +280,6 @@ func (o *Orchestrator) getReportByEvent(
 ) ([]models.Report, error) {
 	l := o.log.With(slog.Any("event", event))
 	l.DebugContext(ctx, "getting report by event")
-
-	o.mu.RLock()
-
-	r, ok := o.cache[event]
-	if ok {
-		l.DebugContext(ctx, "find report in cache")
-		o.mu.RUnlock()
-
-		return r, nil
-	}
-
-	o.mu.RUnlock()
 
 	l.DebugContext(ctx, "cache miss, loading report")
 
@@ -299,15 +295,6 @@ func (o *Orchestrator) getReportByEvent(
 	}
 
 	l.DebugContext(ctx, "reports loaded", slog.Any("reports_count", 1))
-
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	if rp, ok := o.cache[event]; ok {
-		o.cache[event] = append(rp, *reports)
-	} else {
-		o.cache[event] = append([]models.Report{}, *reports)
-	}
 
 	return []models.Report{*reports}, nil
 }
