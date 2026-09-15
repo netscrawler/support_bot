@@ -14,9 +14,6 @@ import (
 	"go.uber.org/fx"
 )
 
-// collectorsParallel mirrors the `parallel` const from app.go (which still
-// declares its own copy until app.go is deleted in Task 7 — same name would
-// collide in package app).
 const collectorsParallel uint8 = 30
 
 var collectorsModule = fx.Module(

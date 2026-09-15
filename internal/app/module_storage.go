@@ -12,17 +12,10 @@ import (
 
 var storageModule = fx.Module("storage", fx.Provide(newAppContext, newDB))
 
-func newAppContext(lc fx.Lifecycle) context.Context {
+func newAppContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	lc.Append(fx.Hook{
-		OnStop: func(context.Context) error {
-			cancel()
-			return nil
-		},
-	})
-
-	return ctx
+	return ctx, cancel
 }
 
 func newDB(ctx context.Context, cfg *config.Config, log *slog.Logger, lc fx.Lifecycle) (*postgres.DB, error) {

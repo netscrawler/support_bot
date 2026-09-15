@@ -27,9 +27,6 @@ import (
 	"go.uber.org/fx"
 )
 
-// reportBufferSize mirrors the `channelBufferSize` const from app.go (which
-// still declares its own copy until app.go is deleted in Task 7 — same name
-// would collide in package app).
 const reportBufferSize uint8 = 15
 
 var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
@@ -38,15 +35,15 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newDelChan, fx.ResultTags(`name:"delChan"`)),
 	newSpecialEventChan,
 	newShdAPIChan,
-	fx.Annotate(newSheduler, fx.ParamTags(``, ``, `name:"scheduleEvents"`, ``)),
-	fx.Annotate(newEventCreator, fx.ParamTags(``, ``, `name:"scheduleEvents"`, `name:"eventChan"`)),
+	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
+	fx.Annotate(newEventCreator, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`)),
 	fx.Annotate(newEventAPI, fx.ParamTags(`name:"eventChan"`, ``)),
 	newEvaluator, newLuaStdCollector, newLuaManager, newProcessorReg, newProcessor,
 	newResultRepository,
-	fx.Annotate(newDeleter, fx.ParamTags(`name:"delChan"`, ``, ``, ``, ``)),
+	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
 	newOrchestratorRepository,
-	fx.Annotate(newOrchestrator, fx.ParamTags(`name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``)),
+	fx.Annotate(newOrchestrator, fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``)),
 	newReportGenService,
 ))
 
@@ -71,6 +68,7 @@ func newShdAPIChan() chan sheduler.SheduleAPIEvent {
 }
 
 func newSheduler(
+	appCtx context.Context,
 	rdb *postgres.DB,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
@@ -81,7 +79,7 @@ func newSheduler(
 	shd := sheduler.NewSheduler(shdLoader, log, scheduleEvents, shdAPI)
 
 	lc.Append(fx.Hook{
-		OnStart: shd.Start,
+		OnStart: func(context.Context) error { return shd.Start(appCtx) },
 		OnStop: func(context.Context) error {
 			shd.Stop()
 
@@ -93,6 +91,7 @@ func newSheduler(
 }
 
 func newEventCreator(
+	appCtx context.Context,
 	rdb *postgres.DB,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
@@ -105,7 +104,7 @@ func newEventCreator(
 	// No OnStop here — mirrors the original app.go asymmetry: the scheduler
 	// and other lifecycle-managed components stop, but the event creator's
 	// goroutine was never wired to a Stop hook in the pre-fx code either.
-	lc.Append(fx.Hook{OnStart: evC.Start})
+	lc.Append(fx.Hook{OnStart: func(context.Context) error { return evC.Start(appCtx) }})
 
 	return evC
 }
@@ -161,6 +160,7 @@ func newResultRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator.SentM
 }
 
 func newDeleter(
+	appCtx context.Context,
 	delChan chan models.Event,
 	tg *telegram.ChatAdaptor,
 	maxAdp *maxadp.Adaptor,
@@ -170,8 +170,8 @@ func newDeleter(
 ) *orchestrator.Deleter {
 	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
 
-	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
-		deleter.Start(ctx)
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		deleter.Start(appCtx)
 
 		return nil
 	}})
@@ -180,6 +180,7 @@ func newDeleter(
 }
 
 func newGenerator(
+	appCtx context.Context,
 	clct *collector.Collector,
 	proc *processor.Processor,
 	eval *evaluator.Engine,
@@ -188,8 +189,8 @@ func newGenerator(
 ) *generator.Generator {
 	gen := generator.New(clct, proc, eval, 4, log)
 
-	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
-		gen.Start(ctx)
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		gen.Start(appCtx)
 
 		return nil
 	}})
@@ -202,6 +203,7 @@ func newOrchestratorRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator
 }
 
 func newOrchestrator(
+	appCtx context.Context,
 	eventChan chan models.Event,
 	specialEventChan chan models.SpecialEventForLK,
 	delChan chan models.Event,
@@ -223,8 +225,8 @@ func newOrchestrator(
 		log,
 	)
 
-	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
-		orch.Start(ctx)
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		orch.Start(appCtx)
 
 		return nil
 	}})

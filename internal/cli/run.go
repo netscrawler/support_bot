@@ -53,8 +53,24 @@ func Run(version, commit, buildTime string, args []string) error {
 		}),
 	)
 	if err := fxApp.Err(); err != nil {
+		// Known gap: if construction failed partway through (some providers'
+		// OnStop hooks already registered, e.g. a DB connection), those
+		// resources are not cleaned up here. Calling fxApp.Stop() would not
+		// help either — fx's internal lifecycle only runs OnStop hooks whose
+		// OnStart phase (or the reverse-order walk gated by having reached
+		// the "started"/"starting" state) actually ran, and that only
+		// happens via App.Start()/App.Run(), which we never reach on this
+		// path (verified against go.uber.org/fx v1.24.0's
+		// internal/lifecycle.Lifecycle.Stop: it no-ops unless the lifecycle
+		// state is started/incompleteStart/starting, and numStarted is 0
+		// here since Start() was never called). Low practical impact: the
+		// process exits immediately after this return.
 		return fmt.Errorf("create app: %w", err)
 	}
+	// fx.App.Run() installs OS signal handlers and blocks until shutdown.
+	// On a start-hook failure it logs via the fxevent logger and calls
+	// os.Exit(1) directly, bypassing this function's normal error-return
+	// path — this is fx's standard Run() behavior, not a bug.
 	fxApp.Run()
 	return nil
 }

@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"log/slog"
-	apihandlers "support_bot/internal/api/http/handlers"
 	apihttp "support_bot/internal/api/http"
+	apihandlers "support_bot/internal/api/http/handlers"
 	"support_bot/internal/config"
 	reportsvc "support_bot/internal/service"
 
