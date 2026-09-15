@@ -1,17 +1,15 @@
 package cli
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/signal"
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
-	"syscall"
-	"time"
+
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 )
 
 func Run(version, commit, buildTime string, args []string) error {
@@ -38,9 +36,6 @@ func Run(version, commit, buildTime string, args []string) error {
 		return fmt.Errorf("setup logger: %w", err)
 	}
 
-	ctx, cancelApp := context.WithCancel(context.Background())
-	defer cancelApp()
-
 	log.Info(
 		"starting with config",
 		slog.Any("config", cfg),
@@ -49,27 +44,17 @@ func Run(version, commit, buildTime string, args []string) error {
 			slog.Any("BuildTime", buildTime)),
 	)
 
-	appContainer, err := app.New(ctx, cfg)
-	if err != nil {
+	fxApp := fx.New(
+		app.Module,
+		fx.Supply(cfg, log),
+		fx.StopTimeout(cfg.Timeout.Shutdown),
+		fx.WithLogger(func(log *slog.Logger) fxevent.Logger {
+			return &fxevent.SlogLogger{Logger: log}
+		}),
+	)
+	if err := fxApp.Err(); err != nil {
 		return fmt.Errorf("create app: %w", err)
 	}
-
-	err = appContainer.Start(ctx)
-	if err != nil {
-		return fmt.Errorf("start app: %w", err)
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-
-	<-stop
-	log.Info("receive stop signal", slog.Any("finish time", 10*time.Second))
-
-	sCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	shutdownCtx := logger.AppendCtx(sCtx,
-		slog.Any("function", "shutting down"))
-	appContainer.GracefulShutdown(shutdownCtx)
+	fxApp.Run()
 	return nil
 }
