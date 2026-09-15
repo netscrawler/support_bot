@@ -289,7 +289,6 @@ func (a *app) init(ctx context.Context) error {
 	sheduleEvents := make(chan models.Event, channelBufferSize)
 	eventChan := make(chan models.Event, channelBufferSize)
 	delChan := make(chan models.Event, channelBufferSize)
-	reportChan := make(chan generator.Job, channelBufferSize)
 	specialEventChan := make(chan models.SpecialEventForLK, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
@@ -330,13 +329,13 @@ func (a *app) init(ctx context.Context) error {
 	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
 
 	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
-	gen := generator.New(reportChan, clct, proc, eval, 4, log)
+	gen := generator.New(clct, proc, eval, 4, log)
 
 	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
 	reportGenSvc := reportsvc.NewReport(reportDBRepo, generator.ReportGeneratorAdapter{Gen: gen}, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
-	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, *snd, delRepo, log)
+	orch := orchestrator.New(eventChan, specialEventChan, delChan, orchRepo, gen, *snd, delRepo, log)
 	report := &reportApp{
 		ScheduleC:    sheduleEvents,
 		EventC:       eventChan,
