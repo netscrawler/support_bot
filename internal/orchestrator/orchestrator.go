@@ -26,10 +26,10 @@ type Orchestrator struct {
 	EventC        chan models.Event
 	SpecialEventC chan models.SpecialEventForLK
 
-	ReportC chan generator.Job
 	DeleteC chan models.Event
 
-	rL ReportLoader
+	rL  ReportLoader
+	gen *generator.Generator
 
 	snd         models.SenderProvider
 	sentMsgRepo SentMsgSaver
@@ -43,9 +43,9 @@ type Orchestrator struct {
 func New(
 	evC chan models.Event,
 	specialEventC chan models.SpecialEventForLK,
-	reportC chan generator.Job,
 	delC chan models.Event,
 	rl ReportLoader,
+	gen *generator.Generator,
 	snd models.SenderProvider,
 	sentMsgRepo SentMsgSaver,
 	log *slog.Logger,
@@ -56,9 +56,9 @@ func New(
 	return &Orchestrator{
 		EventC:        evC,
 		SpecialEventC: specialEventC,
-		ReportC:       reportC,
 		DeleteC:       delC,
 		rL:            rl,
+		gen:           gen,
 		snd:           snd,
 		sentMsgRepo:   sentMsgRepo,
 		cache:         cache,
@@ -129,22 +129,9 @@ func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) 
 	}
 
 	for _, report := range reports {
-		result := make(chan generator.JobResult, 1)
+		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
 
-		select {
-		case <-ctx.Done():
-			o.log.InfoContext(ctx, "context cancelled. stopping")
-
-			return
-		case o.ReportC <- generator.Job{Report: report, Result: result}:
-			o.log.DebugContext(
-				ctx,
-				"sending report to generator",
-				slog.Any("report", report.Name),
-			)
-		}
-
-		go o.awaitAndDeliver(ctx, report, result)
+		go o.generateAndDeliver(ctx, report)
 	}
 }
 
@@ -164,51 +151,29 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 			report.Recipients = []models.Recipient{event.Recipient}
 		}
 
-		result := make(chan generator.JobResult, 1)
+		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
 
-		select {
-		case <-ctx.Done():
-			o.log.InfoContext(ctx, "context cancelled. stopping")
-
-			return
-		case o.ReportC <- generator.Job{Report: report, Result: result}:
-			o.log.DebugContext(
-				ctx,
-				"sending report to generator",
-				slog.Any("report", report.Name),
-			)
-		}
-
-		go o.awaitAndDeliver(ctx, report, result)
+		go o.generateAndDeliver(ctx, report)
 	}
 }
 
-// awaitAndDeliver waits for the generator's result for report and, on a
-// positive evaluation, delivers it to report's recipients. Generation
-// already happened in the shared worker pool; this just picks up where it
-// left off, so it runs in its own goroutine and never blocks the event loop.
-func (o *Orchestrator) awaitAndDeliver(
-	ctx context.Context,
-	report models.Report,
-	result <-chan generator.JobResult,
-) {
-	select {
-	case <-ctx.Done():
+// generateAndDeliver runs report through the generator's shared worker pool
+// and, on a positive evaluation, delivers it to report's recipients. It
+// runs in its own goroutine so a busy pool never blocks the event loop.
+func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Report) {
+	dataset, data, approve, err := o.gen.Generate(ctx, report)
+	if err != nil {
+		o.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
+
 		return
-	case r := <-result:
-		if r.Err != nil {
-			o.log.ErrorContext(ctx, "error create report", slog.Any("error", r.Err))
+	}
 
-			return
-		}
+	if !approve {
+		return
+	}
 
-		if !r.Approve {
-			return
-		}
-
-		if err := o.deliver(ctx, report, r.Dataset, r.Data); err != nil {
-			o.log.ErrorContext(ctx, "error delivering report", slog.Any("error", err))
-		}
+	if err := o.deliver(ctx, report, dataset, data); err != nil {
+		o.log.ErrorContext(ctx, "error delivering report", slog.Any("error", err))
 	}
 }
 
