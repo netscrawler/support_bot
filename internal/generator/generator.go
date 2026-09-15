@@ -29,9 +29,9 @@ type Evaluator interface {
 // job is a unit of work sent through Generator's shared worker pool. result
 // receives the generated dataset, exported files, and evaluation outcome —
 // delivering them to recipients is the caller's responsibility. Every
-// caller (the orchestrator's scheduled path, and the HTTP on-demand path
-// via ReportGeneratorAdapter) goes through the same Generate method below,
-// so there is no notion of a "type" of generation anywhere in this API.
+// caller (internal/orchestrator, for both its event-driven and on-demand
+// paths) goes through the same Generate method below, so there is no
+// notion of a "type" of generation anywhere in this API.
 type job struct {
 	report models.Report
 	result chan<- jobResult
@@ -87,33 +87,6 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
-	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
-
-	for {
-		select {
-		case <-ctx.Done():
-			g.log.DebugContext(ctx, "context cancelled")
-
-			return
-		case j, ok := <-jobs:
-			if !ok {
-				g.log.DebugContext(ctx, "jobs chan closed")
-
-				return
-			}
-
-			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.report.Name))
-
-			dataset, res, approve, err := g.generate(rvCtx, j.report)
-			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
-
-			cancel()
-		}
-	}
-}
-
 // Generate submits report to the shared worker pool and blocks until it has
 // been processed, returning the collected dataset, the exported files, and
 // whether the report's evaluation condition approved sending it. It makes
@@ -142,9 +115,9 @@ func (g *Generator) Generate(
 // generate runs the shared report pipeline: resolve query params, collect
 // data, run the processing pipeline (if any), evaluate the report
 // condition, and export the result. It stops short of delivering anything —
-// delivery to recipients is the caller's responsibility (see
-// internal/orchestrator for the scheduled path, and ReportGeneratorAdapter
-// below for the on-demand path).
+// delivery to recipients, and any "not found" semantics, are the caller's
+// responsibility (see internal/orchestrator, which handles both the
+// event-driven and on-demand paths).
 func (g *Generator) generate(
 	ctx context.Context,
 	report models.Report,
@@ -230,25 +203,29 @@ func (g *Generator) generate(
 	return data, res, true, nil
 }
 
-// ReportGeneratorAdapter adapts Generator to service.ReportGenerator's
-// single-file Generate signature (internal/service/report_generator.go).
-// On-demand reports are expected to declare exactly one export; if more are
-// configured, the first is returned — a known simplification. A negative
-// evaluation result, or no exports, is surfaced as models.ErrNotFound,
-// matching the "not found" semantics the HTTP layer expects.
-type ReportGeneratorAdapter struct {
-	Gen *Generator
-}
+func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
+	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
 
-func (a ReportGeneratorAdapter) Generate(ctx context.Context, report models.Report) (models.Data, error) {
-	_, data, approve, err := a.Gen.Generate(ctx, report)
-	if err != nil {
-		return models.Data{}, err
+	for {
+		select {
+		case <-ctx.Done():
+			g.log.DebugContext(ctx, "context cancelled")
+
+			return
+		case j, ok := <-jobs:
+			if !ok {
+				g.log.DebugContext(ctx, "jobs chan closed")
+
+				return
+			}
+
+			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.report.Name))
+
+			dataset, res, approve, err := g.generate(rvCtx, j.report)
+			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
+
+			cancel()
+		}
 	}
-
-	if !approve || len(data) == 0 {
-		return models.Data{}, models.ErrNotFound
-	}
-
-	return data[0], nil
 }

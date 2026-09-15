@@ -99,7 +99,6 @@ func Default() *Config {
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20,
 			MaxBodyBytes:      10 << 20,
-			AuthToken:         "changeme-auth-token",
 		},
 	}
 }

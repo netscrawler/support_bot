@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"support_bot/internal/api/http/handlers"
 	"support_bot/internal/api/http/middlewares"
 	"support_bot/internal/pkg/httplib"
 )
@@ -17,16 +18,18 @@ type Server struct {
 	log *slog.Logger
 }
 
-func New(cfg *Config, log *slog.Logger) *Server {
+func New(cfg *Config, reportHandler *handlers.Handler, log *slog.Logger) *Server {
 	router := httplib.NewRouter()
-	mw := middlewares.NewMiddleware(log, cfg.MaxBodyBytes, cfg.AuthToken)
+	mw := middlewares.NewMiddleware(log, cfg.MaxBodyBytes)
+	router.Group("/api/v1/public", func(r *httplib.Router) {
+		r.Get("/report/{report_id}", reportHandler.GetGeneratedReportByID)
+	})
 
 	router.Use(
 		mw.RecoverMiddleware,
 		mw.Trace,
 		mw.Gzip,
 		mw.LogRequest,
-		mw.Auth,
 	)
 
 	return &Server{

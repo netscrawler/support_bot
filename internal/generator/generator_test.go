@@ -2,7 +2,6 @@ package generator
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"support_bot/internal/models"
 	"testing"
@@ -31,7 +30,8 @@ func (f fakeEvaluator) EvalStr(_ context.Context, expr string) (string, error) {
 	return expr, nil
 }
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 func TestGenerate_ExportsOnApprove(t *testing.T) {
 	g := &Generator{
@@ -43,7 +43,7 @@ func TestGenerate_ExportsOnApprove(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
 	}
 
 	data, res, approve, err := g.generate(context.Background(), report)
@@ -104,7 +104,7 @@ func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
 	}
 
 	_, data, approve, err := g.Generate(ctx, report)
@@ -158,15 +158,14 @@ func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 		log:        slog.New(slog.DiscardHandler),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	g.Start(ctx)
 
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
 	}
 
 	type outcome struct {
@@ -196,59 +195,5 @@ func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for Generate result")
 		}
-	}
-}
-
-func TestReportGeneratorAdapter_Generate_ReturnsFirstExport(t *testing.T) {
-	g := &Generator{
-		c:          make(chan job),
-		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
-		eval:       fakeEvaluator{approve: true},
-		numWorkers: 1,
-		log:        slog.New(slog.DiscardHandler),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	g.Start(ctx)
-
-	adapter := ReportGeneratorAdapter{Gen: g}
-
-	report := models.Report{
-		Name:       "r1",
-		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
-	}
-
-	data, err := adapter.Generate(ctx, report)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	if data.FileName != "out_q1.csv" {
-		t.Fatalf("Generate() = %+v, want FileName out_q1.csv", data)
-	}
-}
-
-func TestReportGeneratorAdapter_Generate_NegativeEvaluationIsNotFound(t *testing.T) {
-	g := &Generator{
-		c:          make(chan job),
-		clct:       fakeCollector{data: models.Dataset{}},
-		eval:       fakeEvaluator{approve: false},
-		numWorkers: 1,
-		log:        slog.New(slog.DiscardHandler),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	g.Start(ctx)
-
-	adapter := ReportGeneratorAdapter{Gen: g}
-
-	_, err := adapter.Generate(ctx, models.Report{Name: "r1", Evaluation: "false"})
-	if !errors.Is(err, models.ErrNotFound) {
-		t.Fatalf("Generate() error = %v, want models.ErrNotFound", err)
 	}
 }

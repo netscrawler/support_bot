@@ -10,7 +10,7 @@ import (
 )
 
 func TestMW_Gzip_CompressesWhenAccepted(t *testing.T) {
-	mw := NewMiddleware(slog.Default(), 1024, "")
+	mw := NewMiddleware(slog.Default(), 1024)
 
 	handler := mw.Gzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("hello world"))
@@ -42,7 +42,7 @@ func TestMW_Gzip_CompressesWhenAccepted(t *testing.T) {
 }
 
 func TestMW_Gzip_PassesThroughWhenNotAccepted(t *testing.T) {
-	mw := NewMiddleware(slog.Default(), 1024, "")
+	mw := NewMiddleware(slog.Default(), 1024)
 
 	handler := mw.Gzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("hello world"))

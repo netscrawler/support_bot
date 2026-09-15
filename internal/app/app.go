@@ -17,7 +17,6 @@ import (
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/orchestrator"
-	"support_bot/internal/pkg/httplib"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
@@ -77,7 +76,7 @@ type reportApp struct {
 	Event        *eventcreator.EventCreator
 	Orchestrator *orchestrator.Orchestrator
 	Generator    *generator.Generator
-	Deleter      *generator.Deleter
+	Deleter      *orchestrator.Deleter
 	Retry        *retry.Retry
 }
 
@@ -326,16 +325,25 @@ func (a *app) init(ctx context.Context) error {
 
 	snd := models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
 
-	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
+	delRepo := orchestrator.NewResultRepository(rdb.GetConn(), log)
 
-	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
+	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
 	gen := generator.New(clct, proc, eval, 4, log)
 
-	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
-	reportGenSvc := reportsvc.NewReport(reportDBRepo, generator.ReportGeneratorAdapter{Gen: gen}, log)
-
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
-	orch := orchestrator.New(eventChan, specialEventChan, delChan, orchRepo, gen, *snd, delRepo, log)
+	orch := orchestrator.New(
+		eventChan,
+		specialEventChan,
+		delChan,
+		orchRepo,
+		gen,
+		*snd,
+		delRepo,
+		log,
+	)
+
+	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
+	reportGenSvc := reportsvc.NewReport(reportDBRepo, orch, log)
 	report := &reportApp{
 		ScheduleC:    sheduleEvents,
 		EventC:       eventChan,
@@ -394,12 +402,9 @@ func (a *app) init(ctx context.Context) error {
 	a.tgBot = tgBotUser
 	a.reportGenSvc = reportGenSvc
 
-	httpSrv := apihttp.New(&cfg.HTTP, log)
-
 	reportHandler := apihandlers.NewHandler(reportGenSvc, log)
-	httpSrv.Router().Group("/api/v1/public", func(r *httplib.Router) {
-		r.Get("/report/{report_id}", reportHandler.GetGeneratedReportByID)
-	})
+
+	httpSrv := apihttp.New(&cfg.HTTP, reportHandler, log)
 
 	a.http = httpSrv
 
