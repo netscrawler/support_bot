@@ -7,6 +7,7 @@ import (
 	"maps"
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/logger"
 	"sync"
 	"time"
 )
@@ -161,6 +162,11 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 // and, on a positive evaluation, delivers it to report's recipients. It
 // runs in its own goroutine so a busy pool never blocks the event loop.
 func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Report) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	ctx = logger.AppendCtx(ctx, slog.Any("report_name", report.Name))
+
 	dataset, data, approve, err := o.gen.Generate(ctx, report)
 	if err != nil {
 		o.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
