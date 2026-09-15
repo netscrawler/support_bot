@@ -25,7 +25,7 @@ func NewResultRepository(db *sqlx.DB, log *slog.Logger) *SentMsgRepository {
 	}
 }
 
-func (rr *SentMsgRepository) saveTgMsg(
+func (rr *SentMsgRepository) SaveTgMsg(
 	ctx context.Context,
 	reportName string,
 	msgs []models.SentMessage,

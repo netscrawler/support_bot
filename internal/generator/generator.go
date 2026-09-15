@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
@@ -34,13 +33,9 @@ type Generator struct {
 
 	eval Evaluator
 
-	snd models.SenderProvider
-
 	proc *processor.Processor
 
 	numWorkers uint8
-
-	sentMsgRepo SentMsgRepository
 
 	log *slog.Logger
 }
@@ -48,8 +43,6 @@ type Generator struct {
 func New(
 	c chan Job,
 	clct Collector,
-	snd models.SenderProvider,
-	sendRepo SentMsgRepository,
 	proc *processor.Processor,
 	eval Evaluator,
 	workers uint8,
@@ -62,14 +55,12 @@ func New(
 	}
 
 	return &Generator{
-		c:           c,
-		clct:        clct,
-		eval:        eval,
-		snd:         snd,
-		log:         l,
-		numWorkers:  workers,
-		sentMsgRepo: sendRepo,
-		proc:        proc,
+		c:          c,
+		clct:       clct,
+		eval:       eval,
+		log:        l,
+		numWorkers: workers,
+		proc:       proc,
 	}
 }
 
@@ -98,42 +89,20 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan Job, id uint8) {
 			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Report.Name))
 
-			if j.Result != nil {
-				res, err := g.generateOnDemand(rvCtx, j.Report)
-				j.Result <- JobResult{Data: res, Err: err}
-				cancel()
-
-				continue
-			}
-
-			err := g.createReport(rvCtx, j.Report)
-			if err != nil {
-				g.log.ErrorContext(rvCtx, "error create report", slog.Any("error", err))
-			}
+			dataset, res, approve, err := g.generate(rvCtx, j.Report)
+			j.Result <- JobResult{Dataset: dataset, Data: res, Approve: approve, Err: err}
 
 			cancel()
 		}
 	}
 }
 
-func (g *Generator) createReport(ctx context.Context, report models.Report) error {
-	data, res, approve, err := g.generate(ctx, report)
-	if err != nil {
-		return err
-	}
-
-	if !approve {
-		return nil
-	}
-
-	return g.deliver(ctx, report, data, res)
-}
-
 // generate runs the shared report pipeline: resolve query params, collect
 // data, run the processing pipeline (if any), evaluate the report
-// condition, and export the result. It stops short of delivering anything,
-// so both the scheduled path (createReport) and the on-demand path
-// (generateOnDemand, added in on_demand.go) can reuse it unchanged.
+// condition, and export the result. It stops short of delivering anything —
+// delivery to recipients is the caller's responsibility (see
+// internal/orchestrator for the scheduled path, and GenerateOnDemand in
+// on_demand.go for the on-demand path).
 func (g *Generator) generate(
 	ctx context.Context,
 	report models.Report,
@@ -217,58 +186,4 @@ func (g *Generator) generate(
 	}
 
 	return data, res, true, nil
-}
-
-// deliver sends a generated report to its configured recipients and records
-// the resulting message state. This is the original tail end of
-// createReport, unchanged, used only by the scheduled path.
-func (g *Generator) deliver(
-	ctx context.Context,
-	report models.Report,
-	data models.Dataset,
-	res []models.Data,
-) error {
-	l := g.log
-
-	if len(report.Recipients) == 0 {
-		l.ErrorContext(ctx, "empty targets list")
-
-		return fmt.Errorf("empty targets list")
-	}
-
-	// Достаем "_meta" лист из данных, для использования в шаблоне email
-	addMeta := make(map[string]any)
-	meta, ok := data["_meta"]
-	if ok {
-		for _, d := range meta {
-			maps.Insert(addMeta, maps.All(d))
-		}
-	}
-	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
-	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
-
-	resMsg, err := msg.Send(ctx, g.snd)
-	if err != nil {
-		l.ErrorContext(ctx, "error while send message", slog.Any("error", err))
-	}
-
-	if len(resMsg) == 0 {
-		l.InfoContext(ctx, "report generated")
-
-		return nil
-	}
-
-	l.InfoContext(
-		ctx,
-		"saving message to database",
-		slog.Any("report", report.Name),
-		slog.Any("message", resMsg),
-	)
-
-	err = g.sentMsgRepo.saveTgMsg(ctx, msg.ReportName, resMsg)
-	if err != nil {
-		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
-	}
-
-	return nil
 }

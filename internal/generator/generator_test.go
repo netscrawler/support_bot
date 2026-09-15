@@ -89,10 +89,17 @@ func TestGenerate_NegativeEvaluationSkipsExport(t *testing.T) {
 
 func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
 	g := &Generator{
-		clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
-		eval: fakeEvaluator{approve: true},
-		log:  slog.New(slog.DiscardHandler),
+		c:          make(chan Job),
+		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+		eval:       fakeEvaluator{approve: true},
+		numWorkers: 1,
+		log:        slog.New(slog.DiscardHandler),
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	g.Start(ctx)
 
 	report := models.Report{
 		Name:       "r1",
@@ -100,26 +107,33 @@ func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
 		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
 	}
 
-	res, err := g.generateOnDemand(context.Background(), report)
+	res, err := g.GenerateOnDemand(ctx, report)
 	if err != nil {
-		t.Fatalf("generateOnDemand() error = %v", err)
+		t.Fatalf("GenerateOnDemand() error = %v", err)
 	}
 
 	if len(res) != 1 || res[0].FileName != "out_q1.csv" {
-		t.Fatalf("generateOnDemand() res = %+v", res)
+		t.Fatalf("GenerateOnDemand() res = %+v", res)
 	}
 }
 
 func TestGenerateOnDemand_NegativeEvaluationIsNotFound(t *testing.T) {
 	g := &Generator{
-		clct: fakeCollector{data: models.Dataset{}},
-		eval: fakeEvaluator{approve: false},
-		log:  slog.New(slog.DiscardHandler),
+		c:          make(chan Job),
+		clct:       fakeCollector{data: models.Dataset{}},
+		eval:       fakeEvaluator{approve: false},
+		numWorkers: 1,
+		log:        slog.New(slog.DiscardHandler),
 	}
 
-	_, err := g.generateOnDemand(context.Background(), models.Report{Name: "r1", Evaluation: "false"})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	g.Start(ctx)
+
+	_, err := g.GenerateOnDemand(ctx, models.Report{Name: "r1", Evaluation: "false"})
 	if !errors.Is(err, models.ErrNotFound) {
-		t.Fatalf("generateOnDemand() error = %v, want models.ErrNotFound", err)
+		t.Fatalf("GenerateOnDemand() error = %v, want models.ErrNotFound", err)
 	}
 }
 

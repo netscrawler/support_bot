@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"maps"
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"sync"
@@ -14,6 +16,12 @@ type ReportLoader interface {
 	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
 }
 
+// SentMsgSaver records a delivered message so the deleter can later clean it
+// up (e.g. end-of-day Telegram messages).
+type SentMsgSaver interface {
+	SaveTgMsg(ctx context.Context, reportName string, msgs []models.SentMessage) error
+}
+
 type Orchestrator struct {
 	EventC        chan models.Event
 	SpecialEventC chan models.SpecialEventForLK
@@ -22,6 +30,9 @@ type Orchestrator struct {
 	DeleteC chan models.Event
 
 	rL ReportLoader
+
+	snd         models.SenderProvider
+	sentMsgRepo SentMsgSaver
 
 	mu    sync.RWMutex
 	cache map[string][]models.Report
@@ -35,6 +46,8 @@ func New(
 	reportC chan generator.Job,
 	delC chan models.Event,
 	rl ReportLoader,
+	snd models.SenderProvider,
+	sentMsgRepo SentMsgSaver,
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
@@ -46,6 +59,8 @@ func New(
 		ReportC:       reportC,
 		DeleteC:       delC,
 		rL:            rl,
+		snd:           snd,
+		sentMsgRepo:   sentMsgRepo,
 		cache:         cache,
 		log:           l,
 	}
@@ -114,18 +129,22 @@ func (o *Orchestrator) processGenReportEvent(ctx context.Context, event string) 
 	}
 
 	for _, report := range reports {
+		result := make(chan generator.JobResult, 1)
+
 		select {
 		case <-ctx.Done():
 			o.log.InfoContext(ctx, "context cancelled. stopping")
 
 			return
-		case o.ReportC <- generator.Job{Report: report}:
+		case o.ReportC <- generator.Job{Report: report, Result: result}:
 			o.log.DebugContext(
 				ctx,
 				"sending report to generator",
 				slog.Any("report", report.Name),
 			)
 		}
+
+		go o.awaitAndDeliver(ctx, report, result)
 	}
 }
 
@@ -145,19 +164,105 @@ func (o *Orchestrator) processGenReportSpecialEvent(
 			report.Recipients = []models.Recipient{event.Recipient}
 		}
 
+		result := make(chan generator.JobResult, 1)
+
 		select {
 		case <-ctx.Done():
 			o.log.InfoContext(ctx, "context cancelled. stopping")
 
 			return
-		case o.ReportC <- generator.Job{Report: report}:
+		case o.ReportC <- generator.Job{Report: report, Result: result}:
 			o.log.DebugContext(
 				ctx,
 				"sending report to generator",
 				slog.Any("report", report.Name),
 			)
 		}
+
+		go o.awaitAndDeliver(ctx, report, result)
 	}
+}
+
+// awaitAndDeliver waits for the generator's result for report and, on a
+// positive evaluation, delivers it to report's recipients. Generation
+// already happened in the shared worker pool; this just picks up where it
+// left off, so it runs in its own goroutine and never blocks the event loop.
+func (o *Orchestrator) awaitAndDeliver(
+	ctx context.Context,
+	report models.Report,
+	result <-chan generator.JobResult,
+) {
+	select {
+	case <-ctx.Done():
+		return
+	case r := <-result:
+		if r.Err != nil {
+			o.log.ErrorContext(ctx, "error create report", slog.Any("error", r.Err))
+
+			return
+		}
+
+		if !r.Approve {
+			return
+		}
+
+		if err := o.deliver(ctx, report, r.Dataset, r.Data); err != nil {
+			o.log.ErrorContext(ctx, "error delivering report", slog.Any("error", err))
+		}
+	}
+}
+
+// deliver sends a generated report to its configured recipients and records
+// the resulting message state.
+func (o *Orchestrator) deliver(
+	ctx context.Context,
+	report models.Report,
+	data models.Dataset,
+	res []models.Data,
+) error {
+	l := o.log
+
+	if len(report.Recipients) == 0 {
+		l.ErrorContext(ctx, "empty targets list")
+
+		return fmt.Errorf("empty targets list")
+	}
+
+	// Достаем "_meta" лист из данных, для использования в шаблоне email
+	addMeta := make(map[string]any)
+	meta, ok := data["_meta"]
+	if ok {
+		for _, d := range meta {
+			maps.Insert(addMeta, maps.All(d))
+		}
+	}
+	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
+	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
+
+	resMsg, err := msg.Send(ctx, o.snd)
+	if err != nil {
+		l.ErrorContext(ctx, "error while send message", slog.Any("error", err))
+	}
+
+	if len(resMsg) == 0 {
+		l.InfoContext(ctx, "report generated")
+
+		return nil
+	}
+
+	l.InfoContext(
+		ctx,
+		"saving message to database",
+		slog.Any("report", report.Name),
+		slog.Any("message", resMsg),
+	)
+
+	err = o.sentMsgRepo.SaveTgMsg(ctx, msg.ReportName, resMsg)
+	if err != nil {
+		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
+	}
+
+	return nil
 }
 
 func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) {
