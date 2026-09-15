@@ -87,9 +87,9 @@ func TestGenerate_NegativeEvaluationSkipsExport(t *testing.T) {
 	}
 }
 
-func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
+func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 	g := &Generator{
-		c:          make(chan Job),
+		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
 		eval:       fakeEvaluator{approve: true},
 		numWorkers: 1,
@@ -107,19 +107,23 @@ func TestGenerateOnDemand_ReturnsExportedFiles(t *testing.T) {
 		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
 	}
 
-	res, err := g.GenerateOnDemand(ctx, report)
+	_, data, approve, err := g.Generate(ctx, report)
 	if err != nil {
-		t.Fatalf("GenerateOnDemand() error = %v", err)
+		t.Fatalf("Generate() error = %v", err)
 	}
 
-	if len(res) != 1 || res[0].FileName != "out_q1.csv" {
-		t.Fatalf("GenerateOnDemand() res = %+v", res)
+	if !approve {
+		t.Fatalf("Generate() approve = false, want true")
+	}
+
+	if len(data) != 1 || data[0].FileName != "out_q1.csv" {
+		t.Fatalf("Generate() data = %+v", data)
 	}
 }
 
-func TestGenerateOnDemand_NegativeEvaluationIsNotFound(t *testing.T) {
+func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(t *testing.T) {
 	g := &Generator{
-		c:          make(chan Job),
+		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{}},
 		eval:       fakeEvaluator{approve: false},
 		numWorkers: 1,
@@ -131,15 +135,23 @@ func TestGenerateOnDemand_NegativeEvaluationIsNotFound(t *testing.T) {
 
 	g.Start(ctx)
 
-	_, err := g.GenerateOnDemand(ctx, models.Report{Name: "r1", Evaluation: "false"})
-	if !errors.Is(err, models.ErrNotFound) {
-		t.Fatalf("GenerateOnDemand() error = %v, want models.ErrNotFound", err)
+	_, data, approve, err := g.Generate(ctx, models.Report{Name: "r1", Evaluation: "false"})
+	if err != nil {
+		t.Fatalf("Generate() error = %v, want nil", err)
+	}
+
+	if approve {
+		t.Fatalf("Generate() approve = true, want false")
+	}
+
+	if data != nil {
+		t.Fatalf("Generate() data = %+v, want nil", data)
 	}
 }
 
-func TestGenerateOnDemand_SharesWorkerPoolWithScheduledJobs(t *testing.T) {
+func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 	g := &Generator{
-		c:          make(chan Job),
+		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
 		eval:       fakeEvaluator{approve: true},
 		numWorkers: 1,
@@ -158,16 +170,16 @@ func TestGenerateOnDemand_SharesWorkerPoolWithScheduledJobs(t *testing.T) {
 	}
 
 	type outcome struct {
-		res []models.Data
-		err error
+		data []models.Data
+		err  error
 	}
 
 	results := make(chan outcome, 2)
 
 	for range 2 {
 		go func() {
-			res, err := g.GenerateOnDemand(context.Background(), report)
-			results <- outcome{res: res, err: err}
+			_, data, _, err := g.Generate(context.Background(), report)
+			results <- outcome{data: data, err: err}
 		}()
 	}
 
@@ -175,21 +187,21 @@ func TestGenerateOnDemand_SharesWorkerPoolWithScheduledJobs(t *testing.T) {
 		select {
 		case o := <-results:
 			if o.err != nil {
-				t.Errorf("GenerateOnDemand() error = %v", o.err)
+				t.Errorf("Generate() error = %v", o.err)
 			}
 
-			if len(o.res) != 1 || o.res[0].FileName != "out_q1.csv" {
-				t.Errorf("GenerateOnDemand() res = %+v", o.res)
+			if len(o.data) != 1 || o.data[0].FileName != "out_q1.csv" {
+				t.Errorf("Generate() data = %+v", o.data)
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for GenerateOnDemand result")
+			t.Fatal("timed out waiting for Generate result")
 		}
 	}
 }
 
 func TestReportGeneratorAdapter_Generate_ReturnsFirstExport(t *testing.T) {
 	g := &Generator{
-		c:          make(chan Job),
+		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
 		eval:       fakeEvaluator{approve: true},
 		numWorkers: 1,
@@ -221,7 +233,7 @@ func TestReportGeneratorAdapter_Generate_ReturnsFirstExport(t *testing.T) {
 
 func TestReportGeneratorAdapter_Generate_NegativeEvaluationIsNotFound(t *testing.T) {
 	g := &Generator{
-		c:          make(chan Job),
+		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{}},
 		eval:       fakeEvaluator{approve: false},
 		numWorkers: 1,

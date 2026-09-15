@@ -26,8 +26,26 @@ type Evaluator interface {
 	EvalStr(ctx context.Context, expr string) (string, error)
 }
 
+// job is a unit of work sent through Generator's shared worker pool. result
+// receives the generated dataset, exported files, and evaluation outcome —
+// delivering them to recipients is the caller's responsibility. Every
+// caller (the orchestrator's scheduled path, and the HTTP on-demand path
+// via ReportGeneratorAdapter) goes through the same Generate method below,
+// so there is no notion of a "type" of generation anywhere in this API.
+type job struct {
+	report models.Report
+	result chan<- jobResult
+}
+
+type jobResult struct {
+	dataset models.Dataset
+	data    []models.Data
+	approve bool
+	err     error
+}
+
 type Generator struct {
-	c chan Job
+	c chan job
 
 	clct Collector
 
@@ -41,7 +59,6 @@ type Generator struct {
 }
 
 func New(
-	c chan Job,
 	clct Collector,
 	proc *processor.Processor,
 	eval Evaluator,
@@ -55,7 +72,7 @@ func New(
 	}
 
 	return &Generator{
-		c:          c,
+		c:          make(chan job),
 		clct:       clct,
 		eval:       eval,
 		log:        l,
@@ -70,7 +87,7 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-func (g *Generator) worker(ctx context.Context, jobs <-chan Job, id uint8) {
+func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
 	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
 
 	for {
@@ -87,13 +104,38 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan Job, id uint8) {
 			}
 
 			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Report.Name))
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.report.Name))
 
-			dataset, res, approve, err := g.generate(rvCtx, j.Report)
-			j.Result <- JobResult{Dataset: dataset, Data: res, Approve: approve, Err: err}
+			dataset, res, approve, err := g.generate(rvCtx, j.report)
+			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
 
 			cancel()
 		}
+	}
+}
+
+// Generate submits report to the shared worker pool and blocks until it has
+// been processed, returning the collected dataset, the exported files, and
+// whether the report's evaluation condition approved sending it. It makes
+// no caller-specific interpretation of the result — delivering the report,
+// and any "not found" semantics, are the caller's responsibility.
+func (g *Generator) Generate(
+	ctx context.Context,
+	report models.Report,
+) (models.Dataset, []models.Data, bool, error) {
+	result := make(chan jobResult, 1)
+
+	select {
+	case g.c <- job{report: report, result: result}:
+	case <-ctx.Done():
+		return nil, nil, false, ctx.Err()
+	}
+
+	select {
+	case r := <-result:
+		return r.dataset, r.data, r.approve, r.err
+	case <-ctx.Done():
+		return nil, nil, false, ctx.Err()
 	}
 }
 
@@ -101,8 +143,8 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan Job, id uint8) {
 // data, run the processing pipeline (if any), evaluate the report
 // condition, and export the result. It stops short of delivering anything —
 // delivery to recipients is the caller's responsibility (see
-// internal/orchestrator for the scheduled path, and GenerateOnDemand in
-// on_demand.go for the on-demand path).
+// internal/orchestrator for the scheduled path, and ReportGeneratorAdapter
+// below for the on-demand path).
 func (g *Generator) generate(
 	ctx context.Context,
 	report models.Report,
@@ -186,4 +228,27 @@ func (g *Generator) generate(
 	}
 
 	return data, res, true, nil
+}
+
+// ReportGeneratorAdapter adapts Generator to service.ReportGenerator's
+// single-file Generate signature (internal/service/report_generator.go).
+// On-demand reports are expected to declare exactly one export; if more are
+// configured, the first is returned — a known simplification. A negative
+// evaluation result, or no exports, is surfaced as models.ErrNotFound,
+// matching the "not found" semantics the HTTP layer expects.
+type ReportGeneratorAdapter struct {
+	Gen *Generator
+}
+
+func (a ReportGeneratorAdapter) Generate(ctx context.Context, report models.Report) (models.Data, error) {
+	_, data, approve, err := a.Gen.Generate(ctx, report)
+	if err != nil {
+		return models.Data{}, err
+	}
+
+	if !approve || len(data) == 0 {
+		return models.Data{}, models.ErrNotFound
+	}
+
+	return data[0], nil
 }
