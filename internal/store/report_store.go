@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"support_bot/internal/db/sqlcgen"
@@ -252,6 +253,15 @@ func (s *ReportStore) GetLinkedCrons(
 	return crons, nil
 }
 
+// Create inserts a report and all of its dependencies (evaluation, pipeline,
+// queries, exports, templates, crons, recipients) inside a single
+// transaction, resolving each dependency by its natural key if it already
+// exists (get-or-create) rather than duplicating it. Ports
+// internal/service/report_manager.go's ReportManager.Create.
+func (s *ReportStore) Create(ctx context.Context, rep models.Report) (int64, error) {
+	return s.createWithPool(ctx, s.pool, rep)
+}
+
 // assemble replaces the three near-identical getFullReportModel/getReportByID
 // copies previously duplicated across internal/repository,
 // internal/orchestrator, and internal/tg_bot/repository — the single place
@@ -438,4 +448,312 @@ func intPtr(i *int32) *int {
 	}
 	v := int(*i)
 	return &v
+}
+
+// createWithPool is Create generalized over txBeginner so tests can drive it
+// against a pgxmock pool without a real *pgxpool.Pool.
+func (s *ReportStore) createWithPool(
+	ctx context.Context,
+	pool txBeginner,
+	rep models.Report,
+) (int64, error) {
+	var reportID int32
+
+	err := ExecTxPool(ctx, pool, func(q *sqlcgen.Queries) error {
+		exists, err := q.ReportExistsByName(ctx, rep.Name)
+		if err != nil {
+			return fmt.Errorf("check report exists: %w", err)
+		}
+		if exists {
+			return models.ErrAlreadyExist
+		}
+
+		var pipelineID *int64
+		if rep.Pipeline != nil {
+			id, err := s.createPipeline(ctx, q, rep.Pipeline)
+			if err != nil {
+				return fmt.Errorf("create pipeline: %w", err)
+			}
+			pipelineID = &id
+		}
+
+		evalID, err := s.getOrCreateEvaluation(ctx, q, rep.Evaluation)
+		if err != nil {
+			return fmt.Errorf("process evaluation: %w", err)
+		}
+
+		reportID, err = q.CreateReport(ctx, sqlcgen.CreateReportParams{
+			Name:         rep.Name,
+			Title:        rep.Title,
+			EvalID:       evalID,
+			PipelineID:   pipelineID,
+			AccessFromLk: rep.AccessFromLK,
+			Active:       rep.Active,
+		})
+		if err != nil {
+			return fmt.Errorf("create report: %w", err)
+		}
+
+		for _, query := range rep.Queries {
+			qID, err := s.getOrCreateQuery(ctx, q, query)
+			if err != nil {
+				return fmt.Errorf("process query %q: %w", query.Title, err)
+			}
+			if err := q.LinkQueryToReport(
+				ctx,
+				sqlcgen.LinkQueryToReportParams{ReportID: reportID, QueryID: qID},
+			); err != nil {
+				return fmt.Errorf("link query %d: %w", qID, err)
+			}
+		}
+
+		for _, export := range rep.Exports {
+			formatID, err := s.getOrCreateExportFormat(ctx, q, export.Format)
+			if err != nil {
+				return fmt.Errorf("process export format %q: %w", export.Format, err)
+			}
+
+			sortOrder, err := json.Marshal(export.Order)
+			if err != nil {
+				return fmt.Errorf("marshal export order: %w", err)
+			}
+
+			if err := q.LinkExportToReport(ctx, sqlcgen.LinkExportToReportParams{
+				ReportID:  &reportID,
+				FormatID:  &formatID,
+				FileName:  export.FileName,
+				SortOrder: sortOrder,
+			}); err != nil {
+				return fmt.Errorf("link export: %w", err)
+			}
+
+			if export.Template != nil {
+				tmplID, err := s.getOrCreateTemplate(ctx, q, *export.Template)
+				if err != nil {
+					return fmt.Errorf("process template %q: %w", export.Template.Title, err)
+				}
+				if err := q.LinkTemplateToReport(
+					ctx,
+					sqlcgen.LinkTemplateToReportParams{ReportID: reportID, TemplateID: tmplID},
+				); err != nil {
+					return fmt.Errorf("link template: %w", err)
+				}
+			}
+		}
+
+		for _, cron := range rep.Crons {
+			cID, err := s.getOrCreateCron(ctx, q, cron)
+			if err != nil {
+				return fmt.Errorf("process cron %q: %w", cron.Name, err)
+			}
+			if err := q.LinkCronToReport(
+				ctx,
+				sqlcgen.LinkCronToReportParams{ReportID: reportID, CronID: cID},
+			); err != nil {
+				return fmt.Errorf("link cron %d: %w", cID, err)
+			}
+		}
+
+		for _, recipient := range rep.Recipients {
+			rID, err := s.getOrCreateRecipient(ctx, q, recipient)
+			if err != nil {
+				return fmt.Errorf("process recipient %q: %w", recipient.Name, err)
+			}
+			if err := q.LinkRecipientToReport(
+				ctx,
+				sqlcgen.LinkRecipientToReportParams{ReportID: &reportID, RecipientID: &rID},
+			); err != nil {
+				return fmt.Errorf("link recipient %d: %w", rID, err)
+			}
+		}
+
+		return nil
+	})
+
+	return int64(reportID), err
+}
+
+func (s *ReportStore) getOrCreateEvaluation(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	eval string,
+) (int64, error) {
+	id, err := q.FindEvaluationIDByExpr(ctx, eval)
+	if err == nil {
+		return int64(id), nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find evaluation: %w", err)
+	}
+	id, err = q.CreateEvaluation(ctx, eval)
+	return int64(id), err
+}
+
+func (s *ReportStore) createPipeline(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	pipe *models.Pipeline,
+) (int64, error) {
+	pipeBytes, err := json.Marshal(pipe)
+	if err != nil {
+		return 0, fmt.Errorf("marshal pipeline: %w", err)
+	}
+	id, err := q.CreatePipeline(ctx, pipeBytes)
+	return int64(id), err
+}
+
+func (s *ReportStore) getOrCreateQuery(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	card models.Card,
+) (int32, error) {
+	id, err := q.FindQueryIDByUUIDAndTitle(ctx, sqlcgen.FindQueryIDByUUIDAndTitleParams{
+		CardUuid: card.CardUUID, Title: card.Title,
+	})
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find query: %w", err)
+	}
+
+	params := []byte("{}")
+	if card.RawParams != nil {
+		params = card.RawParams
+	}
+
+	return q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
+		CardUuid: card.CardUUID, Title: card.Title, QType: card.Type, Params: params,
+	})
+}
+
+func (s *ReportStore) getOrCreateExportFormat(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	format string,
+) (int32, error) {
+	id, err := q.FindExportFormatIDByFormat(ctx, &format)
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find export format: %w", err)
+	}
+	return q.CreateExportFormat(ctx, &format)
+}
+
+func (s *ReportStore) getOrCreateTemplate(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	tmpl models.Template,
+) (int32, error) {
+	id, err := q.FindTemplateIDByTitleAndType(ctx, sqlcgen.FindTemplateIDByTitleAndTypeParams{
+		Title: &tmpl.Title, Type: tmpl.Type,
+	})
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find template: %w", err)
+	}
+	return q.CreateTemplate(ctx, sqlcgen.CreateTemplateParams{
+		TemplateText: &tmpl.TemplateText, Title: &tmpl.Title, Type: tmpl.Type,
+	})
+}
+
+func (s *ReportStore) getOrCreateCron(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	cron models.Cron,
+) (int32, error) {
+	id, err := q.FindCronIDByNameAndExpr(ctx, sqlcgen.FindCronIDByNameAndExprParams{
+		Name: cron.Name, Cron: cron.Cron,
+	})
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find cron: %w", err)
+	}
+	return q.CreateCron(ctx, sqlcgen.CreateCronParams{
+		Cron:        cron.Cron,
+		Name:        cron.Name,
+		Description: &cron.Description,
+		IsActive:    cron.IsActive,
+		EventType:   int32(cron.EventType), //nolint:gosec // small enum value from config
+	})
+}
+
+func (s *ReportStore) getOrCreateRecipient(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	recipient models.Recipient,
+) (int32, error) {
+	id, err := q.FindRecipientIDByName(ctx, recipient.Name)
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, fmt.Errorf("find recipient: %w", err)
+	}
+	return s.createRecipient(ctx, q, recipient)
+}
+
+func (s *ReportStore) createRecipient(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	recipient models.Recipient,
+) (int32, error) {
+	var chatID, emailID *int32
+
+	if recipient.Chat != nil {
+		id, err := s.getOrCreateChat(ctx, q, *recipient.Chat)
+		if err != nil {
+			return 0, err
+		}
+		chatID = &id
+	}
+
+	if recipient.Email != nil {
+		id, err := q.CreateEmailTemplate(ctx, sqlcgen.CreateEmailTemplateParams{
+			Dest: recipient.Email.Dest, Copy: recipient.Email.Copy,
+			Subject: recipient.Email.Subject, Body: recipient.Email.Body,
+		})
+		if err != nil {
+			return 0, err
+		}
+		emailID = &id
+	}
+
+	var threadID *int32
+	if recipient.ThreadID != nil {
+		v := int32(*recipient.ThreadID) //nolint:gosec // telegram thread ids fit int32
+		threadID = &v
+	}
+
+	recipientType := string(recipient.Type)
+
+	return q.CreateRecipient(ctx, sqlcgen.CreateRecipientParams{
+		Name: recipient.Name, RemotePath: recipient.RemotePath, ChatID: chatID,
+		ThreadID: threadID, EmailID: emailID, Type: &recipientType,
+		NeedDeleteAfterEndOfDay: &recipient.NeedDeleteAfterEndOfDay,
+	})
+}
+
+func (s *ReportStore) getOrCreateChat(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	chat models.Chat,
+) (int32, error) {
+	id, err := q.FindChatIDByChatID(ctx, chat.ChatID)
+	if err == nil {
+		return id, nil
+	}
+	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+		return 0, err
+	}
+	return q.CreateChat(ctx, sqlcgen.CreateChatParams{
+		ChatID: chat.ChatID, Title: chat.Title, Type: chat.Type,
+		Description: chat.Description, IsActive: chat.IsActive, ChType: chat.ChType,
+	})
 }
