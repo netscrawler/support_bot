@@ -20,9 +20,9 @@ import (
 	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
-	reportrepo "support_bot/internal/repository"
 	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
+	reportstore "support_bot/internal/store"
 
 	"go.uber.org/fx"
 )
@@ -42,7 +42,7 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newResultRepository,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
-	newOrchestratorRepository,
+	newReportStore,
 	fx.Annotate(newOrchestrator, fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``)),
 	newReportGenService,
 ))
@@ -198,8 +198,8 @@ func newGenerator(
 	return gen
 }
 
-func newOrchestratorRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator.Repository {
-	return orchestrator.NewRepository(rdb.GetConn(), log)
+func newReportStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ReportStore {
+	return reportstore.NewReportStore(rdb.GetConn(), log)
 }
 
 func newOrchestrator(
@@ -207,7 +207,7 @@ func newOrchestrator(
 	eventChan chan models.Event,
 	specialEventChan chan models.SpecialEventForLK,
 	delChan chan models.Event,
-	orchRepo *orchestrator.Repository,
+	orchRepo *reportstore.ReportStore,
 	gen *generator.Generator,
 	snd *models.SenderProvider,
 	delRepo *orchestrator.SentMsgRepository,
@@ -234,8 +234,10 @@ func newOrchestrator(
 	return orch
 }
 
-func newReportGenService(rdb *postgres.DB, orch *orchestrator.Orchestrator, log *slog.Logger) *reportsvc.Report {
-	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
-
-	return reportsvc.NewReport(reportDBRepo, orch, log)
+func newReportGenService(
+	reportStore *reportstore.ReportStore,
+	orch *orchestrator.Orchestrator,
+	log *slog.Logger,
+) *reportsvc.Report {
+	return reportsvc.NewReport(reportStore, orch, log)
 }

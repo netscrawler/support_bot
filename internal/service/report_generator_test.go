@@ -12,7 +12,7 @@ type fakeReportDB struct {
 	err    error
 }
 
-func (f fakeReportDB) GetPublicReportByID(_ context.Context, _ string) (*models.Report, error) {
+func (f fakeReportDB) GetByPublicID(_ context.Context, _ string) (*models.Report, error) {
 	return f.report, f.err
 }
 

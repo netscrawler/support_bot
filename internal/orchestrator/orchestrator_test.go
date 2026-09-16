@@ -91,7 +91,7 @@ type fakeLoader struct {
 	report models.Report
 }
 
-func (f fakeLoader) Load(_ context.Context) ([]models.Report, error) { return nil, nil }
+func (f fakeLoader) LoadActive(_ context.Context) ([]models.Report, error) { return nil, nil }
 
 func (f fakeLoader) LoadByEvent(_ context.Context, _ string, _ bool) (*models.Report, error) {
 	r := f.report

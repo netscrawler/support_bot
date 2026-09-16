@@ -6,6 +6,7 @@ import (
 	"support_bot/internal/config"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
+	reportstore "support_bot/internal/store"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
@@ -31,7 +32,6 @@ var telegramModule = fx.Module(
 		newTgState,
 		newChatRepository,
 		newUserRepository,
-		newReportRepository,
 		newNotify,
 		newChatService,
 		newUserService,
@@ -70,10 +70,6 @@ func newUserRepository(rdb *postgres.DB, log *slog.Logger) *repository.UserRepos
 	return repository.NewUserRepository(rdb.GetConn(), log)
 }
 
-func newReportRepository(rdb *postgres.DB, log *slog.Logger) *repository.ReportRepository {
-	return repository.NewReportRepository(rdb.GetConn(), log)
-}
-
 func newNotify(tg *telegram.ChatAdaptor, userRepo *repository.UserRepository, log *slog.Logger) *service.Notify {
 	return service.NewNotify(tg, userRepo, log)
 }
@@ -93,11 +89,11 @@ func newScheduleAPI(shdAPI chan sheduler.SheduleAPIEvent) *sheduler.SheduleAPI {
 func newReportService(
 	shed *sheduler.SheduleAPI,
 	evAPI *eventcreator.EventAPI,
-	reportRepo *repository.ReportRepository,
+	reportStore *reportstore.ReportStore,
 	cfg *config.Config,
 	log *slog.Logger,
 ) *service.Report {
-	return service.NewReportService(shed, evAPI, reportRepo, cfg.MetabaseDomain, log)
+	return service.NewReportService(shed, evAPI, reportStore, cfg.MetabaseDomain, log)
 }
 
 func newAdminHandler(
