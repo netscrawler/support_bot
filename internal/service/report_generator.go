@@ -9,7 +9,7 @@ import (
 )
 
 type ReportDB interface {
-	GetPublicReportByID(ctx context.Context, reportID string) (*models.Report, error)
+	GetByPublicID(ctx context.Context, reportID string) (*models.Report, error)
 }
 
 type ReportGenerator interface {
@@ -27,7 +27,7 @@ func NewReport(db ReportDB, gen ReportGenerator, log *slog.Logger) *Report {
 }
 
 func (r *Report) GenerateReport(ctx context.Context, reportID string) (models.Data, error) {
-	report, err := r.db.GetPublicReportByID(ctx, reportID)
+	report, err := r.db.GetByPublicID(ctx, reportID)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			return models.Data{}, models.ErrNotFound

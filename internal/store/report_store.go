@@ -211,6 +211,9 @@ func (s *ReportStore) LoadPaged(
 	if err != nil {
 		return nil, 0, fmt.Errorf("count reports: %w", err)
 	}
+	if total > 0 {
+		page = min(page, (int(total)+pageSize-1)/pageSize)
+	}
 
 	offset := int32(page-1) * pageSize
 

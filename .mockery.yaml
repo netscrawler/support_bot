@@ -14,3 +14,18 @@ packages:
   support_bot/internal/collector:
     config:
       all: true
+  support_bot/internal/service:
+    config:
+      all: false
+    interfaces:
+      ReportStore:
+  support_bot/internal/orchestrator:
+    config:
+      all: false
+    interfaces:
+      ReportLoader:
+  support_bot/internal/tg_bot/service:
+    config:
+      all: false
+    interfaces:
+      ReportProvider:

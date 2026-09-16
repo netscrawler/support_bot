@@ -16,7 +16,7 @@ import (
 const maxInFlightGenerations = 8
 
 type ReportLoader interface {
-	Load(ctx context.Context) ([]models.Report, error)
+	LoadActive(ctx context.Context) ([]models.Report, error)
 	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
 }
 
