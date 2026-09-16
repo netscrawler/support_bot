@@ -18,6 +18,7 @@ import (
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/repository"
 	"support_bot/internal/service"
+	"support_bot/internal/store"
 )
 
 func Ctl() {
@@ -83,7 +84,7 @@ func exportReportsDslFromDB(args []string) error {
 	defer db.Stop(ctx)
 
 	mng := service.NewReportManager(
-		repository.NewRepository(db.GetConn(), slog.Default()),
+		store.NewReportStore(db.GetConn(), slog.Default()),
 		service.NewReportValidation(),
 		slog.Default(),
 	)
@@ -186,7 +187,7 @@ func applyDSLs(args []string) error {
 	defer db.Stop(ctx)
 
 	mng := service.NewReportManager(
-		repository.NewRepository(db.GetConn(), slog.Default()),
+		store.NewReportStore(db.GetConn(), slog.Default()),
 		service.NewReportValidation(),
 		slog.Default(),
 	)
