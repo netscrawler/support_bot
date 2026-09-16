@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"support_bot/internal/api/http/common"
-	"support_bot/internal/errorz"
+	"support_bot/internal/models"
 	"support_bot/internal/pkg/httplib"
 )
 
@@ -21,7 +21,7 @@ func (h *Handler) GetGeneratedReportByID(w http.ResponseWriter, r *http.Request)
 
 	report, err := h.rp.GenerateReport(r.Context(), reportID)
 	if err != nil {
-		if errors.Is(err, errorz.ErrNotFound) {
+		if errors.Is(err, models.ErrNotFound) {
 			httplib.ErrNotFound.Write(w)
 			return
 		}

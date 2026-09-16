@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"support_bot/internal/errorz"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/uow"
 
@@ -526,7 +525,7 @@ func (r *Repository) GetPublicReportByID(
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, models.ErrNotFound
 		}
-		return nil, fmt.Errorf("%w: failed to get public report: %w", errorz.ErrInternal, err)
+		return nil, fmt.Errorf("%w: failed to get public report: %w", models.ErrInternal, err)
 	}
 
 	return r.GetReportByID(ctx, reportID, u)
@@ -567,13 +566,13 @@ limit 1`
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, models.ErrNotFound
 		}
-		return nil, fmt.Errorf("%w: failed to get report: %w", errorz.ErrInternal, err)
+		return nil, fmt.Errorf("%w: failed to get report: %w", models.ErrInternal, err)
 	}
 
 	report, err := r.getFullReportModel(ctx, rp, u)
 	if err != nil {
 		r.log.ErrorContext(ctx, "error getting full report", slog.Any("error", err))
-		return nil, fmt.Errorf("%w: failed to get report: %w", errorz.ErrInternal, err)
+		return nil, fmt.Errorf("%w: failed to get report: %w", models.ErrInternal, err)
 	}
 	return report, nil
 }
