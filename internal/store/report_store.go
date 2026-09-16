@@ -620,9 +620,25 @@ func (s *ReportStore) getOrCreateQuery(
 		return 0, fmt.Errorf("find query: %w", err)
 	}
 
-	params := []byte("{}")
-	if card.RawParams != nil {
+	// card.RawParams заполняется только при чтении карточки из БД (тег json:"-"
+	// исключает его из JSON-декодирования). Путь создания отчёта
+	// (ReportManager.Create -> json.Decoder) заполняет только card.Params,
+	// поэтому RawParams здесь всегда nil — раньше это приводило к тому, что
+	// реальные параметры карточки молча терялись и записывались как "{}".
+	var params []byte
+
+	switch {
+	case len(card.RawParams) > 0:
 		params = card.RawParams
+	case len(card.Params) > 0:
+		var err error
+
+		params, err = json.Marshal(card.Params)
+		if err != nil {
+			return 0, fmt.Errorf("marshal card params: %w", err)
+		}
+	default:
+		params = []byte("{}")
 	}
 
 	return q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
