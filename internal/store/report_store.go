@@ -289,7 +289,7 @@ func (s *ReportStore) assemble(
 	if pipelineID != nil {
 		pipeData, err := s.q.GetPipelineByID(ctx, *pipelineID)
 		if err != nil {
-			return nil, fmt.Errorf("load pipeline: %w", err)
+			return nil, translateNoRows(err)
 		}
 
 		if err := json.Unmarshal(pipeData, &pipeline); err != nil {
