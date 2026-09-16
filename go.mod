@@ -158,7 +158,6 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	github.com/sqlc-dev/doubleclick v1.0.0 // indirect
 	github.com/sqlc-dev/sqlc v1.31.1 // indirect
-	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
@@ -239,6 +238,7 @@ require (
 	github.com/max-messenger/max-bot-api-client-go/v2 v2.1.1
 	github.com/mymmrac/telego v1.11.1
 	github.com/netscrawler/metabase-public-api v0.0.0-20250722130654-59cfc07f3d73
+	github.com/pashagolub/pgxmock/v4 v4.9.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1
 	github.com/tengattack/gluacrypto v0.0.0-20240324200146-54b58c95c255
