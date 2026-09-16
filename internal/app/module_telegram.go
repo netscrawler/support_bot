@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"support_bot/internal/config"
+	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
 	reportstore "support_bot/internal/store"
@@ -11,7 +12,6 @@ import (
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/service"
 
-	"support_bot/internal/delivery/telegram"
 	eventcreator "support_bot/internal/event_creator"
 	maxbot "support_bot/internal/max_bot"
 	tgbot "support_bot/internal/tg_bot"
@@ -44,7 +44,11 @@ var telegramModule = fx.Module(
 	),
 )
 
-func newTelegramBot(ctx context.Context, cfg *config.Config, log *slog.Logger) (*telego.Bot, *th.BotHandler, error) {
+func newTelegramBot(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+) (*telego.Bot, *th.BotHandler, error) {
 	return tgbot.NewTelegramBot(ctx, cfg.TgBot, log)
 }
 
@@ -69,11 +73,19 @@ func newUserStore(rdb *postgres.DB, log *slog.Logger) *reportstore.UserStore {
 	return reportstore.NewUserStore(rdb.GetConn(), log)
 }
 
-func newNotify(tg *telegram.ChatAdaptor, userStore *reportstore.UserStore, log *slog.Logger) *service.Notify {
+func newNotify(
+	tg *telegram.ChatAdaptor,
+	userStore *reportstore.UserStore,
+	log *slog.Logger,
+) *service.Notify {
 	return service.NewNotify(tg, userStore, log)
 }
 
-func newChatService(chatStore *reportstore.ChatStore, notify *service.Notify, log *slog.Logger) *service.Chat {
+func newChatService(
+	chatStore *reportstore.ChatStore,
+	notify *service.Notify,
+	log *slog.Logger,
+) *service.Chat {
 	return service.NewChat(chatStore, notify, log)
 }
 

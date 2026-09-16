@@ -25,7 +25,11 @@ func newMetabase(cfg *config.Config) *metabase.Metabase {
 	return metabase.New(cfg.MetabaseDomain)
 }
 
-func newAppMetricaCollector(ctx context.Context, cfg *config.Config, log *slog.Logger) *appmetrica.Collector {
+func newAppMetricaCollector(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+) *appmetrica.Collector {
 	appM := appmetrica.NewCollector(&cfg.AppMetrica, log)
 
 	sup, err := appM.GetApplications(ctx)
@@ -50,7 +54,12 @@ func newJira(cfg *config.Config) *jira.Collector {
 	return jira.New(cfg.Jira)
 }
 
-func newCollector(mb *metabase.Metabase, appM *appmetrica.Collector, jiraColl *jira.Collector, log *slog.Logger) *collector.Collector {
+func newCollector(
+	mb *metabase.Metabase,
+	appM *appmetrica.Collector,
+	jiraColl *jira.Collector,
+	log *slog.Logger,
+) *collector.Collector {
 	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, log)
 }
 
