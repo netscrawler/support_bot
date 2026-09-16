@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"support_bot/internal/models"
-	"support_bot/internal/pkg/uow"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -61,7 +60,7 @@ func (rr *SentMsgRepository) SaveTgMsg(
 
 func (rr *SentMsgRepository) loadMsgToDelete(
 	ctx context.Context,
-) ([]models.SentMessage, uow.UOW, error) {
+) ([]models.SentMessage, *sqlx.Tx, error) {
 	const query = `select id, chat_id, thread_id, message_id, message_id_str, title, sent_at, deleted, ch_type from sent_messages where deleted = False AND sent_at >= CURRENT_DATE - INTERVAL '1 day'
 	AND sent_at < CURRENT_DATE for update skip locked;`
 
@@ -76,15 +75,13 @@ func (rr *SentMsgRepository) loadMsgToDelete(
 		return nil, nil, err
 	}
 
-	u := uow.NewUOW(tx)
-
-	return msgs, u, nil
+	return msgs, tx, nil
 }
 
-func (rr *SentMsgRepository) markDeleted(ctx context.Context, id int64, u uow.UOW) error {
+func (rr *SentMsgRepository) markDeleted(ctx context.Context, id int64, tx *sqlx.Tx) error {
 	const query = `update sent_messages set deleted = true where id = $1;`
 
-	if _, err := u.ExecContext(ctx, query, id); err != nil {
+	if _, err := tx.ExecContext(ctx, query, id); err != nil {
 		return err
 	}
 
