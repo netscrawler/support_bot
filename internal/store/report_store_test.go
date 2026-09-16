@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 	"testing"
@@ -209,6 +210,83 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 		t.Fatalf("GetByID() error = %v, want errors.Is(err, models.ErrNotFound)", err)
 	}
 
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestReportStore_Create_AlreadyExists(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectBegin()
+	pool.ExpectQuery("select exists").
+		WithArgs("dup-report").
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(true))
+	pool.ExpectRollback()
+
+	s := NewReportStore(nil, slog.New(slog.DiscardHandler))
+
+	_, err = execTxOnMock(t, pool, s, models.Report{Name: "dup-report"})
+	if !errors.Is(err, models.ErrAlreadyExist) {
+		t.Fatalf("Create() error = %v, want models.ErrAlreadyExist", err)
+	}
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// execTxOnMock runs Create against a store whose pool is a pgxmock pool,
+// substituting ExecTx's underlying Begin call for the mock's.
+func execTxOnMock(
+	t *testing.T,
+	pool pgxmock.PgxPoolIface,
+	s *ReportStore,
+	rep models.Report,
+) (int64, error) {
+	t.Helper()
+	return s.createWithPool(context.Background(), pool, rep)
+}
+
+func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectBegin()
+	pool.ExpectQuery("select exists").
+		WithArgs("new-report").
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+	pool.ExpectQuery("select id from evaluate").
+		WithArgs("1 == 1").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into evaluate").
+		WithArgs("1 == 1").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
+	pool.ExpectQuery("insert into reports").
+		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
+	pool.ExpectCommit()
+
+	id, err := execTxOnMock(
+		t,
+		pool,
+		NewReportStore(nil, slog.New(slog.DiscardHandler)),
+		models.Report{
+			Name: "new-report", Title: "New Report", Evaluation: "1 == 1", Active: true,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if id != 100 {
+		t.Errorf("Create() id = %d, want 100", id)
+	}
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
