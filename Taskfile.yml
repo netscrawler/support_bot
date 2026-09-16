@@ -41,6 +41,11 @@ tasks:
     cmds:
       - rm -f ./{{.BIN_DIR}}/{{.BINARY_NAME}}
 
+  generate:
+    desc: Regenerate sqlc code from internal/db/queries
+    cmds:
+      - go tool sqlc generate
+
   docker-build:
     desc: Build docker image
     cmds:
