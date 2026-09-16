@@ -36,14 +36,24 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newSpecialEventChan,
 	newShdAPIChan,
 	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
-	fx.Annotate(newEventCreator, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`)),
+	fx.Annotate(
+		newEventCreator,
+		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`),
+	),
 	fx.Annotate(newEventAPI, fx.ParamTags(`name:"eventChan"`, ``)),
-	newEvaluator, newLuaStdCollector, newLuaManager, newProcessorReg, newProcessor,
+	newEvaluator,
+	newLuaStdCollector,
+	newLuaManager,
+	newProcessorReg,
+	newProcessor,
 	newResultRepository,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
 	newReportStore,
-	fx.Annotate(newOrchestrator, fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``)),
+	fx.Annotate(
+		newOrchestrator,
+		fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``),
+	),
 	newReportGenService,
 ))
 
@@ -132,7 +142,11 @@ func newLuaStdCollector(
 	})
 }
 
-func newLuaManager(cfg *config.Config, luaStdColl *luastd.CollectPlugin, rdb *postgres.DB) *lua.Manager {
+func newLuaManager(
+	cfg *config.Config,
+	luaStdColl *luastd.CollectPlugin,
+	rdb *postgres.DB,
+) *lua.Manager {
 	scriptRepo := lua.NewRepository(rdb.GetConn())
 
 	return lua.NewManager(

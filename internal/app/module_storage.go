@@ -18,7 +18,12 @@ func newAppContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-func newDB(ctx context.Context, cfg *config.Config, log *slog.Logger, lc fx.Lifecycle) (*postgres.DB, error) {
+func newDB(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+	lc fx.Lifecycle,
+) (*postgres.DB, error) {
 	connCtx, cancel := context.WithTimeout(ctx, cfg.Database.DatabaseConnect)
 	defer cancel()
 

@@ -29,7 +29,9 @@ func TestSentMsgRepository_MarkEndOfDayMsgDeleted_BeginTxFails(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestSentMsgRepository_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagates(t *testing.T) {
+func TestSentMsgRepository_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagates(
+	t *testing.T,
+) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()

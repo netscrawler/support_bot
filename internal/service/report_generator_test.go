@@ -26,7 +26,11 @@ func (f fakeReportGenerator) Generate(_ context.Context, _ models.Report) (model
 }
 
 func TestGenerateReport_NotFoundFromDB(t *testing.T) {
-	r := NewReport(fakeReportDB{err: models.ErrNotFound}, fakeReportGenerator{}, slog.New(slog.DiscardHandler))
+	r := NewReport(
+		fakeReportDB{err: models.ErrNotFound},
+		fakeReportGenerator{},
+		slog.New(slog.DiscardHandler),
+	)
 
 	_, err := r.GenerateReport(context.Background(), "some-id")
 	if err != models.ErrNotFound {
