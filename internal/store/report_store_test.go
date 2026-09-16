@@ -215,6 +215,89 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 	}
 }
 
+// TestReportStore_LoadPaged_ClampsPage проверяет ограничение номера страницы
+// в LoadPaged: страница <= 0 приводится к первой, а страница за пределами
+// диапазона — к последней доступной, при этом возвращаются реальные строки
+// этой страницы, а не пустой срез.
+func TestReportStore_LoadPaged_ClampsPage(t *testing.T) {
+	tests := []struct {
+		name         string
+		page         int
+		total        int64
+		wantOffset   int32
+		mockRowNames []string
+	}{
+		{
+			// Вход: page = 0 при total = 12 (3 страницы по 5).
+			// Ожидание: page приводится к 1, offset = 0.
+			name:         "страница меньше или равна нулю приводится к первой странице",
+			page:         0,
+			total:        12,
+			wantOffset:   0,
+			mockRowNames: []string{"r1", "r2", "r3", "r4", "r5"},
+		},
+		{
+			// Вход: page = 100 при total = 12 (последняя валидная страница — 3).
+			// Ожидание: page приводится к 3, offset = 10, возвращаются
+			// реальные строки последней страницы, а не пустой срез.
+			name:         "страница за пределами диапазона возвращает последнюю страницу",
+			page:         100,
+			total:        12,
+			wantOffset:   10,
+			mockRowNames: []string{"r11", "r12"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool, err := pgxmock.NewPool()
+			if err != nil {
+				t.Fatalf("pgxmock.NewPool() error = %v", err)
+			}
+			defer pool.Close()
+
+			pool.ExpectQuery("select count\\(\\*\\) from reports where access_from_lk = true").
+				WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(tt.total))
+
+			rows := pgxmock.NewRows([]string{"id", "name", "title"})
+			for i, name := range tt.mockRowNames {
+				rows.AddRow(int32(i+1), name, "Title "+name)
+			}
+
+			pool.ExpectQuery("select id, name, title from reports where access_from_lk = true").
+				WithArgs(int32(5), tt.wantOffset).
+				WillReturnRows(rows)
+
+			s := NewReportStoreForTest(sqlcgen.New(pool))
+
+			reports, total, err := s.LoadPaged(context.Background(), tt.page)
+			if err != nil {
+				t.Fatalf("LoadPaged() error = %v", err)
+			}
+
+			if total != int(tt.total) {
+				t.Errorf("LoadPaged() total = %d, want %d", total, tt.total)
+			}
+			if len(reports) != len(tt.mockRowNames) {
+				t.Fatalf(
+					"LoadPaged() returned %d reports, want %d (must not be empty for an out-of-range page)",
+					len(reports),
+					len(tt.mockRowNames),
+				)
+			}
+			for i, name := range tt.mockRowNames {
+				if reports[i].Name != name {
+					t.Errorf("LoadPaged() reports[%d].Name = %q, want %q", i, reports[i].Name, name)
+				}
+			}
+
+			if err := pool.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet expectations: %v", err)
+			}
+		})
+	}
+}
+
 func TestReportStore_Create_AlreadyExists(t *testing.T) {
 	pool, err := pgxmock.NewPool()
 	if err != nil {
