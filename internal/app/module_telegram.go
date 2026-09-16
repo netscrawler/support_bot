@@ -9,7 +9,6 @@ import (
 	reportstore "support_bot/internal/store"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
-	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 
 	"support_bot/internal/delivery/telegram"
@@ -30,8 +29,8 @@ var telegramModule = fx.Module(
 		newTelegramBot,
 		newMaxBot,
 		newTgState,
-		newChatRepository,
-		newUserRepository,
+		newChatStore,
+		newUserStore,
 		newNotify,
 		newChatService,
 		newUserService,
@@ -62,24 +61,24 @@ func newTgState(cfg *config.Config) *handlers.State {
 	return handlers.NewState(cfg.TgBot.CleanUpTime)
 }
 
-func newChatRepository(rdb *postgres.DB, log *slog.Logger) *repository.ChatRepository {
-	return repository.NewChatRepository(rdb.GetConn(), log)
+func newChatStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ChatStore {
+	return reportstore.NewChatStore(rdb.GetConn(), log)
 }
 
-func newUserRepository(rdb *postgres.DB, log *slog.Logger) *repository.UserRepository {
-	return repository.NewUserRepository(rdb.GetConn(), log)
+func newUserStore(rdb *postgres.DB, log *slog.Logger) *reportstore.UserStore {
+	return reportstore.NewUserStore(rdb.GetConn(), log)
 }
 
-func newNotify(tg *telegram.ChatAdaptor, userRepo *repository.UserRepository, log *slog.Logger) *service.Notify {
-	return service.NewNotify(tg, userRepo, log)
+func newNotify(tg *telegram.ChatAdaptor, userStore *reportstore.UserStore, log *slog.Logger) *service.Notify {
+	return service.NewNotify(tg, userStore, log)
 }
 
-func newChatService(chatRepo *repository.ChatRepository, notify *service.Notify, log *slog.Logger) *service.Chat {
-	return service.NewChat(chatRepo, notify, log)
+func newChatService(chatStore *reportstore.ChatStore, notify *service.Notify, log *slog.Logger) *service.Chat {
+	return service.NewChat(chatStore, notify, log)
 }
 
-func newUserService(userRepo *repository.UserRepository, log *slog.Logger) *service.User {
-	return service.NewUser(userRepo, log)
+func newUserService(userStore *reportstore.UserStore, log *slog.Logger) *service.User {
+	return service.NewUser(userStore, log)
 }
 
 func newScheduleAPI(shdAPI chan sheduler.SheduleAPIEvent) *sheduler.SheduleAPI {
