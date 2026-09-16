@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"support_bot/internal/db/sqlcgen"
+	"support_bot/internal/models"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
 )
 
@@ -114,6 +117,96 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 			"Queries[0].RawParams empty, want %s (also dropped by the tg_bot loader)",
 			`{"k":"v"}`,
 		)
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestReportStore_GetByID_PipelineNotFound covers the assemble() gap where
+// GetPipelineByID's error bypassed translateNoRows: a dangling pipeline_id
+// (pgx.ErrNoRows from the pipeline lookup) must surface as models.ErrNotFound
+// like every other single-row lookup in this file, not a bare wrapped error.
+func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pipelineID := int64(42)
+
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr").
+		WithArgs(int64(1)).
+		WillReturnRows(pgxmock.NewRows(
+			[]string{
+				"id",
+				"name",
+				"title",
+				"active",
+				"access_from_lk",
+				"pipeline_id",
+				"evaluation",
+			},
+		).
+			AddRow(int32(1), "r1", "Report One", true, true, &pipelineID, new("1 == 1")))
+
+	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params").
+		WithArgs(int64(1)).
+		WillReturnRows(pgxmock.NewRows(
+			[]string{"card_uuid", "title", "q_type", "params"},
+		))
+
+	pool.ExpectQuery("select\n    rc.name").
+		WithArgs(int64(1)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"name",
+			"config",
+			"remote_path",
+			"thread_id",
+			"email_id",
+			"type",
+			"need_delete_after_end_of_day",
+			"dest",
+			"copy",
+			"subject",
+			"body",
+			"chat_id",
+			"chat_title",
+			"chat_type",
+			"chat_description",
+			"chat_is_active",
+			"chat_ch_type",
+		}))
+
+	pool.ExpectQuery("select ef.format, re.file_name").
+		WithArgs(int64(1)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"format",
+			"file_name",
+			"template_id",
+			"template_title",
+			"template_type",
+			"template_text",
+			"sort_order",
+		}))
+
+	pool.ExpectQuery("select c.cron, c.name, c.description, c.is_active, c.event_type").
+		WithArgs(int64(1)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"cron", "name", "description", "is_active", "event_type",
+		}))
+
+	pool.ExpectQuery("select pipeline from pipelines").
+		WithArgs(pipelineID).
+		WillReturnError(pgx.ErrNoRows)
+
+	s := NewReportStoreForTest(sqlcgen.New(pool))
+
+	_, err = s.GetByID(context.Background(), 1)
+	if !errors.Is(err, models.ErrNotFound) {
+		t.Fatalf("GetByID() error = %v, want errors.Is(err, models.ErrNotFound)", err)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {
