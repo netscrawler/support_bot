@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"support_bot/internal/db/sqlcgen"
@@ -364,6 +365,183 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 			Name: "new-report", Title: "New Report", Evaluation: "1 == 1", Active: true,
 		},
 	)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if id != 100 {
+		t.Errorf("Create() id = %d, want 100", id)
+	}
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestReportStore_Create_WiresAllDependencies проверяет всю ~250-строчную
+// цепочку get-or-create в createWithPool для отчёта, у которого заполнены
+// все виды зависимостей разом: карточка (query) с непустым card.Params,
+// экспорт с шаблоном, крон и получатель с одновременно чатом и email.
+//
+// Вход: models.Report с одной карточкой (Params без RawParams), одним
+// экспортом с шаблоном, одним кроном и одним получателем (чат + email);
+// ни одна зависимость ещё не существует в БД (все Find* возвращают
+// pgx.ErrNoRows), поэтому createWithPool должен создать (Create*) и
+// привязать (Link*) каждую из них.
+//
+// Ожидание: полная и точная последовательность SQL-вызовов внутри
+// транзакции, и, что важно для критического бага, аргумент params у
+// CreateQuery равен json.Marshal(card.Params) — а не литералу "{}", в
+// который параметры карточки молча превращались до фикса, потому что
+// card.RawParams всегда nil на пути создания отчёта из JSON/DSL.
+func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	card := models.Card{
+		CardUUID: "card-uuid-1",
+		Title:    "Card One",
+		Type:     "mb",
+		Params:   map[string]string{"date1": "2024-01-01", "date2": "2024-01-31"},
+	}
+	wantQueryParams, err := json.Marshal(card.Params)
+	if err != nil {
+		t.Fatalf("json.Marshal(card.Params) error = %v", err)
+	}
+
+	fileName := "report.csv"
+	export := models.Export{
+		Format:   "csv",
+		FileName: &fileName,
+		Order:    map[string][]string{"sheet1": {"col1", "col2"}},
+		Template: &models.Template{Title: "Tmpl One", Type: "html", TemplateText: "<html></html>"},
+	}
+	wantSortOrder, err := json.Marshal(export.Order)
+	if err != nil {
+		t.Fatalf("json.Marshal(export.Order) error = %v", err)
+	}
+
+	cron := models.Cron{
+		Name:        "daily",
+		Cron:        "0 0 * * *",
+		Description: "desc",
+		IsActive:    true,
+		EventType:   1,
+	}
+
+	chatTitle, chatDesc := "Chat Title", "Chat Desc"
+	chat := models.Chat{
+		ChatID:      555,
+		Title:       &chatTitle,
+		Type:        "tg",
+		Description: &chatDesc,
+		IsActive:    true,
+		ChType:      "tg",
+	}
+
+	emailBody := "Body text"
+	email := models.EmailTemplate{
+		Dest: []string{"a@example.com"}, Copy: []string{"b@example.com"},
+		Subject: "Subject", Body: &emailBody,
+	}
+
+	threadID := 7
+	recipient := models.Recipient{
+		Name: "recipient-1", Chat: &chat, ThreadID: &threadID, Email: &email,
+		Type: models.RecipientType("tg"), NeedDeleteAfterEndOfDay: true,
+	}
+
+	rep := models.Report{
+		Name: "full-report", Title: "Full Report", Evaluation: "1 == 1", Active: true,
+		Queries:    []models.Card{card},
+		Exports:    []models.Export{export},
+		Crons:      []models.Cron{cron},
+		Recipients: []models.Recipient{recipient},
+	}
+
+	pool.ExpectBegin()
+
+	pool.ExpectQuery("select exists").
+		WithArgs("full-report").
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+
+	pool.ExpectQuery("select id from evaluate").
+		WithArgs("1 == 1").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into evaluate").
+		WithArgs("1 == 1").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
+
+	pool.ExpectQuery("insert into reports").
+		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
+
+	// Карточка: не найдена -> создаётся с промаршаленными card.Params.
+	pool.ExpectQuery("select id from queries").
+		WithArgs("card-uuid-1", "Card One").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into queries").
+		WithArgs("card-uuid-1", "Card One", "mb", wantQueryParams).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(21)))
+	pool.ExpectExec("insert into report_queries").
+		WithArgs(int32(100), int32(21)).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	// Экспорт + формат + шаблон.
+	pool.ExpectQuery("select id from export_formats").
+		WithArgs(new("csv")).
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into export_formats").
+		WithArgs(new("csv")).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(31)))
+	pool.ExpectExec("insert into reports_export").
+		WithArgs(new(int32(100)), new(int32(31)), &fileName, wantSortOrder).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	pool.ExpectQuery("select id from templates").
+		WithArgs(new("Tmpl One"), "html").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into templates").
+		WithArgs(new("<html></html>"), new("Tmpl One"), "html").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(41)))
+	pool.ExpectExec("insert into report_templates").
+		WithArgs(int32(100), int32(41)).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	// Крон.
+	pool.ExpectQuery("select id from crons").
+		WithArgs("daily", "0 0 * * *").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into crons").
+		WithArgs("0 0 * * *", "daily", new("desc"), true, int32(1)).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(51)))
+	pool.ExpectExec("insert into report_crons").
+		WithArgs(int32(100), int32(51)).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	// Получатель: сначала чат, потом email, потом сам получатель.
+	pool.ExpectQuery("select id from recipients").
+		WithArgs("recipient-1").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("select id from chats").
+		WithArgs(int64(555)).
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into chats").
+		WithArgs(int64(555), &chatTitle, "tg", &chatDesc, true, "tg").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(61)))
+	pool.ExpectQuery("insert into email_templates").
+		WithArgs([]string{"a@example.com"}, []string{"b@example.com"}, "Subject", &emailBody).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(71)))
+	pool.ExpectQuery("insert into recipients").
+		WithArgs("recipient-1", (*string)(nil), new(int32(61)), new(int32(7)), new(int32(71)), new("tg"), new(true)).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(81)))
+	pool.ExpectExec("insert into reports_recipients").
+		WithArgs(new(int32(100)), new(int32(81))).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	pool.ExpectCommit()
+
+	id, err := execTxOnMock(t, pool, NewReportStore(nil, slog.New(slog.DiscardHandler)), rep)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
