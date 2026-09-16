@@ -18,3 +18,4 @@ config.json
 migrations/*
 reports
 config/prod.yaml
+docs/superpowers/plans/
