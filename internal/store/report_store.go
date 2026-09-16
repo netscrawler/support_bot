@@ -19,20 +19,18 @@ type ReportStore struct {
 	log  *slog.Logger
 }
 
+// ReportsPageSize — размер страницы постраничного списка отчётов.
+// Общий источник истины для ReportStore.LoadPaged и
+// internal/tg_bot/service.Report, которые раньше независимо дублировали
+// это же значение как две отдельные константы, рискуя разойтись.
+const ReportsPageSize = 5
+
 func NewReportStore(pool *pgxpool.Pool, log *slog.Logger) *ReportStore {
 	return &ReportStore{
 		pool: pool,
 		q:    sqlcgen.New(pool),
 		log:  log.With(slog.Any("module", "store.report")),
 	}
-}
-
-// NewReportStoreForTest builds a ReportStore around an already-constructed
-// *sqlcgen.Queries (e.g. one backed by a pgxmock pool) for unit tests that
-// don't need ExecTx/transaction machinery. Production code always uses
-// NewReportStore.
-func NewReportStoreForTest(q *sqlcgen.Queries) *ReportStore {
-	return &ReportStore{q: q, log: slog.Default()}
 }
 
 func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
@@ -201,8 +199,6 @@ func (s *ReportStore) LoadPaged(
 	ctx context.Context,
 	page int,
 ) ([]models.ReportForTgLK, int, error) {
-	const pageSize = 5
-
 	if page <= 0 {
 		page = 1
 	}
@@ -212,14 +208,14 @@ func (s *ReportStore) LoadPaged(
 		return nil, 0, fmt.Errorf("count reports: %w", err)
 	}
 	if total > 0 {
-		page = min(page, (int(total)+pageSize-1)/pageSize)
+		page = min(page, (int(total)+ReportsPageSize-1)/ReportsPageSize)
 	}
 
-	offset := int32(page-1) * pageSize
+	offset := int32(page-1) * ReportsPageSize
 
 	rows, err := s.q.ListReportsForLK(
 		ctx,
-		sqlcgen.ListReportsForLKParams{Limit: pageSize, Offset: offset},
+		sqlcgen.ListReportsForLKParams{Limit: ReportsPageSize, Offset: offset},
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list reports for lk: %w", err)
@@ -315,7 +311,7 @@ func (s *ReportStore) assemble(
 		Title:        title,
 		Queries:      mapCardRows(cardRows),
 		Recipients:   mapRecipientRows(recipientRows),
-		Exports:      mapExportRows(exportRows),
+		Exports:      s.mapExportRows(ctx, exportRows),
 		Pipeline:     pipeline,
 		Evaluation:   evaluation,
 		Active:       active,
@@ -385,7 +381,13 @@ func mapRecipientRows(rows []sqlcgen.ListRecipientsByReportIDRow) []models.Recip
 	return recipients
 }
 
-func mapExportRows(rows []sqlcgen.ListExportsByReportIDRow) []models.Export {
+// mapExportRows — метод (а не свободная функция, как остальные map*Rows),
+// потому что ему нужны logger и ctx для предупреждения о повреждённом
+// sort_order, а свободной функции их взять неоткуда.
+func (s *ReportStore) mapExportRows(
+	ctx context.Context,
+	rows []sqlcgen.ListExportsByReportIDRow,
+) []models.Export {
 	exports := make([]models.Export, 0, len(rows))
 
 	for _, row := range rows {
@@ -401,7 +403,14 @@ func mapExportRows(rows []sqlcgen.ListExportsByReportIDRow) []models.Export {
 
 		var order map[string][]string
 		if row.SortOrder != nil {
-			_ = json.Unmarshal(row.SortOrder, &order)
+			if err := json.Unmarshal(row.SortOrder, &order); err != nil {
+				s.log.WarnContext(
+					ctx,
+					"failed to unmarshal export sort_order",
+					slog.Any("file_name", row.FileName),
+					slog.Any("error", err),
+				)
+			}
 		}
 
 		exports = append(exports, models.Export{
@@ -462,7 +471,7 @@ func (s *ReportStore) createWithPool(
 ) (int64, error) {
 	var reportID int32
 
-	err := ExecTxPool(ctx, pool, func(q *sqlcgen.Queries) error {
+	err := ExecTx(ctx, pool, func(q *sqlcgen.Queries) error {
 		exists, err := q.ReportExistsByName(ctx, rep.Name)
 		if err != nil {
 			return fmt.Errorf("check report exists: %w", err)

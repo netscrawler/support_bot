@@ -20,7 +20,7 @@ func TestExecTx_BeginFails(t *testing.T) {
 	pool.ExpectBegin().WillReturnError(beginErr)
 
 	called := false
-	err = ExecTxPool(context.Background(), pool, func(*sqlcgen.Queries) error {
+	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		called = true
 		return nil
 	})
@@ -47,7 +47,7 @@ func TestExecTx_FnErrorRollsBack(t *testing.T) {
 	pool.ExpectRollback()
 
 	fnErr := errors.New("boom")
-	err = ExecTxPool(context.Background(), pool, func(*sqlcgen.Queries) error {
+	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		return fnErr
 	})
 
@@ -70,7 +70,7 @@ func TestExecTx_CommitsOnSuccess(t *testing.T) {
 	pool.ExpectCommit()
 	pool.ExpectRollback() // the deferred rollback after a successful commit is a documented pgx no-op
 
-	err = ExecTxPool(context.Background(), pool, func(*sqlcgen.Queries) error {
+	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		return nil
 	})
 	if err != nil {

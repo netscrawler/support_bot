@@ -13,6 +13,14 @@ import (
 	"github.com/pashagolub/pgxmock/v4"
 )
 
+// NewReportStoreForTest builds a ReportStore around an already-constructed
+// *sqlcgen.Queries (e.g. one backed by a pgxmock pool) for unit tests that
+// don't need ExecTx/transaction machinery. Production code always uses
+// NewReportStore.
+func NewReportStoreForTest(q *sqlcgen.Queries) *ReportStore {
+	return &ReportStore{q: q, log: slog.Default()}
+}
+
 func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 	pool, err := pgxmock.NewPool()
 	if err != nil {
@@ -63,7 +71,25 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 			"chat_description",
 			"chat_is_active",
 			"chat_ch_type",
-		}))
+		}).AddRow(
+			"recipient-1",
+			[]byte(`{}`),
+			new("remote/path"),
+			new(int32(555)),
+			new(int32(7)),
+			new("tg"),
+			new(true),
+			[]string{"a@example.com"},
+			[]string{"b@example.com"},
+			new("Subject"),
+			new("Body text"),
+			new(int64(99)),
+			new("Chat Title"),
+			new("tg"),
+			new("Chat Description"),
+			new(true),
+			new("group"),
+		))
 
 	pool.ExpectQuery("select ef.format, re.file_name").
 		WithArgs(int64(1)).
@@ -75,7 +101,15 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 			"template_type",
 			"template_text",
 			"sort_order",
-		}))
+		}).AddRow(
+			new("csv"),
+			new("report.csv"),
+			new(int32(3)),
+			new("Template One"),
+			new("html"),
+			new("<html></html>"),
+			[]byte(`{"sheet1":["col1","col2"]}`),
+		))
 
 	pool.ExpectQuery("select c.cron, c.name, c.description, c.is_active, c.event_type").
 		WithArgs(int64(1)).
@@ -119,6 +153,46 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 			"Queries[0].RawParams empty, want %s (also dropped by the tg_bot loader)",
 			`{"k":"v"}`,
 		)
+	}
+
+	if len(report.Recipients) != 1 {
+		t.Fatalf("Recipients = %v, want 1 entry", report.Recipients)
+	}
+	recipient := report.Recipients[0]
+	if recipient.Chat == nil || recipient.Chat.ChatID != 99 {
+		t.Errorf("Recipients[0].Chat = %+v, want ChatID=99", recipient.Chat)
+	}
+	if recipient.Chat != nil &&
+		(recipient.Chat.Title == nil || *recipient.Chat.Title != "Chat Title") {
+		t.Errorf("Recipients[0].Chat.Title = %v, want %q", recipient.Chat.Title, "Chat Title")
+	}
+	if recipient.Email == nil || len(recipient.Email.Dest) != 1 ||
+		recipient.Email.Dest[0] != "a@example.com" {
+		t.Errorf("Recipients[0].Email = %+v, want Dest=[a@example.com]", recipient.Email)
+	}
+	if recipient.Type != models.RecipientType("tg") {
+		t.Errorf("Recipients[0].Type = %q, want %q", recipient.Type, "tg")
+	}
+	if !recipient.NeedDeleteAfterEndOfDay {
+		t.Errorf("Recipients[0].NeedDeleteAfterEndOfDay = false, want true")
+	}
+	if recipient.ThreadID == nil || *recipient.ThreadID != 555 {
+		t.Errorf("Recipients[0].ThreadID = %v, want 555", recipient.ThreadID)
+	}
+
+	if len(report.Exports) != 1 {
+		t.Fatalf("Exports = %v, want 1 entry", report.Exports)
+	}
+	export := report.Exports[0]
+	if export.Format != "csv" {
+		t.Errorf("Exports[0].Format = %q, want %q", export.Format, "csv")
+	}
+	if export.Template == nil || export.Template.ID != 3 ||
+		export.Template.Title != "Template One" {
+		t.Errorf("Exports[0].Template = %+v, want ID=3 Title=%q", export.Template, "Template One")
+	}
+	if len(export.Order["sheet1"]) != 2 || export.Order["sheet1"][0] != "col1" {
+		t.Errorf("Exports[0].Order[sheet1] = %v, want [col1 col2]", export.Order["sheet1"])
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {

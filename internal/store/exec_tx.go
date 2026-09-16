@@ -6,7 +6,6 @@ import (
 	"support_bot/internal/db/sqlcgen"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // txBeginner is the minimal seam ExecTx needs — satisfied by *pgxpool.Pool
@@ -15,15 +14,12 @@ type txBeginner interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// ExecTx runs fn inside a single transaction, committing on success and
-// rolling back on any error. This replaces internal/pkg/uow wholesale.
-func ExecTx(ctx context.Context, pool *pgxpool.Pool, fn func(*sqlcgen.Queries) error) error {
-	return ExecTxPool(ctx, pool, fn)
-}
-
-// ExecTxPool is ExecTx generalized over txBeginner for testability with
-// pgxmock; ExecTx is the production-facing name every Store calls.
-func ExecTxPool(ctx context.Context, pool txBeginner, fn func(*sqlcgen.Queries) error) error {
+// ExecTx выполняет fn в рамках одной транзакции, начатой через pool: при
+// успехе коммитит, при любой ошибке (включая ошибку из fn) откатывает.
+// Полностью заменяет internal/pkg/uow. Параметр pool имеет тип txBeginner,
+// а не конкретный *pgxpool.Pool, чтобы тесты могли передавать pgxmock-пул
+// напрямую, без реального подключения к БД.
+func ExecTx(ctx context.Context, pool txBeginner, fn func(*sqlcgen.Queries) error) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
