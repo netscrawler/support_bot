@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/errorz"
 	"support_bot/internal/models"
 	"testing"
 )
@@ -30,8 +29,8 @@ func TestGenerateReport_NotFoundFromDB(t *testing.T) {
 	r := NewReport(fakeReportDB{err: models.ErrNotFound}, fakeReportGenerator{}, slog.New(slog.DiscardHandler))
 
 	_, err := r.GenerateReport(context.Background(), "some-id")
-	if err != errorz.ErrNotFound {
-		t.Fatalf("GenerateReport() error = %v, want errorz.ErrNotFound", err)
+	if err != models.ErrNotFound {
+		t.Fatalf("GenerateReport() error = %v, want models.ErrNotFound", err)
 	}
 }
 
@@ -43,8 +42,8 @@ func TestGenerateReport_NotFoundFromGenerator(t *testing.T) {
 	)
 
 	_, err := r.GenerateReport(context.Background(), "some-id")
-	if err != errorz.ErrNotFound {
-		t.Fatalf("GenerateReport() error = %v, want errorz.ErrNotFound", err)
+	if err != models.ErrNotFound {
+		t.Fatalf("GenerateReport() error = %v, want models.ErrNotFound", err)
 	}
 }
 

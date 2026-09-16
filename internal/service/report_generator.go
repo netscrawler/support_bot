@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/errorz"
 	"support_bot/internal/models"
 )
 
@@ -31,7 +30,7 @@ func (r *Report) GenerateReport(ctx context.Context, reportID string) (models.Da
 	report, err := r.db.GetPublicReportByID(ctx, reportID)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return models.Data{}, errorz.ErrNotFound
+			return models.Data{}, models.ErrNotFound
 		}
 
 		return models.Data{}, fmt.Errorf("get report: %w", err)
@@ -40,11 +39,11 @@ func (r *Report) GenerateReport(ctx context.Context, reportID string) (models.Da
 	data, err := r.gen.Generate(ctx, *report)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return models.Data{}, errorz.ErrNotFound
+			return models.Data{}, models.ErrNotFound
 		}
 
 		return models.Data{},
-			fmt.Errorf("%w: generate report: %w", errorz.ErrInternal, err)
+			fmt.Errorf("%w: generate report: %w", models.ErrInternal, err)
 	}
 
 	return data, nil
