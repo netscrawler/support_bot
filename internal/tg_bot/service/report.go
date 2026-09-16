@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"support_bot/internal/models"
 	"support_bot/internal/sheduler"
+	"support_bot/internal/store"
 	"time"
 
 	eventcreator "support_bot/internal/event_creator"
@@ -29,8 +30,6 @@ type Report struct {
 
 	log *slog.Logger
 }
-
-const reportsPageSize = 5
 
 func NewReportService(
 	shd *sheduler.SheduleAPI,
@@ -64,7 +63,7 @@ func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadRep
 		return models.LoadReportRPL{}, fmt.Errorf("reports not found")
 	}
 
-	pageCount := (rCount + reportsPageSize - 1) / reportsPageSize
+	pageCount := (rCount + store.ReportsPageSize - 1) / store.ReportsPageSize
 
 	page = min(max(page, 1), pageCount)
 
