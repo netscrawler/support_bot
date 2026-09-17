@@ -143,6 +143,20 @@ type ReportCron struct {
 	CronID   int32
 }
 
+type ReportDefinition struct {
+	ID          string
+	Name        string
+	Description string
+	Layout      []byte
+	Format      string
+	Status      string
+	FilePath    string
+	ErrorMsg    string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type ReportQuery struct {
 	ReportID int32
 	QueryID  int32
