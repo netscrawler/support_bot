@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
@@ -27,29 +26,40 @@ type Evaluator interface {
 	EvalStr(ctx context.Context, expr string) (string, error)
 }
 
+// job is a unit of work sent through Generator's shared worker pool. result
+// receives the generated dataset, exported files, and evaluation outcome —
+// delivering them to recipients is the caller's responsibility. Every
+// caller (internal/orchestrator, for both its event-driven and on-demand
+// paths) goes through the same Generate method below, so there is no
+// notion of a "type" of generation anywhere in this API.
+type job struct {
+	report models.Report
+	result chan<- jobResult
+}
+
+type jobResult struct {
+	dataset models.Dataset
+	data    []models.Data
+	approve bool
+	err     error
+}
+
 type Generator struct {
-	c chan models.Report
+	c chan job
 
 	clct Collector
 
 	eval Evaluator
 
-	snd models.SenderProvider
-
 	proc *processor.Processor
 
 	numWorkers uint8
-
-	sentMsgRepo SentMsgRepository
 
 	log *slog.Logger
 }
 
 func New(
-	c chan models.Report,
 	clct Collector,
-	snd models.SenderProvider,
-	sendRepo SentMsgRepository,
 	proc *processor.Processor,
 	eval Evaluator,
 	workers uint8,
@@ -62,14 +72,12 @@ func New(
 	}
 
 	return &Generator{
-		c:           c,
-		clct:        clct,
-		eval:        eval,
-		snd:         snd,
-		log:         l,
-		numWorkers:  workers,
-		sentMsgRepo: sendRepo,
-		proc:        proc,
+		c:          make(chan job),
+		clct:       clct,
+		eval:       eval,
+		log:        l,
+		numWorkers: workers,
+		proc:       proc,
 	}
 }
 
@@ -79,36 +87,41 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-func (g *Generator) worker(ctx context.Context, jobs <-chan models.Report, id uint8) {
-	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
+// Generate submits report to the shared worker pool and blocks until it has
+// been processed, returning the collected dataset, the exported files, and
+// whether the report's evaluation condition approved sending it. It makes
+// no caller-specific interpretation of the result — delivering the report,
+// and any "not found" semantics, are the caller's responsibility.
+func (g *Generator) Generate(
+	ctx context.Context,
+	report models.Report,
+) (models.Dataset, []models.Data, bool, error) {
+	result := make(chan jobResult, 1)
 
-	for {
-		select {
-		case <-ctx.Done():
-			g.log.DebugContext(ctx, "context cancelled")
+	select {
+	case g.c <- job{report: report, result: result}:
+	case <-ctx.Done():
+		return nil, nil, false, ctx.Err()
+	}
 
-			return
-		case j, ok := <-jobs:
-			if !ok {
-				g.log.DebugContext(ctx, "jobs chan closed")
-
-				return
-			}
-
-			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.Name))
-
-			err := g.createReport(rvCtx, j)
-			if err != nil {
-				g.log.ErrorContext(rvCtx, "error create report", slog.Any("error", err))
-			}
-
-			cancel()
-		}
+	select {
+	case r := <-result:
+		return r.dataset, r.data, r.approve, r.err
+	case <-ctx.Done():
+		return nil, nil, false, ctx.Err()
 	}
 }
 
-func (g *Generator) createReport(ctx context.Context, report models.Report) error {
+// generate runs the shared report pipeline: resolve query params, collect
+// data, run the processing pipeline (if any), evaluate the report
+// condition, and export the result. It stops short of delivering anything —
+// delivery to recipients, and any "not found" semantics, are the caller's
+// responsibility (see internal/orchestrator, which handles both the
+// event-driven and on-demand paths).
+func (g *Generator) generate(
+	ctx context.Context,
+	report models.Report,
+) (data models.Dataset, res []models.Data, approve bool, err error) {
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
@@ -128,11 +141,11 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		queries = append(queries, q)
 	}
 
-	data, err := g.clct.Collect(ctx, queries...)
+	data, err = g.clct.Collect(ctx, queries...)
 	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 
-		return err
+		return nil, nil, false, err
 	}
 
 	if report.Pipeline != nil {
@@ -151,25 +164,25 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 				slog.Any("error", err),
 			)
 
-			return err
+			return nil, nil, false, err
 		}
 		data = processed
 	}
 
-	approve, err := g.eval.Evaluate(ctx, data, report.Evaluation)
+	approve, err = g.eval.Evaluate(ctx, data, report.Evaluation)
 	if err != nil {
 		l.ErrorContext(ctx, "error while evaluate report", slog.Any("error", err))
 
-		return err
+		return nil, nil, false, err
 	}
 
 	if !approve {
 		l.InfoContext(ctx, "negative result of evaluating, don`t send report")
 
-		return nil
+		return data, nil, false, nil
 	}
 
-	res := make([]models.Data, 0, len(report.Exports))
+	res = make([]models.Data, 0, len(report.Exports))
 
 	for _, e := range report.Exports {
 		r, err := exporter.Export(data, e)
@@ -187,45 +200,32 @@ func (g *Generator) createReport(ctx context.Context, report models.Report) erro
 		res = append(res, r...)
 	}
 
-	if len(report.Recipients) == 0 {
-		l.ErrorContext(ctx, "empty targets list")
+	return data, res, true, nil
+}
 
-		return fmt.Errorf("empty targets list")
-	}
+func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
+	g.log.DebugContext(ctx, fmt.Sprintf("start worker %d", id))
 
-	// Достаем "_meta" лист из данных, для использования в шаблоне email
-	addMeta := make(map[string]any)
-	meta, ok := data["_meta"]
-	if ok {
-		for _, d := range meta {
-			maps.Insert(addMeta, maps.All(d))
+	for {
+		select {
+		case <-ctx.Done():
+			g.log.DebugContext(ctx, "context cancelled")
+
+			return
+		case j, ok := <-jobs:
+			if !ok {
+				g.log.DebugContext(ctx, "jobs chan closed")
+
+				return
+			}
+
+			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.report.Name))
+
+			dataset, res, approve, err := g.generate(rvCtx, j.report)
+			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
+
+			cancel()
 		}
 	}
-	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
-	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
-
-	resMsg, err := msg.Send(ctx, g.snd)
-	if err != nil {
-		l.ErrorContext(ctx, "error while send message", slog.Any("error", err))
-	}
-
-	if len(resMsg) == 0 {
-		l.InfoContext(ctx, "report generated")
-
-		return nil
-	}
-
-	l.InfoContext(
-		ctx,
-		"saving message to database",
-		slog.Any("report", report.Name),
-		slog.Any("message", resMsg),
-	)
-
-	err = g.sentMsgRepo.saveTgMsg(ctx, msg.ReportName, resMsg)
-	if err != nil {
-		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
-	}
-
-	return nil
 }

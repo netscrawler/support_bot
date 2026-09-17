@@ -10,6 +10,8 @@ import (
 	"support_bot/internal/processor/lua"
 	"time"
 
+	apihttp "support_bot/internal/api/http"
+
 	maxbot "support_bot/internal/max_bot"
 
 	tgbot "support_bot/internal/tg_bot"
@@ -87,6 +89,16 @@ func Default() *Config {
 			Port:     "465",
 			Email:    "example@example.com",
 			Password: "password",
+		},
+		HTTP: apihttp.Config{
+			Host:              "127.0.0.1",
+			Port:              8080,
+			ReadTimeout:       5 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      6 * time.Minute,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+			MaxBodyBytes:      10 << 20,
 		},
 	}
 }

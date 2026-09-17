@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	apihandlers "support_bot/internal/api/http/handlers"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
@@ -22,12 +23,16 @@ import (
 	"support_bot/internal/processor"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/processor/pipeline"
+	reportrepo "support_bot/internal/repository"
+	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 	"time"
+
+	apihttp "support_bot/internal/api/http"
 
 	maxadp "support_bot/internal/delivery/max"
 
@@ -59,6 +64,9 @@ type app struct {
 
 	tgBot *telegramBot
 	smb   *smb.SMB
+
+	reportGenSvc *reportsvc.Report
+	http         *apihttp.Server
 }
 
 type reportApp struct {
@@ -68,7 +76,7 @@ type reportApp struct {
 	Event        *eventcreator.EventCreator
 	Orchestrator *orchestrator.Orchestrator
 	Generator    *generator.Generator
-	Deleter      *generator.Deleter
+	Deleter      *orchestrator.Deleter
 	Retry        *retry.Retry
 }
 
@@ -107,6 +115,7 @@ func New(ctx context.Context, cfg *config.Config) (*app, error) {
 
 func (a *app) Start(_ context.Context) error {
 	a.tgBot.start()
+	a.http.Start()
 
 	return a.report.start(a.ctx)
 }
@@ -125,6 +134,12 @@ func (a *app) GracefulShutdown(ctx context.Context) {
 }
 
 func (a *app) close(ctx context.Context) error {
+	var err error
+
+	if a.http != nil {
+		err = errors.Join(err, a.http.Shutdown(ctx))
+	}
+
 	a.cancel()
 
 	if a.tgBot != nil {
@@ -134,8 +149,6 @@ func (a *app) close(ctx context.Context) error {
 	if a.report != nil {
 		a.report.stop(ctx)
 	}
-
-	var err error
 
 	if a.smb != nil {
 		err = errors.Join(err, a.smb.Close())
@@ -275,7 +288,6 @@ func (a *app) init(ctx context.Context) error {
 	sheduleEvents := make(chan models.Event, channelBufferSize)
 	eventChan := make(chan models.Event, channelBufferSize)
 	delChan := make(chan models.Event, channelBufferSize)
-	reportChan := make(chan models.Report, channelBufferSize)
 	specialEventChan := make(chan models.SpecialEventForLK, channelBufferSize)
 
 	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
@@ -313,13 +325,25 @@ func (a *app) init(ctx context.Context) error {
 
 	snd := models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
 
-	delRepo := generator.NewResultRepository(rdb.GetConn(), log)
+	delRepo := orchestrator.NewResultRepository(rdb.GetConn(), log)
 
-	deleter := generator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
-	gen := generator.New(reportChan, clct, *snd, *delRepo, proc, eval, 4, log)
+	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
+	gen := generator.New(clct, proc, eval, 4, log)
 
 	orchRepo := orchestrator.NewRepository(rdb.GetConn(), log)
-	orch := orchestrator.New(eventChan, specialEventChan, reportChan, delChan, orchRepo, log)
+	orch := orchestrator.New(
+		eventChan,
+		specialEventChan,
+		delChan,
+		orchRepo,
+		gen,
+		*snd,
+		delRepo,
+		log,
+	)
+
+	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
+	reportGenSvc := reportsvc.NewReport(reportDBRepo, orch, log)
 	report := &reportApp{
 		ScheduleC:    sheduleEvents,
 		EventC:       eventChan,
@@ -376,6 +400,13 @@ func (a *app) init(ctx context.Context) error {
 
 	a.report = report
 	a.tgBot = tgBotUser
+	a.reportGenSvc = reportGenSvc
+
+	reportHandler := apihandlers.NewHandler(reportGenSvc, log)
+
+	httpSrv := apihttp.New(&cfg.HTTP, reportHandler, log)
+
+	a.http = httpSrv
 
 	return nil
 }

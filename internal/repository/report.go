@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"support_bot/internal/errorz"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/uow"
 
@@ -45,6 +46,47 @@ func (r *Repository) NewUOW(ctx context.Context) (uow.UOW, error) {
 	return u, nil
 }
 
+// beginReadTx opens a read-only transaction and wraps it as a uow.UOW.
+func (r *Repository) beginReadTx(ctx context.Context) (*sqlx.Tx, uow.UOW, error) {
+	tx, err := r.db.BeginTxx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		r.log.ErrorContext(ctx, "transaction start failed", slog.Any("error", err))
+
+		return nil, nil, err
+	}
+
+	return tx, uow.NewUOW(tx), nil
+}
+
+// findID runs a single-id lookup query and maps sql.ErrNoRows to models.ErrNotFound.
+func findID(ctx context.Context, u uow.UOW, what, query string, args ...any) (int64, error) {
+	var id int64
+
+	err := u.GetContext(ctx, &id, query, args...)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, models.ErrNotFound
+		}
+
+		return 0, fmt.Errorf("failed to find %s: %w", what, err)
+	}
+
+	return id, nil
+}
+
+// execLink runs an insert/link statement that returns no rows.
+func execLink(ctx context.Context, u uow.UOW, what, query string, args ...any) error {
+	_, err := u.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to link %s: %w", what, err)
+	}
+
+	return nil
+}
+
 func (r *Repository) FindReportByName(ctx context.Context, name string, u uow.UOW) (bool, error) {
 	var count int64
 
@@ -69,18 +111,7 @@ func (r *Repository) FindEvaluationByRule(
 	ev string,
 	u uow.UOW,
 ) (int64, error) {
-	var id int64
-
-	err := u.GetContext(ctx, &id, "SELECT id FROM evaluate WHERE expr = $1", ev)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find evaluation: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "evaluation", "SELECT id FROM evaluate WHERE expr = $1", ev)
 }
 
 func (r *Repository) CreateEvaluation(ctx context.Context, expr string, tx uow.UOW) (int64, error) {
@@ -118,37 +149,11 @@ func (r *Repository) FindCardByUUIDAndTitle(
 	uuid, title string,
 	u uow.UOW,
 ) (int64, error) {
-	const query = `select id from queries where card_uuid = $1 and title = $2`
-
-	var id int64
-
-	err := u.GetContext(ctx, &id, query, uuid, title)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find card: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "card", `select id from queries where card_uuid = $1 and title = $2`, uuid, title)
 }
 
 func (r *Repository) FindCardByName(ctx context.Context, name string, u uow.UOW) (int64, error) {
-	const query = `select id from queries where title = $1`
-
-	var id int64
-
-	err := u.GetContext(ctx, &id, query, name)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find card: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "card", `select id from queries where title = $1`, name)
 }
 
 func (r *Repository) CreateQuery(ctx context.Context, card models.Card, u uow.UOW) (int64, error) {
@@ -176,18 +181,7 @@ func (r *Repository) FindRecipientFromName(
 	name string,
 	u uow.UOW,
 ) (int64, error) {
-	var id int64
-
-	err := u.GetContext(ctx, &id, "select id from recipients where name = $1", name)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find recipient: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "recipient", "select id from recipients where name = $1", name)
 }
 
 type RecipientDBO struct {
@@ -239,18 +233,7 @@ func (r *Repository) CreateRecipient(
 }
 
 func (r *Repository) FindChatByID(ctx context.Context, chatID int64, u uow.UOW) (int64, error) {
-	var id int64
-
-	err := u.GetContext(ctx, &id, "select id from chats where chat_id = $1", chatID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find chat: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "chat", "select id from chats where chat_id = $1", chatID)
 }
 
 func (r *Repository) CreateChat(ctx context.Context, chat models.Chat, u uow.UOW) (int64, error) {
@@ -330,14 +313,11 @@ func (r *Repository) LinkQueryToReport(
 	reportID, queryID int64,
 	u uow.UOW,
 ) error {
-	const query = "insert into report_queries(report_id, query_id) values ($1, $2)"
-
-	_, err := u.ExecContext(ctx, query, reportID, queryID)
-	if err != nil {
-		return fmt.Errorf("failed to link query to report: %w", err)
-	}
-
-	return nil
+	return execLink(
+		ctx, u, "query to report",
+		"insert into report_queries(report_id, query_id) values ($1, $2)",
+		reportID, queryID,
+	)
 }
 
 func (r *Repository) LinkRecipientToReport(
@@ -345,14 +325,11 @@ func (r *Repository) LinkRecipientToReport(
 	reportID, recipientID int64,
 	u uow.UOW,
 ) error {
-	const query = "insert into reports_recipients(report_id, recipient_id) values ($1, $2)"
-
-	_, err := u.ExecContext(ctx, query, reportID, recipientID)
-	if err != nil {
-		return fmt.Errorf("failed to link recipient to report: %w", err)
-	}
-
-	return nil
+	return execLink(
+		ctx, u, "recipient to report",
+		"insert into reports_recipients(report_id, recipient_id) values ($1, $2)",
+		reportID, recipientID,
+	)
 }
 
 func (r *Repository) FindExportFormat(
@@ -360,18 +337,7 @@ func (r *Repository) FindExportFormat(
 	format string,
 	u uow.UOW,
 ) (int64, error) {
-	var id int64
-
-	err := u.GetContext(ctx, &id, "select id from export_formats where format = $1", format)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find export format: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "export format", "select id from export_formats where format = $1", format)
 }
 
 func (r *Repository) CreateExportFormat(
@@ -401,14 +367,11 @@ func (r *Repository) LinkExportToReport(
 	sortOrder json.RawMessage,
 	u uow.UOW,
 ) error {
-	const query = "insert into reports_export(report_id, format_id, file_name, sort_order) values ($1, $2, $3, $4)"
-
-	_, err := u.ExecContext(ctx, query, reportID, formatID, fileName, sortOrder)
-	if err != nil {
-		return fmt.Errorf("failed to link export to report: %w", err)
-	}
-
-	return nil
+	return execLink(
+		ctx, u, "export to report",
+		"insert into reports_export(report_id, format_id, file_name, sort_order) values ($1, $2, $3, $4)",
+		reportID, formatID, fileName, sortOrder,
+	)
 }
 
 func (r *Repository) LinkTemplateToReport(
@@ -416,14 +379,11 @@ func (r *Repository) LinkTemplateToReport(
 	reportID, templateID int64,
 	u uow.UOW,
 ) error {
-	const query = "insert into report_templates(report_id, template_id) values ($1, $2)"
-
-	_, err := u.ExecContext(ctx, query, reportID, templateID)
-	if err != nil {
-		return fmt.Errorf("failed to link template to report: %w", err)
-	}
-
-	return nil
+	return execLink(
+		ctx, u, "template to report",
+		"insert into report_templates(report_id, template_id) values ($1, $2)",
+		reportID, templateID,
+	)
 }
 
 func (r *Repository) CreateTemplate(
@@ -448,24 +408,14 @@ func (r *Repository) FindTemplateByTitleAndType(
 	title, tType string,
 	u uow.UOW,
 ) (int64, error) {
-	var id int64
-
-	err := u.GetContext(
+	return findID(
 		ctx,
-		&id,
+		u,
+		"template",
 		"select id from templates where title = $1 and type = $2",
 		title,
 		tType,
 	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find template: %w", err)
-	}
-
-	return id, nil
 }
 
 func (r *Repository) FindCronByNameAndExpr(
@@ -473,18 +423,7 @@ func (r *Repository) FindCronByNameAndExpr(
 	name, cron string,
 	u uow.UOW,
 ) (int64, error) {
-	var id int64
-
-	err := u.GetContext(ctx, &id, "select id from crons where name = $1 and cron = $2", name, cron)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, models.ErrNotFound
-		}
-
-		return 0, fmt.Errorf("failed to find cron: %w", err)
-	}
-
-	return id, nil
+	return findID(ctx, u, "cron", "select id from crons where name = $1 and cron = $2", name, cron)
 }
 
 func (r *Repository) CreateCron(ctx context.Context, cron models.Cron, u uow.UOW) (int64, error) {
@@ -514,14 +453,11 @@ func (r *Repository) LinkCronToReport(
 	reportID, cronID int64,
 	u uow.UOW,
 ) error {
-	const query = "insert into report_crons(report_id, cron_id) values ($1, $2)"
-
-	_, err := u.ExecContext(ctx, query, reportID, cronID)
-	if err != nil {
-		return fmt.Errorf("failed to link cron to report: %w", err)
-	}
-
-	return nil
+	return execLink(
+		ctx, u, "cron to report",
+		"insert into report_crons(report_id, cron_id) values ($1, $2)",
+		reportID, cronID,
+	)
 }
 
 func (r *Repository) Load(ctx context.Context) ([]models.Report, error) {
@@ -531,18 +467,11 @@ func (r *Repository) Load(ctx context.Context) ([]models.Report, error) {
 
 	r.log.DebugContext(ctx, "start loading all reports")
 
-	tx, err := r.db.BeginTxx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelReadCommitted,
-		ReadOnly:  true,
-	})
+	tx, u, err := r.beginReadTx(ctx)
 	if err != nil {
-		r.log.ErrorContext(ctx, "transaction start failed", slog.Any("error", err))
-
 		return nil, err
 	}
 	defer tx.Rollback()
-
-	u := uow.NewUOW(tx)
 
 	rpts, err := r.loadReports(ctx, u)
 	if err != nil {
@@ -553,7 +482,7 @@ func (r *Repository) Load(ctx context.Context) ([]models.Report, error) {
 
 	reports := make([]models.Report, 0, len(rpts))
 	for _, rp := range rpts {
-		rpt, err := r.getReportByID(ctx, rp, u)
+		rpt, err := r.getFullReportModel(ctx, rp, u)
 		if err != nil {
 			r.log.ErrorContext(
 				ctx,
@@ -571,6 +500,84 @@ func (r *Repository) Load(ctx context.Context) ([]models.Report, error) {
 	return reports, nil
 }
 
+func (r *Repository) GetPublicReportByID(
+	ctx context.Context,
+	publicReportID string,
+) (*models.Report, error) {
+	const query = "select report_id from public_reports where public_id = $1 limit 1"
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repository load: %w", ctx.Err())
+	}
+
+	tx, u, err := r.beginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			r.log.ErrorContext(ctx, "transaction rollback failed", slog.Any("error", err))
+		}
+	}()
+
+	var reportID int64
+
+	err = u.GetContext(ctx, &reportID, query, publicReportID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, models.ErrNotFound
+		}
+		return nil, fmt.Errorf("%w: failed to get public report: %w", errorz.ErrInternal, err)
+	}
+
+	return r.GetReportByID(ctx, reportID, u)
+}
+
+func (r *Repository) GetReportByID(
+	ctx context.Context,
+	reportID int64,
+	tx ...uow.UOW,
+) (*models.Report, error) {
+	const query = `select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+from reports r
+left join evaluate e on e.id = r.eval_id
+where r.id = $1
+limit 1`
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("repository load: %w", ctx.Err())
+	}
+	var u uow.UOW
+
+	if len(tx) > 0 {
+		u = tx[0]
+	} else {
+		sqlTx, txu, err := r.beginReadTx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer sqlTx.Rollback()
+
+		u = txu
+	}
+
+	var rp reportLoad
+
+	err := u.GetContext(ctx, &rp, query, reportID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, models.ErrNotFound
+		}
+		return nil, fmt.Errorf("%w: failed to get report: %w", errorz.ErrInternal, err)
+	}
+
+	report, err := r.getFullReportModel(ctx, rp, u)
+	if err != nil {
+		r.log.ErrorContext(ctx, "error getting full report", slog.Any("error", err))
+		return nil, fmt.Errorf("%w: failed to get report: %w", errorz.ErrInternal, err)
+	}
+	return report, nil
+}
+
 func (r *Repository) loadReports(ctx context.Context, u uow.UOW) ([]reportLoad, error) {
 	const query = `select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
 from reports r
@@ -586,7 +593,7 @@ left join evaluate e on e.id = r.eval_id`
 	return rp, nil
 }
 
-func (r *Repository) getReportByID(
+func (r *Repository) getFullReportModel(
 	ctx context.Context,
 	rp reportLoad,
 	u uow.UOW,

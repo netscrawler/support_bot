@@ -26,7 +26,12 @@ alter table reports
     add column pipeline_id bigint,
     add constraint fk_report_pipeline foreign key (pipeline_id) references pipelines (id) on delete restrict;
 
-
+create table public_reports(
+    id serial primary key,
+    public_id uuid unique not null,
+    report_id bigint not null,
+    constraint  fk_report foreign key (report_id) references reports(id) on delete cascade
+);
 
 create table lua_scripts
 (
