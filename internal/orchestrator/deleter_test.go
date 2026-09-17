@@ -66,6 +66,11 @@ func TestDeleter_DeleteOne(t *testing.T) {
 			wantMaxCalled:   true,
 		},
 		{
+			name:            "неизвестный ChType без MessageID и MessageIDStr помечает удалённым без вызова адаптеров",
+			msg:             models.SentMessage{ChType: "", MessageID: 0, MessageIDStr: nil},
+			wantMarkDeleted: true,
+		},
+		{
 			name:            "свежая ошибка удаления не помечает сообщение удалённым",
 			msg:             models.SentMessage{ChType: models.ChatTypeTg, Time: time.Now()},
 			tgErr:           errors.New("telegram недоступен"),

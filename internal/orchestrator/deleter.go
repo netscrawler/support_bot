@@ -122,6 +122,18 @@ func (d *Deleter) deleteOne(ctx context.Context, m models.SentMessage) bool {
 		}
 	}
 
+	// del остаётся nil, если ChType не tg/max, MessageID == 0 и
+	// MessageIDStr == nil — адаптер доставки определить нечем. Такое
+	// сообщение не связано ни с одним каналом, поэтому логируем и сразу
+	// помечаем удалённым, а не пытаемся вызвать nil.DeleteMsg (этот edge
+	// case унаследован от старой инлайновой реализации, но раньше приводил
+	// к панике).
+	if del == nil {
+		d.log.ErrorContext(ctx, "no delivery adapter for message", slog.Any("id", m.ID))
+
+		return true
+	}
+
 	if err := del.DeleteMsg(ctx, m); err != nil {
 		d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
 
