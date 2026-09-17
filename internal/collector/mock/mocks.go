@@ -16,19 +16,10 @@ func NewMockDataFetcher(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockDataFetcher {
-	if helper, ok := t.(interface{ Helper() }); ok {
-		helper.Helper()
-	}
-
 	mock := &MockDataFetcher{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() {
-		if helper, ok := t.(interface{ Helper() }); ok {
-			helper.Helper()
-		}
-		mock.AssertExpectations(t)
-	})
+	t.Cleanup(func() { mock.AssertExpectations(t) })
 
 	return mock
 }
@@ -83,7 +74,7 @@ type MockDataFetcher_Fetch_Call struct {
 //   - ctx context.Context
 //   - target string
 //   - params map[string]string
-func (_e *MockDataFetcher_Expecter) Fetch(ctx any, target any, params any) *MockDataFetcher_Fetch_Call {
+func (_e *MockDataFetcher_Expecter) Fetch(ctx interface{}, target interface{}, params interface{}) *MockDataFetcher_Fetch_Call {
 	return &MockDataFetcher_Fetch_Call{Call: _e.mock.On("Fetch", ctx, target, params)}
 }
 
@@ -110,8 +101,8 @@ func (_c *MockDataFetcher_Fetch_Call) Run(run func(ctx context.Context, target s
 	return _c
 }
 
-func (_c *MockDataFetcher_Fetch_Call) Return(stringToAnyMoqParams []map[string]any, err error) *MockDataFetcher_Fetch_Call {
-	_c.Call.Return(stringToAnyMoqParams, err)
+func (_c *MockDataFetcher_Fetch_Call) Return(stringToVs []map[string]any, err error) *MockDataFetcher_Fetch_Call {
+	_c.Call.Return(stringToVs, err)
 	return _c
 }
 

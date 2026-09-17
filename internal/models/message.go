@@ -107,21 +107,21 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 			if r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
 			}
-		case EmailRecipient:
+		case emailRecipient:
 			err := m.sendSMTP(ctx, sp.SMTP(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
 
 				continue
 			}
-		case SambaRecipient:
+		case sambaRecipient:
 			err := m.sendSMB(ctx, sp.SMB(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
 
 				continue
 			}
-		case MaxRecipient:
+		case maxRecipient:
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)

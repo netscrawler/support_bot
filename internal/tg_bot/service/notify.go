@@ -5,22 +5,17 @@ import (
 	"log/slog"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/models"
+	"support_bot/internal/tg_bot/repository"
 )
-
-// AdminNotifier — узкий интерфейс, которого достаточно Notify: ему нужен
-// только список администраторов, а не весь UserProvider.
-type AdminNotifier interface {
-	GetAllAdmins(ctx context.Context) ([]models.User, error)
-}
 
 type Notify struct {
 	tg   *telegram.ChatAdaptor
-	user AdminNotifier
+	user *repository.UserRepository
 	log  *slog.Logger
 }
 
 func NewNotify(tg *telegram.ChatAdaptor,
-	user AdminNotifier,
+	user *repository.UserRepository,
 	log *slog.Logger,
 ) *Notify {
 	return &Notify{tg: tg, user: user, log: log}

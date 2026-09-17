@@ -17,5 +17,3 @@ config.json
 .idea
 migrations/*
 reports
-config/prod.yaml
-docs/superpowers/plans/

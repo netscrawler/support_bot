@@ -14,16 +14,6 @@ type SheduleUnit struct {
 	EventType int `db:"event_type"`
 }
 
-// ReportCronEvent — DTO, которое возвращает internal/store.CronStore.
-// Живёт в models, а не в internal/event_creator (единственном потребителе),
-// чтобы internal/store не зависел от конкретного пакета-потребителя —
-// такая зависимость была бы нарушением слоёв (storage не должен знать
-// о event_creator).
-type ReportCronEvent struct {
-	Name     string
-	CronName string
-}
-
 func (s SheduleUnit) String() string {
 	return fmt.Sprintf("%s: %s", s.Name, s.Crontab)
 }

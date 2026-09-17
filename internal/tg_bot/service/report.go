@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"support_bot/internal/models"
 	"support_bot/internal/sheduler"
-	"support_bot/internal/store"
+	"support_bot/internal/tg_bot/repository"
 	"time"
 
 	eventcreator "support_bot/internal/event_creator"
@@ -14,27 +14,23 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-type ReportProvider interface {
-	GetByName(ctx context.Context, reportName string) (*models.Report, error)
-	LoadPaged(ctx context.Context, page int) ([]models.ReportForTgLK, int, error)
-	GetLinkedCrons(ctx context.Context, reportName string) ([]models.SheduleUnit, error)
-}
-
 type Report struct {
 	*sheduler.SheduleAPI
 	*eventcreator.EventAPI
 
-	repo ReportProvider
+	repo *repository.ReportRepository
 
 	mbURL string
 
 	log *slog.Logger
 }
 
+const reportsPageSize = 5
+
 func NewReportService(
 	shd *sheduler.SheduleAPI,
 	eventAPI *eventcreator.EventAPI,
-	repo ReportProvider,
+	repo *repository.ReportRepository,
 	mbURL string,
 	log *slog.Logger,
 ) *Report {
@@ -54,7 +50,7 @@ func (r *Report) LoadReportsWithPagination(ctx context.Context) (models.LoadRepo
 }
 
 func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadReportRPL, error) {
-	reports, rCount, err := r.repo.LoadPaged(ctx, page)
+	rCount, err := r.repo.GetReportsCount(ctx)
 	if err != nil {
 		return models.LoadReportRPL{}, err
 	}
@@ -63,9 +59,20 @@ func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadRep
 		return models.LoadReportRPL{}, fmt.Errorf("reports not found")
 	}
 
-	pageCount := (rCount + store.ReportsPageSize - 1) / store.ReportsPageSize
+	pageCount := (rCount + reportsPageSize - 1) / reportsPageSize
 
-	page = min(max(page, 1), pageCount)
+	if page <= 0 {
+		page = 1
+	}
+
+	if page > pageCount {
+		page = pageCount
+	}
+
+	reports, err := r.repo.LoadReports(ctx, page)
+	if err != nil {
+		return models.LoadReportRPL{}, err
+	}
 
 	rpl := models.LoadReportRPL{
 		ReportsTotal: rCount,
@@ -104,14 +111,14 @@ func (r *Report) GetReportInfoByName(
 	ctx context.Context,
 	reportName string,
 ) (models.ReportInfo, error) {
-	rpt, err := r.repo.GetByName(ctx, reportName)
+	rpt, err := r.repo.GetReportByName(ctx, reportName)
 	if err != nil {
 		return models.ReportInfo{}, fmt.Errorf("%w: (%w)", models.ErrInternal, err)
 	}
 
 	var cronString, recipientString, exportString, queryString []string
 
-	crons, err := r.repo.GetLinkedCrons(ctx, reportName)
+	crons, err := r.repo.GetReportLinkedCrons(ctx, reportName)
 	if err != nil {
 		cronString = []string{fmt.Sprintf("%s: (%s)", models.ErrInternal.Error(), err.Error())}
 	}

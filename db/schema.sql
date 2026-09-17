@@ -1,3 +1,28 @@
+-- Роли пользователей
+CREATE TYPE user_role AS ENUM ('admin', 'user', 'primary');
+
+-- Таблица пользователей
+CREATE TABLE users
+(
+    id          SERIAL PRIMARY KEY,
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username    VARCHAR(255),
+    first_name  VARCHAR(255),
+    last_name   VARCHAR(255),
+    role        user_role     NOT NULL DEFAULT 'user'
+);
+
+-- Таблица чатов для уведомлений
+CREATE TABLE chats
+(
+    id          SERIAL PRIMARY KEY,
+    chat_id     BIGINT UNIQUE NOT NULL,
+    title       VARCHAR(255),
+    type        VARCHAR(50)   NOT NULL, -- 'private', 'group', 'supergroup', 'channel'
+    description TEXT,
+    is_active   BOOLEAN       NOT NULL DEFAULT true,
+    ch_type     varchar(50)   NOT NULL default 'tg'
+);
 create table evaluate
 (
     id   serial primary key,
@@ -6,33 +31,29 @@ create table evaluate
 
 create table pipelines
 (
-    id Serial primary key,
+    id       Serial primary key,
     pipeline jsonb not null default '{}'
 );
 
 CREATE TABLE reports
 (
-    id      SERIAL PRIMARY KEY,
-    name    VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
-    active  BOOLEAN      NOT NULL DEFAULT FALSE,
-    title   TEXT         NOT NULL,
-    eval_id bigint       NOT NULL,
+    id             SERIAL PRIMARY KEY,
+    name           VARCHAR(255) NOT NULL UNIQUE, -- уникальное имя уведомления
+    active         BOOLEAN      NOT NULL DEFAULT FALSE,
+    title          TEXT         NOT NULL,
+    eval_id        bigint       NOT NULL,
+    access_from_lk boolean      not null default true,
+    pipeline_id    bigint,
+    constraint fk_report_pipeline foreign key (pipeline_id) references pipelines (id) on delete restrict,
     CONSTRAINT fk_report_eval FOREIGN KEY (eval_id) REFERENCES evaluate (id) ON DELETE RESTRICT
 );
-
-alter table reports
-    add column access_from_lk boolean not null default true;
-alter table reports
-    add column pipeline_id bigint,
-    add constraint fk_report_pipeline foreign key (pipeline_id) references pipelines (id) on delete restrict;
-
 
 
 create table lua_scripts
 (
-    id serial primary key,
-    name varchar(255) unique not null,
-    script TEXT not null
+    id     serial primary key,
+    name   varchar(255) unique not null,
+    script TEXT                not null
 );
 
 create table email_templates
@@ -46,14 +67,15 @@ create table email_templates
 
 create table recipients
 (
-    id          serial PRIMARY KEY,
-    name        text not null,
-    config      jsonb DEFAULT '{}',
-    remote_path text,
-    chat_id     int,
-    thread_id   int,
-    email_id    int,
-    type        text,
+    id                           serial PRIMARY KEY,
+    name                         text not null,
+    config                       jsonb DEFAULT '{}',
+    remote_path                  text,
+    chat_id                      int,
+    thread_id                    int,
+    email_id                     int,
+    type                         text,
+    need_delete_after_end_of_day bool  default false,
     CONSTRAINT fk_recipient_chat FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE RESTRICT,
     CONSTRAINT fk_recipient_email FOREIGN KEY (email_id) REFERENCES email_templates (id) ON DELETE RESTRICT
 );
@@ -72,13 +94,11 @@ CREATE TABLE reports_recipients
 CREATE TABLE queries
 (
     id        SERIAL PRIMARY KEY,
-    card_uuid TEXT NOT NULL,
-    title     TEXT NOT NULL
+    card_uuid TEXT  NOT NULL,
+    title     TEXT  NOT NULL,
+    q_type    text  not null default 'mb',
+    params    jsonb not null default '{}'
 );
-
-alter table queries
-add column q_type text not null default 'mb',
-add column params jsonb not null default '{}';
 
 CREATE TABLE templates
 (
@@ -94,35 +114,23 @@ CREATE TABLE crons
     cron        TEXT NOT NULL,
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    is_active   bool NOT NULL DEFAULT FALSE
+    is_active   bool NOT NULL DEFAULT FALSE,
+    event_type  INT  NOT NULL DEFAULT 0
 );
-
-ALTER TABLE crons
-    ADD COLUMN event_type INT NOT NULL DEFAULT 0;
-
-alter table recipients
-    add column need_delete_after_end_of_day bool default false;
-
 
 create table sent_messages
 (
-    id          serial primary key,
-    chat_id     bigint      not null,
-    thread_id   int         not null default 0,
-    message_id  bigint      not null,
-    title       text        not null,
-    sent_at     timestamptz not null default now(),
-    deleted     bool        not null default false,
-    report_name text        not null
+    id             serial primary key,
+    chat_id        bigint       not null,
+    thread_id      int          not null default 0,
+    message_id     bigint       not null,
+    title          text         not null,
+    sent_at        timestamptz  not null default now(),
+    deleted        bool         not null default false,
+    report_name    text         not null,
+    message_id_str varchar(250),
+    ch_type        varchar(250) not null default 'tg'
 );
-
-alter table sent_messages
-add column message_id_str varchar(250);
-
-
-alter table sent_messages
-add column ch_type varchar(250) not null default 'tg';
-
 
 CREATE TABLE report_crons
 (

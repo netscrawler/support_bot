@@ -32,7 +32,7 @@ func TestExecuteTemplate(t *testing.T) {
 
 		tmpl := `Отчёт за {{ now | lastMonth | formatRuMonthYear}}`
 
-		want := fmt.Sprintf("Отчёт за %s", time.Now().AddDate(0, 0, -1).Format("02.01.2006"))
+		want := "Отчёт за декабрь 2025"
 
 		got, err := text.ExecuteTemplate(tmpl, nil)
 
