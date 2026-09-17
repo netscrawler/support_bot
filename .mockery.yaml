@@ -32,3 +32,13 @@ packages:
       ChatProvider:
       UserProvider:
       AdminNotifier:
+  support_bot/internal/sheduler:
+    config:
+      all: false
+    interfaces:
+      SheduleLoader:
+  support_bot/internal/event_creator:
+    config:
+      all: false
+    interfaces:
+      EventProvider:

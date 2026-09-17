@@ -35,6 +35,7 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newDelChan, fx.ResultTags(`name:"delChan"`)),
 	newSpecialEventChan,
 	newShdAPIChan,
+	newCronStore,
 	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
 	fx.Annotate(
 		newEventCreator,
@@ -79,14 +80,13 @@ func newShdAPIChan() chan sheduler.SheduleAPIEvent {
 
 func newSheduler(
 	appCtx context.Context,
-	rdb *postgres.DB,
+	cronStore *reportstore.CronStore,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
 	shdAPI chan sheduler.SheduleAPIEvent,
 	lc fx.Lifecycle,
 ) *sheduler.Sheduler {
-	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
-	shd := sheduler.NewSheduler(shdLoader, log, scheduleEvents, shdAPI)
+	shd := sheduler.NewSheduler(cronStore, log, scheduleEvents, shdAPI)
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error { return shd.Start(appCtx) },
@@ -102,14 +102,13 @@ func newSheduler(
 
 func newEventCreator(
 	appCtx context.Context,
-	rdb *postgres.DB,
+	cronStore *reportstore.CronStore,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
 	eventChan chan models.Event,
 	lc fx.Lifecycle,
 ) *eventcreator.EventCreator {
-	evRepository := eventcreator.NewRepository(rdb.GetConn(), log)
-	evC := eventcreator.New(scheduleEvents, eventChan, log, evRepository)
+	evC := eventcreator.New(scheduleEvents, eventChan, log, cronStore)
 
 	// No OnStop here — mirrors the original app.go asymmetry: the scheduler
 	// and other lifecycle-managed components stop, but the event creator's
@@ -117,6 +116,10 @@ func newEventCreator(
 	lc.Append(fx.Hook{OnStart: func(context.Context) error { return evC.Start(appCtx) }})
 
 	return evC
+}
+
+func newCronStore(rdb *postgres.DB) *reportstore.CronStore {
+	return reportstore.NewCronStore(rdb.GetConn())
 }
 
 func newEventAPI(

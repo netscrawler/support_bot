@@ -14,6 +14,11 @@ type SheduleUnit struct {
 	EventType int `db:"event_type"`
 }
 
+type ReportCronEvent struct {
+	Name     string
+	CronName string
+}
+
 func (s SheduleUnit) String() string {
 	return fmt.Sprintf("%s: %s", s.Name, s.Crontab)
 }
