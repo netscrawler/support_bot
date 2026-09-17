@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM golang:1.26-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 
 # Установка зависимостей сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
