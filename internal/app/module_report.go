@@ -46,7 +46,7 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newLuaManager,
 	newProcessorReg,
 	newProcessor,
-	newResultRepository,
+	newSentMsgStore,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
 	newReportStore,
@@ -169,8 +169,8 @@ func newProcessor(runnerReg *processor.RunnerRegistry, log *slog.Logger) *proces
 	return processor.NewProcessor(runnerReg, log)
 }
 
-func newResultRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator.SentMsgRepository {
-	return orchestrator.NewResultRepository(rdb.GetConn(), log)
+func newSentMsgStore(rdb *postgres.DB, log *slog.Logger) *reportstore.SentMsgStore {
+	return reportstore.NewSentMsgStore(rdb.GetConn(), log)
 }
 
 func newDeleter(
@@ -178,11 +178,11 @@ func newDeleter(
 	delChan chan models.Event,
 	tg *telegram.ChatAdaptor,
 	maxAdp *maxadp.Adaptor,
-	delRepo *orchestrator.SentMsgRepository,
+	delRepo *reportstore.SentMsgStore,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Deleter {
-	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
+	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, delRepo, log)
 
 	lc.Append(fx.Hook{OnStart: func(context.Context) error {
 		deleter.Start(appCtx)
@@ -224,7 +224,7 @@ func newOrchestrator(
 	orchRepo *reportstore.ReportStore,
 	gen *generator.Generator,
 	snd *models.SenderProvider,
-	delRepo *orchestrator.SentMsgRepository,
+	delRepo *reportstore.SentMsgStore,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Orchestrator {
