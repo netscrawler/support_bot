@@ -19,6 +19,7 @@ packages:
       all: false
     interfaces:
       ReportStore:
+      ScriptSaver:
   support_bot/internal/orchestrator:
     config:
       all: false
@@ -42,3 +43,8 @@ packages:
       all: false
     interfaces:
       EventProvider:
+  support_bot/internal/processor/lua:
+    config:
+      all: false
+    interfaces:
+      PluginProvider:
