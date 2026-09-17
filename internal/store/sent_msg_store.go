@@ -124,14 +124,16 @@ func (s *SentMsgStore) withLockedMsgsToDeleteWithPool(
 				continue
 			}
 
+			// Ошибка здесь возвращается, а не логируется: она обрывает всю
+			// ExecTx и приводит к rollback — что произошло бы в реальном
+			// Postgres в любом случае, т.к. ошибка внутри транзакции делает
+			// недействительными все последующие операторы вплоть до commit.
+			// Возврат ошибки раньше просто не даёт выполнить заведомо
+			// обречённые запросы для оставшихся строк. Вызывающий код
+			// (Deleter.delete) сам логирует итоговую ошибку.
 			//nolint:gosec // ids fit int32, see schema
 			if err := q.MarkSentMsgDeleted(ctx, int32(msg.ID)); err != nil {
-				s.log.ErrorContext(
-					ctx,
-					"mark deleted failed",
-					slog.Any("id", msg.ID),
-					slog.Any("error", err),
-				)
+				return fmt.Errorf("mark deleted id=%d: %w", msg.ID, err)
 			}
 		}
 

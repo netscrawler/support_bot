@@ -113,6 +113,60 @@ func TestSentMsgStore_WithLockedMsgsToDelete_CallbackDecidesMarkDeleted(t *testi
 	}
 }
 
+// TestSentMsgStore_WithLockedMsgsToDelete_CallbackFalseSkipsMarkDeleted
+// проверяет обратное направление к CallbackDecidesMarkDeleted: если fn вернул
+// false, MarkSentMsgDeleted вообще не должен вызываться. Ни один
+// ExpectExec("update sent_messages set deleted = true") не настроен —
+// pgxmock вернёт ошибку "unexpected call" на любой незапланированный exec, и
+// эта ошибка не должна быть проглочена (как раньше происходило из-за
+// log-and-continue в withLockedMsgsToDeleteWithPool): регресс к "помечать
+// всех безусловно" должен провалить тест.
+func TestSentMsgStore_WithLockedMsgsToDelete_CallbackFalseSkipsMarkDeleted(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	title := "Report Chat"
+	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+
+	pool.ExpectBegin()
+	pool.ExpectQuery("select id, chat_id, thread_id, message_id, message_id_str, title, sent_at, deleted, ch_type").
+		WillReturnRows(pgxmock.NewRows(
+			[]string{
+				"id", "chat_id", "thread_id", "message_id",
+				"message_id_str", "title", "sent_at", "deleted", "ch_type",
+			},
+		).
+			AddRow(int32(1), int64(100), int32(0), int64(11), (*string)(nil), title, now, false, "tg"),
+		)
+	// ExpectExec на MarkSentMsgDeleted намеренно не настроен.
+	pool.ExpectCommit()
+	pool.ExpectRollback() // no-op после успешного коммита, как и в exec_tx_test.go
+
+	s := NewSentMsgStoreForTest(sqlcgen.New(pool))
+
+	var seenIDs []int64
+	err = s.withLockedMsgsToDeleteWithPool(
+		context.Background(),
+		pool,
+		func(_ context.Context, m models.SentMessage) bool {
+			seenIDs = append(seenIDs, m.ID)
+			return false // ни одно сообщение не помечается удалённым
+		},
+	)
+	if err != nil {
+		t.Fatalf("WithLockedMsgsToDelete() error = %v", err)
+	}
+	if len(seenIDs) != 1 {
+		t.Fatalf("fn called %d times, want 1", len(seenIDs))
+	}
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations (MarkSentMsgDeleted must not be called): %v", err)
+	}
+}
+
 // TestSentMsgStore_RemoveDeletedMessages_ReturnsRowsAffected проверяет, что
 // метод возвращает реальное количество удалённых строк, а не только nil-ошибку.
 func TestSentMsgStore_RemoveDeletedMessages_ReturnsRowsAffected(t *testing.T) {
