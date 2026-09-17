@@ -21,6 +21,8 @@ COPY . .
 
 RUN git config --global --add safe.directory /src
 
+ARG BUILD_TIME
+
 RUN mkdir -p /out && \
     CGO_ENABLED=1 \
     GOOS=linux \

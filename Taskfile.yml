@@ -49,7 +49,7 @@ tasks:
   docker-build:
     desc: Build docker image
     cmds:
-      - docker build -f build.Dockerfile -t support_bot-builder .
+      - docker build --build-arg BUILD_TIME={{.BUILD_TIME}} -f build.Dockerfile -t support_bot-builder .
 
   docker-run:
     desc: Build and extract binary from docker
