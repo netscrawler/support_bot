@@ -17,6 +17,8 @@
 //   - ReportStore — хранилище отчётов поверх *pgxpool.Pool.
 //   - ChatStore — хранилище чатов Telegram-уведомлений (таблица chats).
 //   - UserStore — хранилище пользователей бота (таблица users).
+//   - SentMsgStore — хранилище отправленных сообщений (таблица sent_messages)
+//     для оркестратора и удаления сообщений в конце дня.
 //
 // Основные публичные функции/методы:
 //   - NewReportStore / NewChatStore / NewUserStore — конструкторы для
@@ -29,6 +31,8 @@
 //   - ChatStore.Create / GetByTitle / GetAll / Delete — CRUD для чатов.
 //   - UserStore.Create / Update / GetByUsername / GetByTgID / GetAll /
 //     GetAllAdmins / Delete — CRUD для пользователей.
+//   - SentMsgStore.SaveTgMsg / WithLockedMsgsToDelete / RemoveDeletedMessages /
+//     MarkEndOfDayMsgDeleted — сохранение и удаление отправленных сообщений.
 //   - ExecTx — обёртка над pgx-транзакцией, разделяемая всеми Store; заменяет
 //     internal/pkg/uow.
 //
