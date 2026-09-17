@@ -16,8 +16,8 @@ import (
 	"support_bot/internal/models"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
-	"support_bot/internal/repository"
 	"support_bot/internal/service"
+	"support_bot/internal/store"
 )
 
 func Ctl() {
@@ -83,7 +83,7 @@ func exportReportsDslFromDB(args []string) error {
 	defer db.Stop(ctx)
 
 	mng := service.NewReportManager(
-		repository.NewRepository(db.GetConn(), slog.Default()),
+		store.NewReportStore(db.GetConn(), slog.Default()),
 		service.NewReportValidation(),
 		slog.Default(),
 	)
@@ -186,7 +186,7 @@ func applyDSLs(args []string) error {
 	defer db.Stop(ctx)
 
 	mng := service.NewReportManager(
-		repository.NewRepository(db.GetConn(), slog.Default()),
+		store.NewReportStore(db.GetConn(), slog.Default()),
 		service.NewReportValidation(),
 		slog.Default(),
 	)
@@ -332,7 +332,7 @@ func saveScript(args []string) error {
 		return err
 	}
 
-	mng := service.NewScriptManager(repository.NewScript(db.GetConn()))
+	mng := service.NewScriptManager(store.NewScriptStore(db.GetConn()))
 
 	for _, f := range files {
 		scriptName := filepath.Base(f)
@@ -345,7 +345,7 @@ func saveScript(args []string) error {
 
 		err = mng.Save(ctx, scriptName, string(script))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "read script file: %w\n", err)
+			fmt.Fprintf(os.Stderr, "read script file: %v\n", err)
 			continue
 		}
 		fmt.Fprintf(os.Stdout, "Script %s saved successfully\n", scriptName)

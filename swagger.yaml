@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: support_bot public HTTP API
+  description: Публичный HTTP API для скачивания сгенерированных отчётов по публичной ссылке.
+  version: "1.0"
+servers:
+  - url: /api/v1/public
+paths:
+  /report/{report_id}:
+    get:
+      summary: Получить сгенерированный отчёт по публичному идентификатору
+      operationId: getGeneratedReportByID
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          description: Публичный UUID отчёта (public_reports.public_id)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Файл сгенерированного отчёта
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: report_id не является корректным UUID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Отчёт с указанным public_id не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Внутренняя ошибка при генерации отчёта
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: the requested resource could not be found

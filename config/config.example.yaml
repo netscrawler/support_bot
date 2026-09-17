@@ -9,6 +9,9 @@ log:
         - stdout
     # Формат в котором пишутся логи: (json|text)
     format: text
+    # Список стандартных полей для исключения (time, level, msg, source)
+    exclude:
+        - time
 # Адрес Metabase для забора данных
 metabase_domain: https://metabase.domain
 appmetrica:
@@ -55,7 +58,6 @@ database:
     max_conn_idle_time: 2m0s
     # Таймаут на подключения к базе данных
     database_connect: 30s
-
 # Настройки Telegram-бота.
 # Используется для приема команд и отправки уведомлений.
 telegram:
@@ -74,7 +76,7 @@ timeout:
     # Shutdown — максимальное время на корректное завершение приложения.
     # За это время должны завершиться все активные операции.
     # Если указать слишком маленький период не все процеесы могут завершится корректно
-    shutdown: 5s
+    shutdown: 10s
 # Настройки подключения к SMB (Samba) файловой шаре.
 # Используется для чтения и/или записи файлов на сетевой ресурс.
 # Поддерживается аутентификация по логину/паролю.
@@ -113,7 +115,6 @@ smtp:
     # от имени которой будут отправляться письма.
     # Этот адрес используется в поле From.
     email: example@example.com
-    
     # Пароль от email-учетной записи.
     # Обычно это пароль приложения, а не основной пароль аккаунта.
     password: password
@@ -123,9 +124,29 @@ max:
     max_token: max_bot_token
     # CleanUpTime — интервал очистки временных данных бота
     # (кэш, состояния диалогов, временные сообщения и т.п.).
-    clean_up_time: 10m0s
+    clean_up_time: 0s
     # BotPoll — интервал long-polling запросов к Max API.
-    bot_poll: 30s
+    bot_poll: 0s
     api_proxy: ""
     # Флаг активации бота, false по умолчанию. Отвечает за то включать бота или нет
     max_enabled: false
+# Настройки публичного HTTP API.
+http:
+    # HTTP server host
+    host: 127.0.0.1
+    # HTTP server port
+    port: 8080
+    # HTTP server read timeout
+    read_timeout: 5s
+    # HTTP server read header timeout
+    read_header_timeout: 5s
+    # HTTP server write timeout
+    write_timeout: 6m0s
+    # HTTP server idle timeout
+    idle_timeout: 2m0s
+    # HTTP server max header bytes
+    max_header_bytes: 1048576
+    # HTTP server max header value count
+    max_header_value_count: 0
+    # HTTP server max body bytes
+    max_body_bytes: 10485760
