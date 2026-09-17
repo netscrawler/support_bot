@@ -9,14 +9,9 @@ import (
 	"time"
 )
 
-type event struct {
-	Name     string `db:"report_name"`
-	CronName string `db:"cron_name"`
-}
-
 type EventProvider interface {
-	Load(ctx context.Context) ([]event, error)
-	LoadByName(ctx context.Context, name string) ([]event, error)
+	LoadEvents(ctx context.Context) ([]models.ReportCronEvent, error)
+	LoadEventsByCronName(ctx context.Context, name string) ([]models.ReportCronEvent, error)
 }
 
 type EventCreator struct {
@@ -137,7 +132,7 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]models
 
 	e.mu.RUnlock()
 
-	events, err := e.ep.LoadByName(ctx, name)
+	events, err := e.ep.LoadEventsByCronName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +185,7 @@ func (e *EventCreator) cleaner(ctx context.Context) {
 func (e *EventCreator) heat(ctx context.Context) error {
 	e.log.DebugContext(ctx, "start loading events")
 
-	events, err := e.ep.Load(ctx)
+	events, err := e.ep.LoadEvents(ctx)
 	if err != nil {
 		e.log.ErrorContext(ctx, "error loading events", slog.Any("error", err))
 

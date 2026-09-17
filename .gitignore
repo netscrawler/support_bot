@@ -29,6 +29,13 @@ coverage.txt
 .idea/
 *.swp
 *.swo
+docker.env
+config.json
+.idea
+migrations/*
+reports
+config/prod.yaml
+docs/superpowers/plans/
 
 # OS
 .DS_Store

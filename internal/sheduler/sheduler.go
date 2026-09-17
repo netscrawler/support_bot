@@ -10,7 +10,7 @@ import (
 )
 
 type SheduleLoader interface {
-	Load(ctx context.Context) ([]models2.SheduleUnit, error)
+	LoadActive(ctx context.Context) ([]models2.SheduleUnit, error)
 }
 
 type Sheduler struct {
@@ -45,7 +45,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 	s.cron = cron.New()
 	s.log.InfoContext(ctx, "Starting")
 
-	units, err := s.loader.Load(ctx)
+	units, err := s.loader.LoadActive(ctx)
 	if err != nil {
 		s.log.ErrorContext(ctx, "Error while loading shedule", slog.Any("error", err))
 

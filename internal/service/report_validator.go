@@ -3,15 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"slices"
-
-	"support_bot/internal/evaluator"
-	layoutpkg "support_bot/internal/layout"
 	"support_bot/internal/models"
 )
-
-// AllowedExportFormats defines the whitelist of supported export formats
-var AllowedExportFormats = []string{"html", "pdf", "xlsx", "csv", "png", "text"}
 
 type ReportValidation struct{}
 
@@ -64,6 +57,10 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		if rec.Type == "" {
 			return fmt.Errorf("recipient %q type is empty", rec.Name)
 		}
+
+		if err := r.validateRecipient(ctx, rec); err != nil {
+			return fmt.Errorf("recipient %q: %w", rec.Name, err)
+		}
 	}
 
 	for _, exp := range report.Exports {
@@ -71,16 +68,8 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 			return fmt.Errorf("export format is empty in report %s", report.Name)
 		}
 
-		// Validate export format against whitelist
-		if !isValidExportFormat(string(exp.Format)) {
-			return fmt.Errorf("export format %q is not allowed (allowed: %v)", exp.Format, AllowedExportFormats)
-		}
-
-		// Validate Layout if present (Phase 3.4)
-		if exp.Layout != nil {
-			if err := r.validateLayout(*exp.Layout, report); err != nil {
-				return fmt.Errorf("export layout validation failed: %w", err)
-			}
+		if err := r.validateExport(ctx, exp); err != nil {
+			return fmt.Errorf("export %q in report %s: %w", exp.Format, report.Name, err)
 		}
 	}
 
@@ -117,118 +106,103 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 	return nil
 }
 
-// validateLayout validates a Layout using the block registry, then compiles
-// every conditional-format expression so a malformed rule fails here rather
-// than at export time, where it would abort the whole report send.
-func (r *ReportValidation) validateLayout(layout models.Layout, report models.Report) error {
-	// Collect dataset keys from report queries
-	datasetKeys := make([]string, 0, len(report.Queries))
-	for _, q := range report.Queries {
-		datasetKeys = append(datasetKeys, q.Title)
-	}
-
-	// Use the layout registry to validate (package-level function)
-	if err := layoutpkg.Validate(layout, datasetKeys); err != nil {
-		return err
-	}
-
-	return validateCondExpressions(layout)
-}
-
-// validateCondExpressions compiles every table conditional-format rule so a
-// syntax or type error is reported at author time.
-func validateCondExpressions(layout models.Layout) error {
-	var exprs []string
-
-	for _, b := range layout.Blocks {
-		if b.Table == nil {
-			continue
-		}
-
-		for _, rule := range b.Table.Conditional {
-			exprs = append(exprs, rule.When)
-		}
-	}
-
-	if len(exprs) == 0 {
-		return nil
-	}
-
-	engine, err := evaluator.NewRowEngine()
-	if err != nil {
-		return fmt.Errorf("conditional-format engine: %w", err)
-	}
-
-	if err := engine.Compile(exprs...); err != nil {
-		return fmt.Errorf("conditional-format rule: %w", err)
-	}
-
-	return nil
-}
-
-// isValidExportFormat checks if the format is in the whitelist
-func isValidExportFormat(format string) bool {
-	return slices.Contains(AllowedExportFormats, format)
-}
-
-func (r *ReportValidation) validateReport(ctx context.Context, report models.Report) error {
-	return nil
-}
-
-func (r *ReportValidation) validateQuery(ctx context.Context, query models.Card) error {
-	return nil
-}
-
-func (r *ReportValidation) validateQueryParams(
-	ctx context.Context,
-	params map[string]string,
-) error {
-	return nil
-}
-
+// validateRecipient checks that a recipient carries the fields its delivery
+// channel (models.Message.Send) will dereference unconditionally, so a bad
+// report fails validation instead of panicking at send time.
 func (r *ReportValidation) validateRecipient(
 	ctx context.Context,
 	recipient models.Recipient,
 ) error {
-	return nil
+	switch recipient.Type {
+	case models.TelegramRecipient:
+		return r.validateRecipientChat(ctx, recipient.Chat, models.ChatTypeTg)
+	case models.MaxRecipient:
+		return r.validateRecipientChat(ctx, recipient.Chat, models.ChatTypeMax)
+	case models.EmailRecipient:
+		return r.validateRecipientEmailTemplate(ctx, recipient.Email)
+	case models.SambaRecipient:
+		return r.validateRecipientRemotePath(ctx, recipient.RemotePath)
+	default:
+		return fmt.Errorf("unsupported recipient type %q", recipient.Type)
+	}
 }
 
 func (r *ReportValidation) validateRecipientRemotePath(
 	ctx context.Context,
-	remotePath string,
+	remotePath *string,
 ) error {
+	if remotePath == nil || *remotePath == "" {
+		return fmt.Errorf("remote_path is required for smb recipients")
+	}
+
 	return nil
 }
 
-func (r *ReportValidation) validateRecipientChat(ctx context.Context, ch models.Chat) error {
+func (r *ReportValidation) validateRecipientChat(
+	ctx context.Context,
+	ch *models.Chat,
+	wantChatType string,
+) error {
+	if ch == nil {
+		return fmt.Errorf("chat is required for %s recipients", wantChatType)
+	}
+
+	if ch.ChType != wantChatType {
+		return fmt.Errorf("chat type %q does not match recipient type %q", ch.ChType, wantChatType)
+	}
+
 	return nil
 }
 
 func (r *ReportValidation) validateRecipientEmailTemplate(
 	ctx context.Context,
-	tmpl models.EmailTemplate,
+	tmpl *models.EmailTemplate,
 ) error {
+	if tmpl == nil {
+		return fmt.Errorf("email is required for email recipients")
+	}
+
+	if len(tmpl.Dest) == 0 {
+		return fmt.Errorf("email recipient has no destination addresses")
+	}
+
 	return nil
 }
 
+// validateExport checks fields that internal/exporter.Export dereferences
+// unconditionally per format, so a bad report fails validation instead of
+// panicking at export time.
 func (r *ReportValidation) validateExport(ctx context.Context, export models.Export) error {
-	return nil
+	switch export.Format {
+	case models.ReportFormatCsv, models.ReportFormatXlsx, models.ReportFormatPng,
+		models.ReportFormatHTML, models.ReportFormatPdf:
+		if export.FileName == nil || *export.FileName == "" {
+			return fmt.Errorf("file_name is required for format %q", export.Format)
+		}
+	case models.ReportFormatText:
+	default:
+		return fmt.Errorf("unsupported export format %q", export.Format)
+	}
+
+	switch export.Format {
+	case models.ReportFormatHTML, models.ReportFormatPdf, models.ReportFormatText:
+		return r.validateExportTemplate(ctx, export.Template)
+	default:
+		return nil
+	}
 }
 
-func (r *ReportValidation) validateExportTemplate(ctx context.Context, tmpl models.Template) error {
-	return nil
-}
-
-func (r *ReportValidation) validatePipeline(
+func (r *ReportValidation) validateExportTemplate(
 	ctx context.Context,
-	pipeline models.Pipeline,
+	tmpl *models.Template,
 ) error {
-	return nil
-}
+	if tmpl == nil {
+		return fmt.Errorf("template is required for this export format")
+	}
 
-func (r *ReportValidation) validateEvaluation(
-	ctx context.Context,
-	evaluation string,
-) error {
+	if tmpl.TemplateText == "" {
+		return fmt.Errorf("template %q has empty template_text", tmpl.Title)
+	}
+
 	return nil
 }

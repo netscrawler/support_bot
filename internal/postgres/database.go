@@ -7,16 +7,32 @@ import (
 	"log/slog"
 	"time"
 
-	// sqlx driver.
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct {
-	db     *sqlx.DB
+	pool   *pgxpool.Pool
 	cancel context.CancelFunc
 
 	log *slog.Logger
+}
+
+func parsePoolConfig(cfg Config) (*pgxpool.Config, error) {
+	pgxCfg, err := pgxpool.ParseConfig(cfg.getDSN())
+	if err != nil {
+		return nil, fmt.Errorf("parse dsn: %w", err)
+	}
+
+	pgxCfg.MaxConns = int32(cfg.MaxConns) //nolint:gosec // trusted config value
+	pgxCfg.MaxConnLifetime = cfg.MaxConnLifeTime
+	pgxCfg.MaxConnIdleTime = cfg.MaxConnIdleTime
+	// ponytail: pgxpool has no direct "max idle conns count" knob the way
+	// database/sql's SetMaxIdleConns does — only MaxConns + MaxConnIdleTime.
+	// cfg.MaxIdleConns is intentionally not mapped here; revisit if pool
+	// behavior under load needs a closer idle-count analog than pgxpool
+	// exposes today.
+
+	return pgxCfg, nil
 }
 
 func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
@@ -24,23 +40,22 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 
 	l.InfoContext(ctx, "start connecting to postgres")
 
-	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.getDSN())
+	pgxCfg, err := parsePoolConfig(cfg)
+	if err != nil {
+		l.ErrorContext(ctx, "error building pool config", slog.Any("error", err))
+
+		return nil, err
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
 		l.ErrorContext(ctx, "error connecting to database", slog.Any("error", err))
 
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(cfg.MaxConns)
-	db.SetMaxIdleConns(cfg.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.MaxConnLifeTime)
-	db.SetConnMaxIdleTime(cfg.MaxConnIdleTime)
-
-	if err := db.Ping(); err != nil {
-		closeErr := db.Close()
-		if closeErr != nil {
-			l.ErrorContext(ctx, "unable close connection correctly", slog.Any("error", err))
-		}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -50,8 +65,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 		"database connection established",
 		slog.Group(
 			"config",
-			slog.Any("max open conns", cfg.MaxConns),
-			slog.Any("max idle conns", cfg.MaxIdleConns),
+			slog.Any("max conns", cfg.MaxConns),
 			slog.Any("max conn lifetime", cfg.MaxConnLifeTime),
 			slog.Any("max conn idle time", cfg.MaxConnIdleTime),
 		),
@@ -60,7 +74,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 	cctx, cancel := context.WithCancel(context.Background())
 
 	d := &DB{
-		db:     db,
+		pool:   pool,
 		cancel: cancel,
 		log:    l,
 	}
@@ -70,14 +84,15 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 	return d, nil
 }
 
-func (d *DB) GetConn() *sqlx.DB {
-	return d.db
+func (d *DB) GetConn() *pgxpool.Pool {
+	return d.pool
 }
 
 func (d *DB) Stop(_ context.Context) error {
 	d.cancel()
+	d.pool.Close()
 
-	return d.db.Close()
+	return nil
 }
 
 func (d *DB) startMonitor(ctx context.Context) {
@@ -96,7 +111,7 @@ func (d *DB) startMonitor(ctx context.Context) {
 
 			case <-ticker.C:
 				pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				err := d.db.PingContext(pingCtx)
+				err := d.pool.Ping(pingCtx)
 
 				cancel()
 

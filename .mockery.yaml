@@ -14,3 +14,37 @@ packages:
   support_bot/internal/collector:
     config:
       all: true
+  support_bot/internal/service:
+    config:
+      all: false
+    interfaces:
+      ReportStore:
+      ScriptSaver:
+  support_bot/internal/orchestrator:
+    config:
+      all: false
+    interfaces:
+      ReportLoader:
+  support_bot/internal/tg_bot/service:
+    config:
+      all: false
+    interfaces:
+      ReportProvider:
+      ChatProvider:
+      UserProvider:
+      AdminNotifier:
+  support_bot/internal/sheduler:
+    config:
+      all: false
+    interfaces:
+      SheduleLoader:
+  support_bot/internal/event_creator:
+    config:
+      all: false
+    interfaces:
+      EventProvider:
+  support_bot/internal/processor/lua:
+    config:
+      all: false
+    interfaces:
+      PluginProvider:

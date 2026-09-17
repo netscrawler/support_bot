@@ -1,0 +1,15 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/db/queries"
+    schema:
+      - "migrations/init.sql/001_create_tables.sql"
+      - "migrations/init.sql/002_create_report_tables.sql"
+      - "migrations/init.sql/005_create_public_reports.sql"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/db/sqlcgen"
+        sql_package: "pgx/v5"
+        emit_interface: false
+        emit_pointers_for_null_types: true
