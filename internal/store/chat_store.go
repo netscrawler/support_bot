@@ -2,11 +2,13 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,6 +43,24 @@ func (s *ChatStore) Create(ctx context.Context, chat *models.TgChatDTO) error {
 	}
 
 	return nil
+}
+
+// Exists проверяет наличие чата по chat_id — реальному уникальному
+// естественному ключу таблицы chats (в отличие от title, который может
+// повторяться у разных чатов). Используется service.Chat.Add при
+// регистрации, чтобы не путать разные Telegram-группы с одинаковым
+// отображаемым названием. Переиспользует тот же sqlc-запрос, что и
+// ReportStore.getOrCreateChat.
+func (s *ChatStore) Exists(ctx context.Context, chatID int64) (bool, error) {
+	_, err := s.q.FindChatIDByChatID(ctx, chatID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("find chat by id: %w", err)
+	}
+
+	return true, nil
 }
 
 func (s *ChatStore) GetByTitle(ctx context.Context, title string) (*models.TgChatDTO, error) {
