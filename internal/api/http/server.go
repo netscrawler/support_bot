@@ -21,16 +21,19 @@ type Server struct {
 func New(cfg *Config, reportHandler *handlers.Handler, log *slog.Logger) *Server {
 	router := httplib.NewRouter()
 	mw := middlewares.NewMiddleware(log, cfg.MaxBodyBytes)
-	router.Group("/api/v1/public", func(r *httplib.Router) {
-		r.Get("/report/{report_id}", reportHandler.GetGeneratedReportByID)
-	})
 
+	// Group() снимает копию текущей цепочки middleware, поэтому Use() должен
+	// быть вызван до регистрации групп/роутов — иначе они получат пустую цепочку.
 	router.Use(
 		mw.RecoverMiddleware,
 		mw.Trace,
 		mw.Gzip,
 		mw.LogRequest,
 	)
+
+	router.Group("/api/v1/public", func(r *httplib.Router) {
+		r.Get("/report/{report_id}", reportHandler.GetGeneratedReportByID)
+	})
 
 	return &Server{
 		srv: &http.Server{

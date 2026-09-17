@@ -10,9 +10,10 @@ import (
 	"support_bot/internal/pkg/logger"
 )
 
-// ponytail: fixed-size semaphore, not wired to the generator's actual worker
-// count (hardcoded 4 in app.go, itself slated to move under fx) — sync the
-// two or thread this through New() if throughput needs tuning.
+// ponytail: семафор фиксированного размера, не связан с реальным числом
+// воркеров генератора (захардкожено 4 в app.go, само по себе должно
+// переехать под fx) — синхронизируйте значения или прокиньте это через
+// New(), если потребуется тонкая настройка пропускной способности.
 const maxInFlightGenerations = 8
 
 type ReportLoader interface {
@@ -20,8 +21,8 @@ type ReportLoader interface {
 	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
 }
 
-// SentMsgSaver records a delivered message so the deleter can later clean it
-// up (e.g. end-of-day Telegram messages).
+// SentMsgSaver сохраняет информацию об отправленном сообщении, чтобы deleter
+// мог позже его удалить (например, сообщения в Telegram в конце дня).
 type SentMsgSaver interface {
 	SaveTgMsg(ctx context.Context, reportName string, msgs []models.SentMessage) error
 }
@@ -74,15 +75,15 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	go o.run(ctx)
 }
 
-// Generate implements service.ReportGenerator's single-file Generate
-// signature (internal/service/report_generator.go), routing an on-demand
-// request through the exact same generate step as the event-driven path —
-// the orchestrator doesn't distinguish "send it" from "return it", only
-// what happens with the result differs. On-demand reports are expected to
-// declare exactly one export; if more are configured, the first is
-// returned — a known simplification. A negative evaluation result, or no
-// exports, is surfaced as models.ErrNotFound, matching the "not found"
-// semantics the HTTP layer expects.
+// Generate реализует однофайловую сигнатуру Generate из
+// service.ReportGenerator (internal/service/report_generator.go), пропуская
+// разовый (on-demand) запрос через тот же самый шаг generate, что и
+// событийный путь — оркестратор не различает "отправить" и "вернуть",
+// разница только в том, что делается с результатом. Разовые отчеты должны
+// объявлять ровно один экспорт; если их несколько, возвращается первый —
+// осознанное упрощение. Отрицательный результат оценки или отсутствие
+// экспортов транслируется в models.ErrNotFound — так, как это ожидает
+// HTTP-слой ("не найдено").
 func (o *Orchestrator) Generate(ctx context.Context, report models.Report) (models.Data, error) {
 	_, data, approve, err := o.generate(ctx, report)
 	if err != nil {
@@ -136,11 +137,12 @@ func (o *Orchestrator) run(ctx context.Context) {
 	}
 }
 
-// processGenReportEvent loads the report(s) registered for event and
-// delivers each one — the caller doesn't distinguish which channel or event
-// type triggered this beyond the two things that actually vary: whether the
-// event only targets active reports, and an optional recipient override for
-// a special one-off (e.g. "generate for this LK chat right now").
+// processGenReportEvent загружает отчет(ы), зарегистрированные на event, и
+// доставляет каждый из них — вызывающий код не различает, какой канал или
+// тип события это вызвал, кроме двух реально варьируемых параметров:
+// затрагивает ли событие только активные отчеты, и опциональный override
+// получателя для разового случая (например, "сгенерировать прямо сейчас для
+// этого чата в ЛК").
 func (o *Orchestrator) processGenReportEvent(
 	ctx context.Context,
 	event string,
@@ -174,12 +176,12 @@ func (o *Orchestrator) processGenReportEvent(
 	}
 }
 
-// generate runs report through the generator's shared worker pool under a
-// log context. The per-report timeout budget is the worker pool's own
-// concern (internal/generator/generator.go), not duplicated here. It stops
-// short of doing anything with the result — handing that off, either by
-// delivering it (generateAndDeliver) or returning it to an on-demand caller
-// (Generate), is up to the callers below.
+// generate прогоняет отчет через общий пул воркеров генератора в контексте
+// логирования. Бюджет таймаута на один отчет — забота самого пула воркеров
+// (internal/generator/generator.go), здесь не дублируется. Функция
+// намеренно не делает ничего с результатом — передать его дальше, доставив
+// (generateAndDeliver) или вернув разовому вызывающему (Generate), решают
+// вызывающие функции ниже.
 func (o *Orchestrator) generate(
 	ctx context.Context,
 	report models.Report,
@@ -189,9 +191,9 @@ func (o *Orchestrator) generate(
 	return o.gen.Generate(ctx, report)
 }
 
-// generateAndDeliver runs report through the generator's shared worker pool
-// and, on a positive evaluation, delivers it to report's recipients. It
-// runs in its own goroutine so a busy pool never blocks the event loop.
+// generateAndDeliver прогоняет отчет через общий пул воркеров генератора и,
+// при положительной оценке, доставляет его получателям отчета. Запускается
+// в отдельной горутине, чтобы занятый пул никогда не блокировал event loop.
 func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Report) {
 	dataset, data, approve, err := o.generate(ctx, report)
 	if err != nil {
@@ -209,8 +211,8 @@ func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Rep
 	}
 }
 
-// deliver sends a generated report to its configured recipients and records
-// the resulting message state.
+// deliver отправляет сгенерированный отчет настроенным получателям и
+// сохраняет состояние отправленных сообщений.
 func (o *Orchestrator) deliver(
 	ctx context.Context,
 	report models.Report,

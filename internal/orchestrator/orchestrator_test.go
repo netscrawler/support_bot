@@ -54,6 +54,9 @@ func newTestGenerator(t *testing.T, approve bool) *generator.Generator {
 	return g
 }
 
+// TestOrchestrator_Generate_ReturnsFirstExport проверяет, что при
+// положительной оценке условия Orchestrator.Generate возвращает
+// экспортированный файл, полученный от generator.Generator.
 func TestOrchestrator_Generate_ReturnsFirstExport(t *testing.T) {
 	o := &Orchestrator{gen: newTestGenerator(t, true), log: slog.New(slog.DiscardHandler)}
 
@@ -76,6 +79,9 @@ func TestOrchestrator_Generate_ReturnsFirstExport(t *testing.T) {
 	}
 }
 
+// TestOrchestrator_Generate_NegativeEvaluationIsNotFound проверяет, что при
+// отрицательной оценке условия Orchestrator.Generate транслирует это в
+// models.ErrNotFound (отчет не подлежит отправке).
 func TestOrchestrator_Generate_NegativeEvaluationIsNotFound(t *testing.T) {
 	o := &Orchestrator{gen: newTestGenerator(t, false), log: slog.New(slog.DiscardHandler)}
 
@@ -100,9 +106,9 @@ func (f fakeLoader) LoadByEvent(_ context.Context, _ string, _ bool) (*models.Re
 	return &r, nil
 }
 
-// blockingCollector.Collect blocks until release is closed, tracking how
-// many calls are in flight at once (and the peak observed) so a test can
-// assert on concurrency bounds without racing on timing.
+// blockingCollector.Collect блокируется до закрытия release, отслеживая
+// число одновременных вызовов (и пиковое значение), чтобы тест мог проверить
+// границы конкурентности без гонки по времени.
 type blockingCollector struct {
 	release  chan struct{}
 	inFlight *int32
@@ -126,10 +132,10 @@ func (b blockingCollector) Collect(_ context.Context, _ ...models.Card) (models.
 	return models.Dataset{"q1": {{"col": "val"}}}, nil
 }
 
-// TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations guards
-// against the goroutine-per-event leak: processGenReportEvent must never let
-// more than maxInFlightGenerations generateAndDeliver calls run at once,
-// however many events land concurrently.
+// TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations защищает
+// от утечки горутин на каждое событие: processGenReportEvent никогда не
+// должен допускать больше maxInFlightGenerations одновременных вызовов
+// generateAndDeliver, сколько бы событий ни пришло параллельно.
 func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing.T) {
 	var inFlight, peak int32
 
@@ -177,7 +183,7 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	}
 
 	close(release)
-	wg.Wait() // only proves every processGenReportEvent call returned, i.e. was admitted past the semaphore
+	wg.Wait() // доказывает лишь, что каждый вызов processGenReportEvent завершился, т.е. прошёл семафор
 
 	deadline = time.Now().Add(2 * time.Second)
 	for atomic.LoadInt32(&inFlight) != 0 {

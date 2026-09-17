@@ -25,6 +25,8 @@ func (f fakeReportGenerator) Generate(_ context.Context, _ models.Report) (model
 	return f.data, f.err
 }
 
+// TestGenerateReport_NotFoundFromDB проверяет, что GenerateReport
+// пробрасывает models.ErrNotFound, если отчет с данным public_id не найден в БД.
 func TestGenerateReport_NotFoundFromDB(t *testing.T) {
 	r := NewReport(
 		fakeReportDB{err: models.ErrNotFound},
@@ -38,6 +40,9 @@ func TestGenerateReport_NotFoundFromDB(t *testing.T) {
 	}
 }
 
+// TestGenerateReport_NotFoundFromGenerator проверяет, что GenerateReport
+// пробрасывает models.ErrNotFound, если сам генератор вернул эту ошибку
+// (отчет найден в БД, но генерация сообщает об отсутствии данных).
 func TestGenerateReport_NotFoundFromGenerator(t *testing.T) {
 	r := NewReport(
 		fakeReportDB{report: &models.Report{Name: "r1"}},
@@ -51,6 +56,8 @@ func TestGenerateReport_NotFoundFromGenerator(t *testing.T) {
 	}
 }
 
+// TestGenerateReport_ReturnsGeneratedData проверяет, что при успешном поиске
+// отчета и успешной генерации GenerateReport возвращает данные без ошибки.
 func TestGenerateReport_ReturnsGeneratedData(t *testing.T) {
 	want := models.Data{FileName: "out.csv"}
 	r := NewReport(

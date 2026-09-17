@@ -33,6 +33,9 @@ func (f fakeEvaluator) EvalStr(_ context.Context, expr string) (string, error) {
 //go:fix inline
 func strPtr(s string) *string { return new(s) }
 
+// TestGenerate_ExportsOnApprove проверяет generate() напрямую: при
+// положительном результате оценки условия (evaluate) собранные данные
+// экспортируются в указанный формат.
 func TestGenerate_ExportsOnApprove(t *testing.T) {
 	g := &Generator{
 		clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
@@ -64,6 +67,9 @@ func TestGenerate_ExportsOnApprove(t *testing.T) {
 	}
 }
 
+// TestGenerate_NegativeEvaluationSkipsExport проверяет, что при
+// отрицательном результате оценки условия экспорт не выполняется и
+// возвращается approve = false, res = nil.
 func TestGenerate_NegativeEvaluationSkipsExport(t *testing.T) {
 	g := &Generator{
 		clct: fakeCollector{data: models.Dataset{}},
@@ -87,6 +93,9 @@ func TestGenerate_NegativeEvaluationSkipsExport(t *testing.T) {
 	}
 }
 
+// TestGenerator_Generate_ReturnsExportedFiles проверяет публичный метод
+// Generate через воркер-пул: запрос отправляется в канал задач и результат
+// генерации (approve = true, экспортированный файл) приходит обратно.
 func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 	g := &Generator{
 		c:          make(chan job),
@@ -121,6 +130,9 @@ func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 	}
 }
 
+// TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse проверяет,
+// что через воркер-пул при отрицательной оценке условия Generate
+// возвращает approve = false и data = nil без ошибки.
 func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(t *testing.T) {
 	g := &Generator{
 		c:          make(chan job),
@@ -149,6 +161,9 @@ func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(t *testing.T) 
 	}
 }
 
+// TestGenerator_Generate_SharesWorkerPoolAcrossCallers проверяет, что
+// несколько одновременных вызовов Generate корректно обслуживаются общим
+// пулом воркеров и каждый вызывающий получает свой результат.
 func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 	g := &Generator{
 		c:          make(chan job),

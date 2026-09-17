@@ -17,6 +17,9 @@ func baseReport() models.Report {
 //go:fix inline
 func strPtr(s string) *string { return new(s) }
 
+// TestValidateRecipient проверяет валидацию получателя отчета: для каждого
+// типа получателя (Telegram, Max, email, SMB) на входе подаются корректные и
+// заведомо неполные данные, ожидается наличие/отсутствие ошибки валидации.
 func TestValidateRecipient(t *testing.T) {
 	v := NewReportValidation()
 	ctx := context.Background()
@@ -27,7 +30,7 @@ func TestValidateRecipient(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			"tg ok",
+			"tg: корректный чат — ошибки нет",
 			models.Recipient{
 				Name: "a",
 				Type: models.TelegramRecipient,
@@ -35,9 +38,13 @@ func TestValidateRecipient(t *testing.T) {
 			},
 			false,
 		},
-		{"tg missing chat", models.Recipient{Name: "a", Type: models.TelegramRecipient}, true},
 		{
-			"tg wrong chat type",
+			"tg: чат не указан — ошибка",
+			models.Recipient{Name: "a", Type: models.TelegramRecipient},
+			true,
+		},
+		{
+			"tg: указан чат другого типа — ошибка",
 			models.Recipient{
 				Name: "a",
 				Type: models.TelegramRecipient,
@@ -46,7 +53,7 @@ func TestValidateRecipient(t *testing.T) {
 			true,
 		},
 		{
-			"max ok",
+			"max: корректный чат — ошибки нет",
 			models.Recipient{
 				Name: "a",
 				Type: models.MaxRecipient,
@@ -55,7 +62,7 @@ func TestValidateRecipient(t *testing.T) {
 			false,
 		},
 		{
-			"email ok",
+			"email: корректный получатель — ошибки нет",
 			models.Recipient{
 				Name:  "a",
 				Type:  models.EmailRecipient,
@@ -63,9 +70,13 @@ func TestValidateRecipient(t *testing.T) {
 			},
 			false,
 		},
-		{"email missing", models.Recipient{Name: "a", Type: models.EmailRecipient}, true},
 		{
-			"email no dest",
+			"email: шаблон не указан — ошибка",
+			models.Recipient{Name: "a", Type: models.EmailRecipient},
+			true,
+		},
+		{
+			"email: получатели (dest) не указаны — ошибка",
 			models.Recipient{
 				Name:  "a",
 				Type:  models.EmailRecipient,
@@ -74,12 +85,20 @@ func TestValidateRecipient(t *testing.T) {
 			true,
 		},
 		{
-			"smb ok",
+			"smb: путь указан — ошибки нет",
 			models.Recipient{Name: "a", Type: models.SambaRecipient, RemotePath: new("/x")},
 			false,
 		},
-		{"smb missing path", models.Recipient{Name: "a", Type: models.SambaRecipient}, true},
-		{"unsupported type", models.Recipient{Name: "a", Type: "carrier_pigeon"}, true},
+		{
+			"smb: путь не указан — ошибка",
+			models.Recipient{Name: "a", Type: models.SambaRecipient},
+			true,
+		},
+		{
+			"неподдерживаемый тип получателя — ошибка",
+			models.Recipient{Name: "a", Type: "carrier_pigeon"},
+			true,
+		},
 	}
 
 	for _, c := range cases {
@@ -95,6 +114,9 @@ func TestValidateRecipient(t *testing.T) {
 	}
 }
 
+// TestValidateExport проверяет валидацию описания экспорта отчета для
+// разных форматов (csv, html, text): на вход подаются корректные и неполные
+// конфигурации, ожидается наличие/отсутствие ошибки валидации.
 func TestValidateExport(t *testing.T) {
 	v := NewReportValidation()
 	ctx := context.Background()
@@ -104,10 +126,14 @@ func TestValidateExport(t *testing.T) {
 		export  models.Export
 		wantErr bool
 	}{
-		{"csv ok", models.Export{Format: models.ReportFormatCsv, FileName: new("f")}, false},
-		{"csv missing filename", models.Export{Format: models.ReportFormatCsv}, true},
 		{
-			"html ok",
+			"csv: имя файла указано — ошибки нет",
+			models.Export{Format: models.ReportFormatCsv, FileName: new("f")},
+			false,
+		},
+		{"csv: имя файла не указано — ошибка", models.Export{Format: models.ReportFormatCsv}, true},
+		{
+			"html: шаблон указан — ошибки нет",
 			models.Export{
 				Format:   models.ReportFormatHTML,
 				FileName: new("f"),
@@ -116,12 +142,12 @@ func TestValidateExport(t *testing.T) {
 			false,
 		},
 		{
-			"html missing template",
+			"html: шаблон не указан — ошибка",
 			models.Export{Format: models.ReportFormatHTML, FileName: new("f")},
 			true,
 		},
 		{
-			"html empty template text",
+			"html: текст шаблона пустой — ошибка",
 			models.Export{
 				Format:   models.ReportFormatHTML,
 				FileName: new("f"),
@@ -130,14 +156,14 @@ func TestValidateExport(t *testing.T) {
 			true,
 		},
 		{
-			"text ok without filename",
+			"text: имя файла не обязательно — ошибки нет",
 			models.Export{
 				Format:   models.ReportFormatText,
 				Template: &models.Template{TemplateText: "x"},
 			},
 			false,
 		},
-		{"unsupported format", models.Export{Format: "carrier_pigeon"}, true},
+		{"неподдерживаемый формат — ошибка", models.Export{Format: "carrier_pigeon"}, true},
 	}
 
 	for _, c := range cases {

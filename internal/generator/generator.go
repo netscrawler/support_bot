@@ -9,7 +9,13 @@ import (
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/processor"
+	"time"
 )
+
+// generationTimeout ограничивает время генерации одного отчёта: без него
+// зависшая генерация (SQL/Lua-пайплайн, CEL, экспорт) навсегда занимает
+// слот воркера в общем пуле (см. orchestrator.go).
+const generationTimeout = 5 * time.Minute
 
 type Collector interface {
 	Collect(ctx context.Context, cards ...models.Card) (models.Dataset, error)
@@ -24,12 +30,12 @@ type Evaluator interface {
 	EvalStr(ctx context.Context, expr string) (string, error)
 }
 
-// job is a unit of work sent through Generator's shared worker pool. result
-// receives the generated dataset, exported files, and evaluation outcome —
-// delivering them to recipients is the caller's responsibility. Every
-// caller (internal/orchestrator, for both its event-driven and on-demand
-// paths) goes through the same Generate method below, so there is no
-// notion of a "type" of generation anywhere in this API.
+// job — единица работы, отправляемая в общий пул воркеров Generator. result
+// получает собранный dataset, экспортированные файлы и результат оценки —
+// доставка получателям остается ответственностью вызывающего кода. Каждый
+// вызывающий (internal/orchestrator, и для событийного, и для разового
+// пути) идет через один и тот же метод Generate ниже, поэтому в этом API
+// нет понятия "типа" генерации.
 type job struct {
 	ctx    context.Context
 	report models.Report
@@ -86,11 +92,12 @@ func (g *Generator) Start(ctx context.Context) {
 	}
 }
 
-// Generate submits report to the shared worker pool and blocks until it has
-// been processed, returning the collected dataset, the exported files, and
-// whether the report's evaluation condition approved sending it. It makes
-// no caller-specific interpretation of the result — delivering the report,
-// and any "not found" semantics, are the caller's responsibility.
+// Generate отправляет report в общий пул воркеров и блокируется до его
+// обработки, возвращая собранный dataset, экспортированные файлы и
+// результат оценки условия отправки. Метод не делает никакой
+// специфичной для вызывающего кода интерпретации результата — доставка
+// отчета и любая семантика "не найдено" остаются ответственностью
+// вызывающего кода.
 func (g *Generator) Generate(
 	ctx context.Context,
 	report models.Report,
@@ -111,12 +118,13 @@ func (g *Generator) Generate(
 	}
 }
 
-// generate runs the shared report pipeline: resolve query params, collect
-// data, run the processing pipeline (if any), evaluate the report
-// condition, and export the result. It stops short of delivering anything —
-// delivery to recipients, and any "not found" semantics, are the caller's
-// responsibility (see internal/orchestrator, which handles both the
-// event-driven and on-demand paths).
+// generate выполняет общий пайплайн отчета: разрешает параметры запросов,
+// собирает данные, прогоняет их через pipeline обработки (если он задан),
+// оценивает условие отчета и экспортирует результат. Функция намеренно не
+// занимается доставкой — доставка получателям и любая семантика "не
+// найдено" остаются ответственностью вызывающего кода (см.
+// internal/orchestrator, который обрабатывает и событийный, и разовый
+// пути).
 func (g *Generator) generate(
 	ctx context.Context,
 	report models.Report,
@@ -218,7 +226,10 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
 				return
 			}
 
-			dataset, res, approve, err := g.generate(j.ctx, j.report)
+			rCtx, cancel := context.WithTimeout(j.ctx, generationTimeout)
+			dataset, res, approve, err := g.generate(rCtx, j.report)
+			cancel()
+
 			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
 		}
 	}
