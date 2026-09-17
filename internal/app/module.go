@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"support_bot/internal/orchestrator"
+	"support_bot/internal/reportdef"
 	"support_bot/internal/sheduler"
 
 	"go.uber.org/fx"
@@ -19,6 +20,7 @@ var Module = fx.Options(
 	deliveryModule,
 	telegramModule,
 	reportPipelineModule,
+	reportDefinitionModule,
 	httpModule,
 	// fx's dependency graph is lazy — these components have no other
 	// dependents, so force their construction here to register their
@@ -29,6 +31,7 @@ var Module = fx.Options(
 		*sheduler.Sheduler,
 		*eventcreator.EventCreator,
 		*orchestrator.Deleter,
+		*reportdef.Cleaner,
 	) {
 	}),
 	// Registered after the terminal-component Invoke above, so this hook is
