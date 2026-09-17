@@ -22,6 +22,9 @@
 //   - ScriptStore — хранилище Lua-скриптов (таблица lua_scripts): реализует
 //     lua.PluginProvider для чтения и используется CLI-командой script save
 //     для сохранения без перезаписи существующих скриптов.
+//   - CronStore — хранилище расписаний (таблица crons) и их связей с
+//     отчётами (таблица report_crons): активные расписания для планировщика
+//     и привязки cron→отчёт для event_creator.
 //
 // Основные публичные функции/методы:
 //   - NewReportStore / NewChatStore / NewUserStore — конструкторы для
@@ -31,11 +34,16 @@
 //     зависимостей (queries, recipients, exports, crons, pipeline).
 //   - ReportStore.Create — создание отчёта и всех его зависимостей одной
 //     транзакцией с get-or-create резолвингом по естественным ключам.
-//   - ChatStore.Create / GetByTitle / GetAll / Delete — CRUD для чатов.
+//   - ChatStore.Create / GetByTitle / GetAll / Delete / Exists — CRUD для
+//     чатов и проверка наличия чата по chat_id.
 //   - UserStore.Create / Update / GetByUsername / GetByTgID / GetAll /
 //     GetAllAdmins / Delete — CRUD для пользователей.
 //   - SentMsgStore.SaveTgMsg / WithLockedMsgsToDelete / RemoveDeletedMessages /
 //     MarkEndOfDayMsgDeleted — сохранение и удаление отправленных сообщений.
+//   - ScriptStore.GetByName / Save — чтение исходного кода скрипта и его
+//     сохранение без перезаписи существующего.
+//   - CronStore.LoadActive / LoadEvents / LoadEventsByCronName — активные
+//     расписания и связанные с ними отчёты для планировщика и event_creator.
 //   - ExecTx — обёртка над pgx-транзакцией, разделяемая всеми Store; заменяет
 //     internal/pkg/uow.
 //
