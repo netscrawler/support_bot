@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"support_bot/internal/db/sqlcgen"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
 )
 
@@ -47,6 +49,94 @@ func TestChatStore_GetByTitle_ReturnsPopulatedChat(t *testing.T) {
 	}
 	if chat.ChatID != 555 || chat.Title != title || chat.Type != "group" {
 		t.Errorf("GetByTitle() = %+v, want ChatID=555 Title=%q Type=group", chat, title)
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestChatStore_Exists_ReturnsTrueForKnownChatID проверяет, что Exists
+// возвращает true, когда запрос находит строку по chat_id.
+func TestChatStore_Exists_ReturnsTrueForKnownChatID(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectQuery("select id from chats where chat_id = \\$1").
+		WithArgs(int64(555)).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(1)))
+
+	s := NewChatStoreForTest(sqlcgen.New(pool))
+
+	exists, err := s.Exists(context.Background(), 555)
+	if err != nil {
+		t.Fatalf("Exists() error = %v", err)
+	}
+	if !exists {
+		t.Error("Exists() = false, want true")
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestChatStore_Exists_NoRowsIsFalse проверяет, что отсутствие строки
+// (pgx.ErrNoRows) транслируется в exists=false без ошибки, а не в
+// models.ErrNotFound — вызывающему коду достаточно булева результата.
+func TestChatStore_Exists_NoRowsIsFalse(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectQuery("select id from chats where chat_id = \\$1").
+		WithArgs(int64(999)).
+		WillReturnError(pgx.ErrNoRows)
+
+	s := NewChatStoreForTest(sqlcgen.New(pool))
+
+	exists, err := s.Exists(context.Background(), 999)
+	if err != nil {
+		t.Fatalf("Exists() error = %v, want nil", err)
+	}
+	if exists {
+		t.Error("Exists() = true, want false")
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestChatStore_Exists_PropagatesQueryError проверяет, что ошибка БД,
+// отличная от pgx.ErrNoRows, возвращается вызывающему коду обёрнутой,
+// но с сохранением исходного значения для errors.Is.
+func TestChatStore_Exists_PropagatesQueryError(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	dbErr := errors.New("connection reset")
+
+	pool.ExpectQuery("select id from chats where chat_id = \\$1").
+		WithArgs(int64(100)).
+		WillReturnError(dbErr)
+
+	s := NewChatStoreForTest(sqlcgen.New(pool))
+
+	exists, err := s.Exists(context.Background(), 100)
+	if exists {
+		t.Error("Exists() = true, want false")
+	}
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("Exists() error = %v, want wrapped %v", err, dbErr)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {

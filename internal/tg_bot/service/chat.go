@@ -9,6 +9,9 @@ import (
 
 type ChatProvider interface {
 	Create(ctx context.Context, chat *models.TgChatDTO) error
+	// Exists проверяет наличие чата по chat_id — единственному реальному
+	// уникальному ключу; title у чатов не уникален.
+	Exists(ctx context.Context, chatID int64) (bool, error)
 	GetByTitle(ctx context.Context, title string) (*models.TgChatDTO, error)
 	GetAll(ctx context.Context) ([]models.TgChatDTO, error)
 	Delete(ctx context.Context, chatID int64) error
@@ -30,15 +33,23 @@ func NewChat(repo ChatProvider, notify *Notify, log *slog.Logger) *Chat {
 	}
 }
 
+// Add регистрирует новый чат. Дубликаты определяются по chat_id — реальному
+// уникальному ключу; одинаковые title у разных Telegram-групп допустимы.
 func (c *Chat) Add(ctx context.Context, chat *models.TgChatDTO) error {
-	ch, _ := c.repo.GetByTitle(ctx, chat.Title)
-	if ch != nil {
+	exists, err := c.repo.Exists(ctx, chat.ChatID)
+	if err != nil {
+		wrapped := fmt.Errorf("%w: check chat id: %w", models.ErrInternal, err)
+		c.notify.SendAdminNotify(ctx, newAddNewChatErrorTemplate(*chat, wrapped))
+
+		return wrapped
+	}
+	if exists {
 		c.notify.SendAdminNotify(ctx, newAddNewChatErrorTemplate(*chat, models.ErrAlreadyExist))
 
 		return models.ErrAlreadyExist
 	}
 
-	err := c.repo.Create(ctx, chat)
+	err = c.repo.Create(ctx, chat)
 	if err != nil {
 		c.notify.SendAdminNotify(ctx, newAddNewChatErrorTemplate(*chat, err))
 
