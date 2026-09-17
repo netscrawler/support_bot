@@ -74,7 +74,7 @@ func Default() *Config {
 			Enabled:     false,
 		},
 		Timeout: timeout{
-			Shutdown: 5 * time.Second,
+			Shutdown: 10 * time.Second,
 		},
 		SMB: smb.Config{
 			Address:  "localhost:542",
