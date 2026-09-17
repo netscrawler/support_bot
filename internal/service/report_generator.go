@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/errorz"
 	"support_bot/internal/models"
 )
 
 type ReportDB interface {
-	GetPublicReportByID(ctx context.Context, reportID string) (*models.Report, error)
+	GetByPublicID(ctx context.Context, reportID string) (*models.Report, error)
 }
 
 type ReportGenerator interface {
@@ -28,10 +27,10 @@ func NewReport(db ReportDB, gen ReportGenerator, log *slog.Logger) *Report {
 }
 
 func (r *Report) GenerateReport(ctx context.Context, reportID string) (models.Data, error) {
-	report, err := r.db.GetPublicReportByID(ctx, reportID)
+	report, err := r.db.GetByPublicID(ctx, reportID)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return models.Data{}, errorz.ErrNotFound
+			return models.Data{}, models.ErrNotFound
 		}
 
 		return models.Data{}, fmt.Errorf("get report: %w", err)
@@ -40,11 +39,11 @@ func (r *Report) GenerateReport(ctx context.Context, reportID string) (models.Da
 	data, err := r.gen.Generate(ctx, *report)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return models.Data{}, errorz.ErrNotFound
+			return models.Data{}, models.ErrNotFound
 		}
 
 		return models.Data{},
-			fmt.Errorf("%w: generate report: %w", errorz.ErrInternal, err)
+			fmt.Errorf("%w: generate report: %w", models.ErrInternal, err)
 	}
 
 	return data, nil

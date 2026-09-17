@@ -14,7 +14,8 @@ func baseReport() models.Report {
 	}
 }
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 func TestValidateRecipient(t *testing.T) {
 	v := NewReportValidation()
@@ -25,14 +26,58 @@ func TestValidateRecipient(t *testing.T) {
 		recipient models.Recipient
 		wantErr   bool
 	}{
-		{"tg ok", models.Recipient{Name: "a", Type: models.TelegramRecipient, Chat: &models.Chat{ChType: models.ChatTypeTg}}, false},
+		{
+			"tg ok",
+			models.Recipient{
+				Name: "a",
+				Type: models.TelegramRecipient,
+				Chat: &models.Chat{ChType: models.ChatTypeTg},
+			},
+			false,
+		},
 		{"tg missing chat", models.Recipient{Name: "a", Type: models.TelegramRecipient}, true},
-		{"tg wrong chat type", models.Recipient{Name: "a", Type: models.TelegramRecipient, Chat: &models.Chat{ChType: models.ChatTypeMax}}, true},
-		{"max ok", models.Recipient{Name: "a", Type: models.MaxRecipient, Chat: &models.Chat{ChType: models.ChatTypeMax}}, false},
-		{"email ok", models.Recipient{Name: "a", Type: models.EmailRecipient, Email: &models.EmailTemplate{Dest: []string{"x@y.z"}}}, false},
+		{
+			"tg wrong chat type",
+			models.Recipient{
+				Name: "a",
+				Type: models.TelegramRecipient,
+				Chat: &models.Chat{ChType: models.ChatTypeMax},
+			},
+			true,
+		},
+		{
+			"max ok",
+			models.Recipient{
+				Name: "a",
+				Type: models.MaxRecipient,
+				Chat: &models.Chat{ChType: models.ChatTypeMax},
+			},
+			false,
+		},
+		{
+			"email ok",
+			models.Recipient{
+				Name:  "a",
+				Type:  models.EmailRecipient,
+				Email: &models.EmailTemplate{Dest: []string{"x@y.z"}},
+			},
+			false,
+		},
 		{"email missing", models.Recipient{Name: "a", Type: models.EmailRecipient}, true},
-		{"email no dest", models.Recipient{Name: "a", Type: models.EmailRecipient, Email: &models.EmailTemplate{}}, true},
-		{"smb ok", models.Recipient{Name: "a", Type: models.SambaRecipient, RemotePath: strPtr("/x")}, false},
+		{
+			"email no dest",
+			models.Recipient{
+				Name:  "a",
+				Type:  models.EmailRecipient,
+				Email: &models.EmailTemplate{},
+			},
+			true,
+		},
+		{
+			"smb ok",
+			models.Recipient{Name: "a", Type: models.SambaRecipient, RemotePath: new("/x")},
+			false,
+		},
 		{"smb missing path", models.Recipient{Name: "a", Type: models.SambaRecipient}, true},
 		{"unsupported type", models.Recipient{Name: "a", Type: "carrier_pigeon"}, true},
 	}
@@ -59,12 +104,39 @@ func TestValidateExport(t *testing.T) {
 		export  models.Export
 		wantErr bool
 	}{
-		{"csv ok", models.Export{Format: models.ReportFormatCsv, FileName: strPtr("f")}, false},
+		{"csv ok", models.Export{Format: models.ReportFormatCsv, FileName: new("f")}, false},
 		{"csv missing filename", models.Export{Format: models.ReportFormatCsv}, true},
-		{"html ok", models.Export{Format: models.ReportFormatHTML, FileName: strPtr("f"), Template: &models.Template{TemplateText: "<p>x</p>"}}, false},
-		{"html missing template", models.Export{Format: models.ReportFormatHTML, FileName: strPtr("f")}, true},
-		{"html empty template text", models.Export{Format: models.ReportFormatHTML, FileName: strPtr("f"), Template: &models.Template{}}, true},
-		{"text ok without filename", models.Export{Format: models.ReportFormatText, Template: &models.Template{TemplateText: "x"}}, false},
+		{
+			"html ok",
+			models.Export{
+				Format:   models.ReportFormatHTML,
+				FileName: new("f"),
+				Template: &models.Template{TemplateText: "<p>x</p>"},
+			},
+			false,
+		},
+		{
+			"html missing template",
+			models.Export{Format: models.ReportFormatHTML, FileName: new("f")},
+			true,
+		},
+		{
+			"html empty template text",
+			models.Export{
+				Format:   models.ReportFormatHTML,
+				FileName: new("f"),
+				Template: &models.Template{},
+			},
+			true,
+		},
+		{
+			"text ok without filename",
+			models.Export{
+				Format:   models.ReportFormatText,
+				Template: &models.Template{TemplateText: "x"},
+			},
+			false,
+		},
 		{"unsupported format", models.Export{Format: "carrier_pigeon"}, true},
 	}
 

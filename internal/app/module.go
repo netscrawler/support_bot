@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
+	"support_bot/internal/orchestrator"
+	"support_bot/internal/sheduler"
 
 	"go.uber.org/fx"
 
 	apihttp "support_bot/internal/api/http"
 	eventcreator "support_bot/internal/event_creator"
-	"support_bot/internal/orchestrator"
-	"support_bot/internal/sheduler"
+
 	tgbot "support_bot/internal/tg_bot"
 )
 

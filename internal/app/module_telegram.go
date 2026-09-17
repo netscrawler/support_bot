@@ -4,14 +4,14 @@ import (
 	"context"
 	"log/slog"
 	"support_bot/internal/config"
+	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
+	reportstore "support_bot/internal/store"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
-	"support_bot/internal/tg_bot/repository"
 	"support_bot/internal/tg_bot/service"
 
-	"support_bot/internal/delivery/telegram"
 	eventcreator "support_bot/internal/event_creator"
 	maxbot "support_bot/internal/max_bot"
 	tgbot "support_bot/internal/tg_bot"
@@ -29,9 +29,8 @@ var telegramModule = fx.Module(
 		newTelegramBot,
 		newMaxBot,
 		newTgState,
-		newChatRepository,
-		newUserRepository,
-		newReportRepository,
+		newChatStore,
+		newUserStore,
 		newNotify,
 		newChatService,
 		newUserService,
@@ -45,7 +44,11 @@ var telegramModule = fx.Module(
 	),
 )
 
-func newTelegramBot(ctx context.Context, cfg *config.Config, log *slog.Logger) (*telego.Bot, *th.BotHandler, error) {
+func newTelegramBot(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+) (*telego.Bot, *th.BotHandler, error) {
 	return tgbot.NewTelegramBot(ctx, cfg.TgBot, log)
 }
 
@@ -62,28 +65,32 @@ func newTgState(cfg *config.Config) *handlers.State {
 	return handlers.NewState(cfg.TgBot.CleanUpTime)
 }
 
-func newChatRepository(rdb *postgres.DB, log *slog.Logger) *repository.ChatRepository {
-	return repository.NewChatRepository(rdb.GetConn(), log)
+func newChatStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ChatStore {
+	return reportstore.NewChatStore(rdb.GetConn(), log)
 }
 
-func newUserRepository(rdb *postgres.DB, log *slog.Logger) *repository.UserRepository {
-	return repository.NewUserRepository(rdb.GetConn(), log)
+func newUserStore(rdb *postgres.DB, log *slog.Logger) *reportstore.UserStore {
+	return reportstore.NewUserStore(rdb.GetConn(), log)
 }
 
-func newReportRepository(rdb *postgres.DB, log *slog.Logger) *repository.ReportRepository {
-	return repository.NewReportRepository(rdb.GetConn(), log)
+func newNotify(
+	tg *telegram.ChatAdaptor,
+	userStore *reportstore.UserStore,
+	log *slog.Logger,
+) *service.Notify {
+	return service.NewNotify(tg, userStore, log)
 }
 
-func newNotify(tg *telegram.ChatAdaptor, userRepo *repository.UserRepository, log *slog.Logger) *service.Notify {
-	return service.NewNotify(tg, userRepo, log)
+func newChatService(
+	chatStore *reportstore.ChatStore,
+	notify *service.Notify,
+	log *slog.Logger,
+) *service.Chat {
+	return service.NewChat(chatStore, notify, log)
 }
 
-func newChatService(chatRepo *repository.ChatRepository, notify *service.Notify, log *slog.Logger) *service.Chat {
-	return service.NewChat(chatRepo, notify, log)
-}
-
-func newUserService(userRepo *repository.UserRepository, log *slog.Logger) *service.User {
-	return service.NewUser(userRepo, log)
+func newUserService(userStore *reportstore.UserStore, log *slog.Logger) *service.User {
+	return service.NewUser(userStore, log)
 }
 
 func newScheduleAPI(shdAPI chan sheduler.SheduleAPIEvent) *sheduler.SheduleAPI {
@@ -93,11 +100,11 @@ func newScheduleAPI(shdAPI chan sheduler.SheduleAPIEvent) *sheduler.SheduleAPI {
 func newReportService(
 	shed *sheduler.SheduleAPI,
 	evAPI *eventcreator.EventAPI,
-	reportRepo *repository.ReportRepository,
+	reportStore *reportstore.ReportStore,
 	cfg *config.Config,
 	log *slog.Logger,
 ) *service.Report {
-	return service.NewReportService(shed, evAPI, reportRepo, cfg.MetabaseDomain, log)
+	return service.NewReportService(shed, evAPI, reportStore, cfg.MetabaseDomain, log)
 }
 
 func newAdminHandler(

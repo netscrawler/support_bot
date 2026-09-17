@@ -22,11 +22,20 @@ var deliveryModule = fx.Module(
 	fx.Provide(newTelegramAdaptor, newMaxAdaptor, newSMTP, newSMB, newSenderProvider),
 )
 
-func newTelegramAdaptor(tgBot *telego.Bot, retr *retry.Retry, log *slog.Logger) *telegram.ChatAdaptor {
+func newTelegramAdaptor(
+	tgBot *telego.Bot,
+	retr *retry.Retry,
+	log *slog.Logger,
+) *telegram.ChatAdaptor {
 	return telegram.NewChatAdaptor(tgBot, retr, log)
 }
 
-func newMaxAdaptor(maxBot *maxcli.Api, retr *retry.Retry, cfg *config.Config, log *slog.Logger) *maxadp.Adaptor {
+func newMaxAdaptor(
+	maxBot *maxcli.Api,
+	retr *retry.Retry,
+	cfg *config.Config,
+	log *slog.Logger,
+) *maxadp.Adaptor {
 	return maxadp.New(maxBot, retr, cfg.MaxBot.Enabled, log)
 }
 
@@ -34,7 +43,12 @@ func newSMTP(cfg *config.Config, log *slog.Logger) *smtp.Sender {
 	return smtp.New(cfg.SMTP, log)
 }
 
-func newSMB(ctx context.Context, cfg *config.Config, log *slog.Logger, lc fx.Lifecycle) (*smb.SMB, error) {
+func newSMB(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+	lc fx.Lifecycle,
+) (*smb.SMB, error) {
 	smbS, err := smb.New(ctx, cfg.SMB, log)
 	if err != nil {
 		return nil, err

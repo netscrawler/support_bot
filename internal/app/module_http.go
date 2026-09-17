@@ -17,7 +17,12 @@ func newReportHandler(reportGenSvc *reportsvc.Report, log *slog.Logger) *apihand
 	return apihandlers.NewHandler(reportGenSvc, log)
 }
 
-func newHTTPServer(cfg *config.Config, reportHandler *apihandlers.Handler, log *slog.Logger, lc fx.Lifecycle) *apihttp.Server {
+func newHTTPServer(
+	cfg *config.Config,
+	reportHandler *apihandlers.Handler,
+	log *slog.Logger,
+	lc fx.Lifecycle,
+) *apihttp.Server {
 	httpSrv := apihttp.New(&cfg.HTTP, reportHandler, log)
 
 	lc.Append(fx.Hook{

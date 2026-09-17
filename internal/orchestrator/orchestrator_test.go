@@ -32,7 +32,8 @@ func (f fakeEvaluator) EvalStr(_ context.Context, expr string) (string, error) {
 	return expr, nil
 }
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 func newTestGenerator(t *testing.T, approve bool) *generator.Generator {
 	t.Helper()
@@ -59,7 +60,7 @@ func TestOrchestrator_Generate_ReturnsFirstExport(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: strPtr("out")}},
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -91,7 +92,7 @@ type fakeLoader struct {
 	report models.Report
 }
 
-func (f fakeLoader) Load(_ context.Context) ([]models.Report, error) { return nil, nil }
+func (f fakeLoader) LoadActive(_ context.Context) ([]models.Report, error) { return nil, nil }
 
 func (f fakeLoader) LoadByEvent(_ context.Context, _ string, _ bool) (*models.Report, error) {
 	r := f.report
@@ -138,7 +139,13 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	g := generator.New(clct, nil, fakeEvaluator{approve: false}, maxInFlightGenerations*2, slog.New(slog.DiscardHandler))
+	g := generator.New(
+		clct,
+		nil,
+		fakeEvaluator{approve: false},
+		maxInFlightGenerations*2,
+		slog.New(slog.DiscardHandler),
+	)
 	g.Start(ctx)
 
 	o := &Orchestrator{
@@ -150,13 +157,11 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 
 	var wg sync.WaitGroup
 	for range maxInFlightGenerations * 4 {
-		wg.Add(1)
 
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 
 			o.processGenReportEvent(ctx, "ev", true, nil)
-		}()
+		})
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -177,7 +182,10 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	deadline = time.Now().Add(2 * time.Second)
 	for atomic.LoadInt32(&inFlight) != 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for in-flight generations to drain, got %d", atomic.LoadInt32(&inFlight))
+			t.Fatalf(
+				"timed out waiting for in-flight generations to drain, got %d",
+				atomic.LoadInt32(&inFlight),
+			)
 		}
 
 		time.Sleep(5 * time.Millisecond)

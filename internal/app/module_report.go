@@ -20,9 +20,9 @@ import (
 	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
-	reportrepo "support_bot/internal/repository"
 	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
+	reportstore "support_bot/internal/store"
 
 	"go.uber.org/fx"
 )
@@ -35,15 +35,27 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newDelChan, fx.ResultTags(`name:"delChan"`)),
 	newSpecialEventChan,
 	newShdAPIChan,
+	newCronStore,
 	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
-	fx.Annotate(newEventCreator, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`)),
+	fx.Annotate(
+		newEventCreator,
+		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`),
+	),
 	fx.Annotate(newEventAPI, fx.ParamTags(`name:"eventChan"`, ``)),
-	newEvaluator, newLuaStdCollector, newLuaManager, newProcessorReg, newProcessor,
-	newResultRepository,
+	newEvaluator,
+	newLuaStdCollector,
+	newScriptStore,
+	newLuaManager,
+	newProcessorReg,
+	newProcessor,
+	newSentMsgStore,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
-	newOrchestratorRepository,
-	fx.Annotate(newOrchestrator, fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``)),
+	newReportStore,
+	fx.Annotate(
+		newOrchestrator,
+		fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``),
+	),
 	newReportGenService,
 ))
 
@@ -69,14 +81,13 @@ func newShdAPIChan() chan sheduler.SheduleAPIEvent {
 
 func newSheduler(
 	appCtx context.Context,
-	rdb *postgres.DB,
+	cronStore *reportstore.CronStore,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
 	shdAPI chan sheduler.SheduleAPIEvent,
 	lc fx.Lifecycle,
 ) *sheduler.Sheduler {
-	shdLoader := sheduler.NewSheduleRepo(rdb.GetConn(), log)
-	shd := sheduler.NewSheduler(shdLoader, log, scheduleEvents, shdAPI)
+	shd := sheduler.NewSheduler(cronStore, log, scheduleEvents, shdAPI)
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error { return shd.Start(appCtx) },
@@ -92,14 +103,13 @@ func newSheduler(
 
 func newEventCreator(
 	appCtx context.Context,
-	rdb *postgres.DB,
+	cronStore *reportstore.CronStore,
 	log *slog.Logger,
 	scheduleEvents chan models.Event,
 	eventChan chan models.Event,
 	lc fx.Lifecycle,
 ) *eventcreator.EventCreator {
-	evRepository := eventcreator.NewRepository(rdb.GetConn(), log)
-	evC := eventcreator.New(scheduleEvents, eventChan, log, evRepository)
+	evC := eventcreator.New(scheduleEvents, eventChan, log, cronStore)
 
 	// No OnStop here — mirrors the original app.go asymmetry: the scheduler
 	// and other lifecycle-managed components stop, but the event creator's
@@ -107,6 +117,10 @@ func newEventCreator(
 	lc.Append(fx.Hook{OnStart: func(context.Context) error { return evC.Start(appCtx) }})
 
 	return evC
+}
+
+func newCronStore(rdb *postgres.DB) *reportstore.CronStore {
+	return reportstore.NewCronStore(rdb.GetConn())
 }
 
 func newEventAPI(
@@ -132,12 +146,18 @@ func newLuaStdCollector(
 	})
 }
 
-func newLuaManager(cfg *config.Config, luaStdColl *luastd.CollectPlugin, rdb *postgres.DB) *lua.Manager {
-	scriptRepo := lua.NewRepository(rdb.GetConn())
+func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {
+	return reportstore.NewScriptStore(rdb.GetConn())
+}
 
+func newLuaManager(
+	cfg *config.Config,
+	luaStdColl *luastd.CollectPlugin,
+	scripts *reportstore.ScriptStore,
+) *lua.Manager {
 	return lua.NewManager(
 		&cfg.Lua,
-		scriptRepo,
+		scripts,
 		luastd.NewSTD(luaStdColl, luastd.DatabasePlugin{}, luastd.RateLimit{}),
 	)
 }
@@ -155,8 +175,8 @@ func newProcessor(runnerReg *processor.RunnerRegistry, log *slog.Logger) *proces
 	return processor.NewProcessor(runnerReg, log)
 }
 
-func newResultRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator.SentMsgRepository {
-	return orchestrator.NewResultRepository(rdb.GetConn(), log)
+func newSentMsgStore(rdb *postgres.DB, log *slog.Logger) *reportstore.SentMsgStore {
+	return reportstore.NewSentMsgStore(rdb.GetConn(), log)
 }
 
 func newDeleter(
@@ -164,11 +184,11 @@ func newDeleter(
 	delChan chan models.Event,
 	tg *telegram.ChatAdaptor,
 	maxAdp *maxadp.Adaptor,
-	delRepo *orchestrator.SentMsgRepository,
+	delRepo *reportstore.SentMsgStore,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Deleter {
-	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, *delRepo, log)
+	deleter := orchestrator.NewDeleter(delChan, tg, maxAdp, delRepo, log)
 
 	lc.Append(fx.Hook{OnStart: func(context.Context) error {
 		deleter.Start(appCtx)
@@ -198,8 +218,8 @@ func newGenerator(
 	return gen
 }
 
-func newOrchestratorRepository(rdb *postgres.DB, log *slog.Logger) *orchestrator.Repository {
-	return orchestrator.NewRepository(rdb.GetConn(), log)
+func newReportStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ReportStore {
+	return reportstore.NewReportStore(rdb.GetConn(), log)
 }
 
 func newOrchestrator(
@@ -207,10 +227,10 @@ func newOrchestrator(
 	eventChan chan models.Event,
 	specialEventChan chan models.SpecialEventForLK,
 	delChan chan models.Event,
-	orchRepo *orchestrator.Repository,
+	orchRepo *reportstore.ReportStore,
 	gen *generator.Generator,
 	snd *models.SenderProvider,
-	delRepo *orchestrator.SentMsgRepository,
+	delRepo *reportstore.SentMsgStore,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Orchestrator {
@@ -234,8 +254,10 @@ func newOrchestrator(
 	return orch
 }
 
-func newReportGenService(rdb *postgres.DB, orch *orchestrator.Orchestrator, log *slog.Logger) *reportsvc.Report {
-	reportDBRepo := reportrepo.NewRepository(rdb.GetConn(), log)
-
-	return reportsvc.NewReport(reportDBRepo, orch, log)
+func newReportGenService(
+	reportStore *reportstore.ReportStore,
+	orch *orchestrator.Orchestrator,
+	log *slog.Logger,
+) *reportsvc.Report {
+	return reportsvc.NewReport(reportStore, orch, log)
 }
