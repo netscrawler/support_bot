@@ -44,6 +44,7 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newEventAPI, fx.ParamTags(`name:"eventChan"`, ``)),
 	newEvaluator,
 	newLuaStdCollector,
+	newScriptStore,
 	newLuaManager,
 	newProcessorReg,
 	newProcessor,
@@ -145,16 +146,18 @@ func newLuaStdCollector(
 	})
 }
 
+func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {
+	return reportstore.NewScriptStore(rdb.GetConn())
+}
+
 func newLuaManager(
 	cfg *config.Config,
 	luaStdColl *luastd.CollectPlugin,
-	rdb *postgres.DB,
+	scripts *reportstore.ScriptStore,
 ) *lua.Manager {
-	scriptRepo := lua.NewRepository(rdb.GetConn())
-
 	return lua.NewManager(
 		&cfg.Lua,
-		scriptRepo,
+		scripts,
 		luastd.NewSTD(luaStdColl, luastd.DatabasePlugin{}, luastd.RateLimit{}),
 	)
 }

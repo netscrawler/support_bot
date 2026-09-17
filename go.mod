@@ -232,7 +232,6 @@ require (
 )
 
 require (
-	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
 	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
@@ -247,7 +246,6 @@ require (
 	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/layeh/gopher-json v0.0.0-20201124131017-552bb3c4c3bf
 	github.com/max-messenger/max-bot-api-client-go/v2 v2.1.1
