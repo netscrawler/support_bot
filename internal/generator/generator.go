@@ -8,9 +8,7 @@ import (
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
-	"support_bot/internal/pkg/logger"
 	"support_bot/internal/processor"
-	"time"
 )
 
 type Collector interface {
@@ -33,6 +31,7 @@ type Evaluator interface {
 // paths) goes through the same Generate method below, so there is no
 // notion of a "type" of generation anywhere in this API.
 type job struct {
+	ctx    context.Context
 	report models.Report
 	result chan<- jobResult
 }
@@ -99,7 +98,7 @@ func (g *Generator) Generate(
 	result := make(chan jobResult, 1)
 
 	select {
-	case g.c <- job{report: report, result: result}:
+	case g.c <- job{ctx: ctx, report: report, result: result}:
 	case <-ctx.Done():
 		return nil, nil, false, ctx.Err()
 	}
@@ -219,13 +218,8 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
 				return
 			}
 
-			rCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			rvCtx := logger.AppendCtx(rCtx, slog.Any("report_name", j.report.Name))
-
-			dataset, res, approve, err := g.generate(rvCtx, j.report)
+			dataset, res, approve, err := g.generate(j.ctx, j.report)
 			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}
-
-			cancel()
 		}
 	}
 }
