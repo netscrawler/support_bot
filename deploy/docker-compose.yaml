@@ -1,0 +1,22 @@
+# Продовый compose-файл: только сервис приложения.
+# PostgreSQL продовый уже развёрнут отдельно и сюда не добавляется —
+# см. database.host в /etc/sbot/config.yaml.
+#
+# Локальная сборка образа для проверки:
+#   docker build -f deploy/Dockerfile -t sbot:local .
+#   SBOT_IMAGE_TAG=local docker compose -f deploy/docker-compose.yaml up
+#
+# В проде образ доставляется и загружается Ansible-плейбуком
+# deploy-docker.yml (docker save/load), поэтому здесь используется
+# готовый image, а не build.
+services:
+  app:
+    image: "sbot:${SBOT_IMAGE_TAG:-latest}"
+    container_name: sbot
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_PATH=/etc/sbot/config.yaml
+    volumes:
+      - /etc/sbot/config.yaml:/etc/sbot/config.yaml:ro

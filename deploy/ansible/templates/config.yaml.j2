@@ -1,0 +1,74 @@
+log:
+    level: prod
+    file: ./log.log
+    output:
+        - stdout
+    format: json
+    exclude:
+        - time
+metabase_domain: "{{ metabase_domain }}"
+appmetrica:
+    o_auth_token: "{{ vault_appmetrica_oauth_token }}"
+    Timeout: 5m0s
+jira:
+    auth_token: "{{ vault_jira_auth_token }}"
+    jira_host: "{{ jira_host }}"
+    timeout: 5m0s
+lua:
+    execution_timeout: 5m0s
+    max_memory_mb: 256
+    allowed_modules:
+        - json
+        - http
+        - url
+        - time
+        - strings
+        - inspect
+database:
+    port: 5432
+    host: "{{ vault_database_host }}"
+    user: "{{ vault_database_user }}"
+    password: "{{ vault_database_password }}"
+    name: "{{ vault_database_name }}"
+    sslmode: require
+    max_conns: 10
+    max_idle_conns: 5
+    max_conn_life_time: 30m0s
+    max_conn_idle_time: 2m0s
+    database_connect: 30s
+telegram:
+    telegram_token: "{{ vault_telegram_token }}"
+    clean_up_time: 10m0s
+    bot_poll: 30s
+    proxy: ""
+    api_proxy: ""
+timeout:
+    shutdown: 10s
+smb:
+    address: "{{ smb_address }}"
+    user: "{{ smb_user }}"
+    password: "{{ vault_smb_password }}"
+    domain: "{{ smb_domain }}"
+    share: "{{ smb_share }}"
+    active: {{ smb_active | lower }}
+smtp:
+    host: "{{ smtp_host }}"
+    port: "{{ smtp_port }}"
+    email: "{{ smtp_email }}"
+    password: "{{ vault_smtp_password }}"
+max:
+    max_token: "{{ vault_max_token }}"
+    clean_up_time: 0s
+    bot_poll: 0s
+    api_proxy: ""
+    max_enabled: {{ max_enabled | lower }}
+http:
+    host: 0.0.0.0
+    port: {{ http_port }}
+    read_timeout: 5s
+    read_header_timeout: 5s
+    write_timeout: 6m0s
+    idle_timeout: 2m0s
+    max_header_bytes: 1048576
+    max_header_value_count: 40
+    max_body_bytes: 10485760

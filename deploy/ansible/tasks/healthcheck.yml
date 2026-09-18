@@ -1,0 +1,8 @@
+---
+# В HTTP API нет /health — единственный роут GET /api/v1/public/report/{id}.
+# Поэтому проверяем, что sbot слушает свой порт локально на целевом хосте.
+- name: Дождаться, пока sbot начнёт слушать HTTP-порт
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ http_port }}"
+    timeout: 30

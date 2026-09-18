@@ -19,3 +19,5 @@ migrations/*
 reports
 config/prod.yaml
 docs/superpowers/plans/
+deploy/ansible/group_vars/production/vault.yml
+deploy/ansible/inventory.ini

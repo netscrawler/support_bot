@@ -1,0 +1,21 @@
+# Каталог на сервере для systemd-релизов: {{ release_path }}/releases/<ts>,
+# симлинк {{ release_path }}/current указывает на активный релиз.
+release_path: /srv/sbot
+service_user: sbot
+http_port: 8080
+# Сколько последних релизов хранить на сервере при деплое через systemd.
+keep_releases: 5
+
+# Несекретные значения для config.yaml.j2 — заполните реальными адресами
+# перед первым деплоем. Секреты (токены, пароли) — в group_vars/production/vault.yml.
+metabase_domain: https://metabase.example.com
+jira_host: https://your-jira-instance.atlassian.net
+smb_address: ""
+smb_user: ""
+smb_domain: WORKGROUP
+smb_share: ""
+smb_active: false
+smtp_host: ""
+smtp_port: "465"
+smtp_email: ""
+max_enabled: false

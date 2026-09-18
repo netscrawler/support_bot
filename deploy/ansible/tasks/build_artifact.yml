@@ -1,0 +1,11 @@
+---
+# Общий шаг для обоих способов деплоя: собирает статический бинарник
+# ./bin/sbot локально через уже существующий Taskfile-таск (build.Dockerfile),
+# чтобы не дублировать логику Go-сборки в Ansible.
+- name: Собрать бинарник sbot (task docker-run)
+  ansible.builtin.command: task docker-run
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  delegate_to: localhost
+  become: false
+  changed_when: true

@@ -1,0 +1,15 @@
+# Скопируйте в vault.yml рядом и зашифруйте перед заполнением реальными значениями:
+#   cp vault.yml.example vault.yml
+#   ansible-vault encrypt group_vars/production/vault.yml
+# vault.yml не коммитится (см. .gitignore) — эти поля соответствуют
+# Config.LogValue() в internal/config/config.go (пароли/токены).
+vault_database_host: localhost
+vault_database_user: postgres
+vault_database_password: CHANGE_ME
+vault_database_name: support_bot
+vault_telegram_token: CHANGE_ME
+vault_jira_auth_token: CHANGE_ME
+vault_appmetrica_oauth_token: CHANGE_ME
+vault_smtp_password: CHANGE_ME
+vault_smb_password: CHANGE_ME
+vault_max_token: CHANGE_ME

@@ -1,0 +1,5 @@
+# Замените на реальный адрес/пользователя продового сервера.
+# Раньше эти значения жили в корневом .env (RELEASE_SRV/RELEASE_USER) —
+# теперь это единственное место, где они настраиваются.
+[production]
+sbot-prod ansible_host=CHANGE_ME ansible_user=CHANGE_ME
