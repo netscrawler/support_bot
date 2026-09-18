@@ -1,0 +1,75 @@
+---
+# Полная замена ручного `task deploy` для Docker-варианта:
+#   ansible-playbook deploy-docker.yml
+- name: Собрать бинарник и Docker-образ sbot
+  hosts: localhost
+  gather_facts: false
+  vars:
+    image_tag: "{{ lookup('pipe', 'git describe --tags --dirty --always') }}"
+  tasks:
+    - ansible.builtin.import_tasks: tasks/build_artifact.yml
+
+    - name: Собрать production-образ sbot (без builder-стадии, бинарник уже готов)
+      ansible.builtin.command: docker build -f deploy/Dockerfile -t sbot:{{ image_tag }} .
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      changed_when: true
+
+    - name: Сохранить образ в tar для передачи на сервер
+      ansible.builtin.command: docker save -o /tmp/sbot-{{ image_tag }}.tar sbot:{{ image_tag }}
+      changed_when: true
+
+- name: Развернуть sbot через Docker Compose
+  hosts: production
+  become: true
+  vars:
+    image_tag: "{{ hostvars['localhost']['image_tag'] }}"
+  tasks:
+    - name: Создать /etc/sbot
+      ansible.builtin.file:
+        path: /etc/sbot
+        state: directory
+        mode: "0750"
+
+    - name: Зашаблонить config.yaml
+      ansible.builtin.template:
+        src: templates/config.yaml.j2
+        dest: /etc/sbot/config.yaml
+        mode: "0640"
+
+    - name: Создать каталог деплоя
+      ansible.builtin.file:
+        path: "{{ release_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Скопировать docker-compose.yaml
+      ansible.builtin.copy:
+        src: ../docker-compose.yaml
+        dest: "{{ release_path }}/docker-compose.yaml"
+        mode: "0644"
+
+    - name: Передать образ на сервер
+      ansible.builtin.copy:
+        src: "/tmp/sbot-{{ image_tag }}.tar"
+        dest: "/tmp/sbot-{{ image_tag }}.tar"
+        mode: "0644"
+
+    - name: Загрузить образ в Docker на сервере
+      ansible.builtin.command: docker load -i /tmp/sbot-{{ image_tag }}.tar
+      changed_when: true
+
+    - name: Поднять/перезапустить сервис через docker compose
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ release_path }}"
+      environment:
+        SBOT_IMAGE_TAG: "{{ image_tag }}"
+      changed_when: true
+
+    - ansible.builtin.import_tasks: tasks/healthcheck.yml
+
+    - name: Удалить временный tar с образом
+      ansible.builtin.file:
+        path: "/tmp/sbot-{{ image_tag }}.tar"
+        state: absent

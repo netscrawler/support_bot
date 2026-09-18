@@ -1,0 +1,15 @@
+[Unit]
+Description=Support Bot (sbot)
+After=network.target
+
+[Service]
+Type=simple
+User={{ service_user }}
+Group={{ service_user }}
+WorkingDirectory={{ release_path }}/current
+ExecStart={{ release_path }}/current/sbot run --config=/etc/sbot/config.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -59,9 +59,5 @@ tasks:
       - mkdir -p bin
       - docker cp support_bot-builder-tmp:/out/sbot ./bin/sbot
       - docker rm support_bot-builder-tmp
-
-  deploy:
-    desc: Deploy the bot
-    deps: [build]
-    cmds:
-      - scp {{.BIN_DIR}}/{{.BINARY_NAME}} ${RELEASE_USER}@${RELEASE_SRV}:${RELEASE_PATH}/support_bot_new
+      # Релиз теперь через Ansible: deploy/ansible/deploy-systemd.yml
+      # или deploy/ansible/deploy-docker.yml (см. deploy/README.md).

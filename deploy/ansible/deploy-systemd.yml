@@ -1,0 +1,85 @@
+---
+# Полная замена ручного `task deploy`: сборка -> копирование -> перезапуск
+# одной командой:
+#   ansible-playbook deploy-systemd.yml
+- name: Собрать бинарник sbot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.import_tasks: tasks/build_artifact.yml
+
+- name: Развернуть sbot как systemd-сервис
+  hosts: production
+  become: true
+  vars:
+    release_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+    release_dir: "{{ release_path }}/releases/{{ release_timestamp }}"
+  tasks:
+    - name: Убедиться, что системный пользователь сервиса существует
+      ansible.builtin.user:
+        name: "{{ service_user }}"
+        system: true
+        create_home: false
+
+    - name: Создать каталог релиза
+      ansible.builtin.file:
+        path: "{{ release_dir }}"
+        state: directory
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: "0755"
+
+    - name: Скопировать бинарник sbot в каталог релиза
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../bin/sbot"
+        dest: "{{ release_dir }}/sbot"
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: "0755"
+
+    - name: Создать /etc/sbot
+      ansible.builtin.file:
+        path: /etc/sbot
+        state: directory
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: "0750"
+
+    - name: Зашаблонить config.yaml
+      ansible.builtin.template:
+        src: templates/config.yaml.j2
+        dest: /etc/sbot/config.yaml
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: "0640"
+
+    - name: Переключить симлинк current на новый релиз
+      ansible.builtin.file:
+        src: "{{ release_dir }}"
+        dest: "{{ release_path }}/current"
+        state: link
+        force: true
+
+    - name: Установить systemd unit
+      ansible.builtin.template:
+        src: ../systemd/sbot.service.j2
+        dest: /etc/systemd/system/sbot.service
+        mode: "0644"
+
+    - name: Перечитать systemd и (пере)запустить sbot
+      ansible.builtin.systemd:
+        name: sbot
+        daemon_reload: true
+        enabled: true
+        state: restarted
+
+    - ansible.builtin.import_tasks: tasks/healthcheck.yml
+
+    - name: Оставить только последние {{ keep_releases }} релизов
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd {{ release_path }}/releases
+        ls -1t | tail -n +{{ (keep_releases | int) + 1 }} | xargs -r rm -rf --
+      args:
+        executable: /bin/bash
+      changed_when: false
