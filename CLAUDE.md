@@ -28,7 +28,9 @@
 
 ## Проект
 - Проверка: `go build ./... && go test ./... && golangci-lint run`.
-- sqlc и mockery генерируют код: не править `internal/db/sqlcgen/` и `*/mock/mocks.go`. Менять `internal/db/queries/*.sql` или интерфейсы и запускать `task generate`.
+- Нужен CGO (DuckDB): `CGO_ENABLED=1` и gcc, иначе build/test падают.
+- Бинарники: `cmd/bot` (основной), `cmd/live-server`. Запуск: `task run` — читает `config/local.yaml` (в .gitignore; образец `config/config.example.yaml`, `config/example.env`).
+- Генерируемый код не править: `internal/db/sqlcgen/` — менять `internal/db/queries/*.sql`, затем `task generate` (sqlc); `*/mock/mocks.go` — менять интерфейс, затем `go tool mockery`.
 - Миграции `migrations/init.sql/` применяются только при первом старте пустой БД (`docker-entrypoint-initdb.d`). Старые файлы не править; схему менять новым `NNN_*.sql`, добавить его в `schema` в `sqlc.yaml` и отметить в `tasks.md`, что на существующей БД его надо накатить вручную.
 - Без явной просьбы не трогать `deploy/ansible` и `.github/workflows`.
 
