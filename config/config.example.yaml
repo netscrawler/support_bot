@@ -21,6 +21,14 @@ jira:
     auth_token: auth token from jira
     jira_host: https://your-jira-instance.atlassian.net
     timeout: 5m0s
+# Прямые подключения к Postgres (коллектор типа pg). Ключ — имя базы, указывается в card_uuid запроса.
+# DSN — только read-only пользователь с минимальными правами: dblink и подобные функции обходят read-only транзакцию.
+databases:
+    analytics:
+        dsn: postgres://ro_user:password@host:5432/db
+        read_only: true
+        statement_timeout: 30s
+        max_conns: 4
 # Настройки Lua-процессора.
 lua:
     # Таймаут для выполнения плагина.

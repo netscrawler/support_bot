@@ -81,6 +81,7 @@ const (
 	CollectTypeMetabase   = "mb"
 	CollectTypeAppMetrica = "appmetrica"
 	CollectTypeJIRA       = "jira"
+	CollectTypePostgres   = "pg"
 )
 
 type Card struct {
@@ -89,6 +90,7 @@ type Card struct {
 	RawParams json.RawMessage   `json:"-"`
 	Params    map[string]string `json:"params"`
 	Type      string            `json:"type"`
+	Query     string            `json:"query"`
 }
 
 func (c Card) ToString(baseUrl string) string {

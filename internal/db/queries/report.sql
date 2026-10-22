@@ -42,7 +42,7 @@ limit 1;
 select report_id from public_reports where public_id = $1 limit 1;
 
 -- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params
+select q.card_uuid, q.title, q.q_type, q.params, q.query
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint;
@@ -115,10 +115,10 @@ insert into evaluate(expr) values ($1) returning id;
 insert into pipelines(pipeline) values ($1) returning id;
 
 -- name: FindQueryIDByUUIDAndTitle :one
-select id from queries where card_uuid = $1 and title = $2;
+select id from queries where card_uuid = $1 and title = $2 and query is not distinct from sqlc.narg(query)::text;
 
 -- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params) values ($1, $2, $3, $4) returning id;
+insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id;
 
 -- name: FindRecipientIDByName :one
 select id from recipients where name = $1;

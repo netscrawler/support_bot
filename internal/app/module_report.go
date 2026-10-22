@@ -7,6 +7,7 @@ import (
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
+	pgcoll "support_bot/internal/collector/postgres"
 	"support_bot/internal/config"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/telegram"
@@ -138,12 +139,19 @@ func newLuaStdCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
+	pg *pgcoll.Collector,
 ) *luastd.CollectPlugin {
+	// Без pg интерфейс должен быть настоящим nil, иначе collector.pg попадёт в Lua.
+	var sqlColl luastd.SQLCollector
+	if pg != nil {
+		sqlColl = pg
+	}
+
 	return luastd.NewCollector(map[string]luastd.DirectCollector{
 		"jira":       jiraColl,
 		"mb":         mb,
 		"appmetrica": appM,
-	})
+	}, sqlColl)
 }
 
 func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {

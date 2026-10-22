@@ -21,6 +21,7 @@ import (
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
+	"support_bot/internal/collector/postgres"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 	"sync"
@@ -125,6 +126,8 @@ type config struct {
 	MetabaseBaseURL string            `json:"metabase"`
 	Jira            jira.Config       `json:"jira"`
 	AppMetrica      appmetrica.Config `json:"appmetrica"`
+
+	Databases map[string]postgres.Config `json:"databases"`
 }
 
 func main() {
@@ -199,11 +202,19 @@ func main() {
 		slog.Error("error watch for templates", slog.Any("error", err))
 	}
 
+	pg, err := postgres.New(ctx, cfg.Databases, log)
+	if err != nil {
+		log.Error("error create postgres collector", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer pg.Close()
+
 	clct := collector.NewCollector(
 		4,
 		metabase.New(cfg.MetabaseBaseURL),
 		appmetrica.NewCollector(&cfg.AppMetrica, log),
 		jira.New(cfg.Jira),
+		pg,
 		slog.Default(),
 	)
 

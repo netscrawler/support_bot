@@ -329,6 +329,7 @@ func mapCardRows(rows []sqlcgen.ListCardsByReportIDRow) []models.Card {
 			Title:     row.Title,
 			Type:      row.QType,
 			RawParams: row.Params,
+			Query:     derefStr(row.Query),
 		})
 	}
 
@@ -619,8 +620,14 @@ func (s *ReportStore) getOrCreateQuery(
 	q *sqlcgen.Queries,
 	card models.Card,
 ) (int32, error) {
+	// Пустой query хранится как NULL (старые типы mb/jira/appmetrica).
+	var query *string
+	if card.Query != "" {
+		query = &card.Query
+	}
+
 	id, err := q.FindQueryIDByUUIDAndTitle(ctx, sqlcgen.FindQueryIDByUUIDAndTitleParams{
-		CardUuid: card.CardUUID, Title: card.Title,
+		CardUuid: card.CardUUID, Title: card.Title, Query: query,
 	})
 	if err == nil {
 		return id, nil
@@ -651,7 +658,7 @@ func (s *ReportStore) getOrCreateQuery(
 	}
 
 	return q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
-		CardUuid: card.CardUUID, Title: card.Title, QType: card.Type, Params: params,
+		CardUuid: card.CardUUID, Title: card.Title, QType: card.Type, Params: params, Query: query,
 	})
 }
 

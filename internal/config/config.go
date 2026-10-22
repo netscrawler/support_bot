@@ -9,6 +9,7 @@ import (
 	"strings"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
+	pgcollector "support_bot/internal/collector/postgres"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
@@ -27,18 +28,19 @@ import (
 )
 
 type Config struct {
-	Log            logger.LogConfig  `yaml:"log"             comment:"Настройки логгирования"`
-	MetabaseDomain string            `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
-	AppMetrica     appmetrica.Config `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
-	Jira           jira.Config       `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
-	Lua            lua.Config        `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
-	Database       postgres.Config   `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	TgBot          tgbot.Config      `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
-	Timeout        timeout           `yaml:"timeout"         comment:"Настройка таймаутов"`
-	SMB            smb.Config        `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
-	SMTP           smtp.Config       `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
-	MaxBot         maxbot.Config     `yaml:"max"             comment:"Настройка Max бота"`
-	HTTP           apihttp.Config    `yaml:"http"            comment:"Настройки публичного HTTP API."`
+	Log            logger.LogConfig              `yaml:"log"             comment:"Настройки логгирования"`
+	MetabaseDomain string                        `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
+	AppMetrica     appmetrica.Config             `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
+	Jira           jira.Config                   `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
+	Lua            lua.Config                    `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
+	Database       postgres.Config               `yaml:"database"        comment:"Настройки подключения к Postgres"`
+	Databases      map[string]pgcollector.Config `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
+	TgBot          tgbot.Config                  `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	Timeout        timeout                       `yaml:"timeout"         comment:"Настройка таймаутов"`
+	SMB            smb.Config                    `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
+	SMTP           smtp.Config                   `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
+	MaxBot         maxbot.Config                 `yaml:"max"             comment:"Настройка Max бота"`
+	HTTP           apihttp.Config                `yaml:"http"            comment:"Настройки публичного HTTP API."`
 }
 
 type timeout struct {
@@ -113,6 +115,15 @@ func (c Config) LogValue() slog.Value {
 	c.SMTP.Password = strings.Repeat("*", len(c.SMTP.Password))
 	c.Jira.AuthToken = strings.Repeat("*", len(c.Jira.AuthToken))
 	c.AppMetrica.OAuthToken = strings.Repeat("*", len(c.AppMetrica.OAuthToken))
+
+	// map ссылочный: копируем, чтобы не затереть DSN в исходном конфиге.
+	dbs := make(map[string]pgcollector.Config, len(c.Databases))
+	for k, v := range c.Databases {
+		v.DSN = "postgres://***"
+		dbs[k] = v
+	}
+
+	c.Databases = dbs
 
 	return slog.AnyValue(safeConfig(c))
 }

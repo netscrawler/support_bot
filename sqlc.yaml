@@ -6,6 +6,7 @@ sql:
       - "migrations/init.sql/001_create_tables.sql"
       - "migrations/init.sql/002_create_report_tables.sql"
       - "migrations/init.sql/005_create_public_reports.sql"
+      - "migrations/init.sql/006_add_query_text.sql"
     gen:
       go:
         package: "sqlcgen"

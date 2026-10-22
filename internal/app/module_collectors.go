@@ -7,6 +7,7 @@ import (
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
+	"support_bot/internal/collector/postgres"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/retry"
 	"time"
@@ -18,7 +19,14 @@ const collectorsParallel uint8 = 30
 
 var collectorsModule = fx.Module(
 	"collectors",
-	fx.Provide(newMetabase, newAppMetricaCollector, newJira, newCollector, newRetry),
+	fx.Provide(
+		newMetabase,
+		newAppMetricaCollector,
+		newJira,
+		newPostgresCollector,
+		newCollector,
+		newRetry,
+	),
 )
 
 func newMetabase(cfg *config.Config) *metabase.Metabase {
@@ -54,13 +62,34 @@ func newJira(cfg *config.Config) *jira.Collector {
 	return jira.New(cfg.Jira)
 }
 
+func newPostgresCollector(
+	ctx context.Context,
+	lc fx.Lifecycle,
+	cfg *config.Config,
+	log *slog.Logger,
+) (*postgres.Collector, error) {
+	pg, err := postgres.New(ctx, cfg.Databases, log)
+	if err != nil {
+		return nil, err
+	}
+
+	lc.Append(fx.Hook{OnStop: func(context.Context) error {
+		pg.Close()
+
+		return nil
+	}})
+
+	return pg, nil
+}
+
 func newCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
+	pg *postgres.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
-	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, log)
+	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, log)
 }
 
 func newRetry(log *slog.Logger) *retry.Retry {
