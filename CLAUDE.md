@@ -31,3 +31,17 @@
 - sqlc и mockery генерируют код: не править `internal/db/sqlcgen/` и `*/mock/mocks.go`. Менять `internal/db/queries/*.sql` или интерфейсы и запускать `task generate`.
 - Миграции `migrations/init.sql/` применяются только при первом старте пустой БД (`docker-entrypoint-initdb.d`). Старые файлы не править; схему менять новым `NNN_*.sql`, добавить его в `schema` в `sqlc.yaml` и отметить в `tasks.md`, что на существующей БД его надо накатить вручную.
 - Без явной просьбы не трогать `deploy/ansible` и `.github/workflows`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues — локальные markdown-файлы в `.scratch/<feature>/`. См. `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Стандартные: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. См. `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` и `docs/adr/` в корне. См. `docs/agents/domain.md`.
