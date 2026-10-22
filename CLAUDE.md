@@ -27,7 +27,7 @@
 - Изменения в `internal/processor/lua/` (Lua-песочница — граница безопасности) — `/security-review` перед archive.
 
 ## Проект
-- Проверка: `go build ./... && go test ./... && golangci-lint run`.
+- Проверка: `go build ./... && go test ./... && go tool golangci-lint run` (линтер — go tool в go.mod, глобальный бинарник может быть собран старым Go).
 - Нужен CGO (DuckDB): `CGO_ENABLED=1` и gcc, иначе build/test падают.
 - Бинарники: `cmd/bot` (основной), `cmd/live-server`. Запуск: `task run` — читает `config/local.yaml` (в .gitignore; образец `config/config.example.yaml`, `config/example.env`).
 - Генерируемый код не править: `internal/db/sqlcgen/` — менять `internal/db/queries/*.sql`, затем `task generate` (sqlc); `*/mock/mocks.go` — менять интерфейс, затем `go tool mockery`.
