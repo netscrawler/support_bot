@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"time"
 )
@@ -63,6 +64,10 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 			)
 		}
 	}
+
+	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status)).Inc()
+	metrics.ReportRunDuration.WithLabelValues(string(run.Kind)).
+		Observe(run.FinishedAt.Sub(run.StartedAt).Seconds())
 
 	if err := r.store.Insert(ctx, run); err != nil {
 		r.log.ErrorContext(ctx, "runlog: запись запуска", "report", run.ReportName, "error", err)

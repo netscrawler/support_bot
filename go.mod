@@ -3,6 +3,41 @@ module support_bot
 go 1.27.0
 
 require (
+	github.com/Masterminds/sprig/v3 v3.3.0
+	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
+	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
+	github.com/cjoudrey/gluaurl v0.0.0-20161028222611-31cbb9bef199
+	github.com/duckdb/duckdb-go/v2 v2.10505.0
+	github.com/fogleman/gg v1.3.0
+	github.com/fsnotify/fsnotify v1.10.1
+	github.com/google/cel-go v0.28.0
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
+	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/hirochachacha/go-smb2 v1.1.0
+	github.com/ilyakaznacheev/cleanenv v1.5.0
+	github.com/jackc/pgx/v5 v5.9.2
+	github.com/joho/godotenv v1.5.1
+	github.com/layeh/gopher-json v0.0.0-20201124131017-552bb3c4c3bf
+	github.com/max-messenger/max-bot-api-client-go/v2 v2.1.1
+	github.com/mymmrac/telego v1.11.1
+	github.com/netscrawler/metabase-public-api v0.0.0-20250722130654-59cfc07f3d73
+	github.com/pashagolub/pgxmock/v4 v4.9.0
+	github.com/prometheus/client_golang v1.12.1
+	github.com/robfig/cron/v3 v3.0.1
+	github.com/stretchr/testify v1.12.1
+	github.com/tengattack/gluacrypto v0.0.0-20240324200146-54b58c95c255
+	github.com/vadv/gopher-lua-libs v0.8.0
+	github.com/xuri/excelize/v2 v2.10.0
+	github.com/yuin/gopher-lua v1.1.2
+	go.uber.org/fx v1.24.0
+	golang.org/x/image v0.35.0
+	golang.org/x/net v0.61.0
+	golang.org/x/time v0.15.0
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
@@ -260,7 +295,6 @@ require (
 	github.com/pingcap/log v1.1.0 // indirect
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260418072757-ce92298d1124 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25 // indirect
-	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
@@ -386,40 +420,6 @@ require (
 	mvdan.cc/sh/v3 v3.13.2-0.20260613075524-2255122b577b // indirect
 	mvdan.cc/unparam v0.0.0-20260823230713-2fa3d841b0c8 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
-)
-
-require (
-	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/SebastiaanKlippert/go-wkhtmltopdf v1.9.3
-	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
-	github.com/cjoudrey/gluaurl v0.0.0-20161028222611-31cbb9bef199
-	github.com/duckdb/duckdb-go/v2 v2.10505.0
-	github.com/fogleman/gg v1.3.0
-	github.com/fsnotify/fsnotify v1.10.1
-	github.com/google/cel-go v0.28.0
-	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
-	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/hirochachacha/go-smb2 v1.1.0
-	github.com/ilyakaznacheev/cleanenv v1.5.0
-	github.com/jackc/pgx/v5 v5.9.2
-	github.com/joho/godotenv v1.5.1
-	github.com/layeh/gopher-json v0.0.0-20201124131017-552bb3c4c3bf
-	github.com/max-messenger/max-bot-api-client-go/v2 v2.1.1
-	github.com/mymmrac/telego v1.11.1
-	github.com/netscrawler/metabase-public-api v0.0.0-20250722130654-59cfc07f3d73
-	github.com/pashagolub/pgxmock/v4 v4.9.0
-	github.com/robfig/cron/v3 v3.0.1
-	github.com/stretchr/testify v1.12.1
-	github.com/tengattack/gluacrypto v0.0.0-20240324200146-54b58c95c255
-	github.com/vadv/gopher-lua-libs v0.8.0
-	github.com/xuri/excelize/v2 v2.10.0
-	github.com/yuin/gopher-lua v1.1.2
-	go.uber.org/fx v1.24.0
-	golang.org/x/image v0.35.0
-	golang.org/x/net v0.61.0
-	golang.org/x/time v0.15.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 tool (

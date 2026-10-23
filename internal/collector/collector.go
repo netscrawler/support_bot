@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"sync"
 	"time"
@@ -171,8 +172,12 @@ func (c *Collector) collect(
 
 			}
 
+			fetchStart := time.Now()
 			data, err := fetchFn(ctx, crd.CardUUID, crd.Params)
+			metrics.CollectorDuration.WithLabelValues(crd.Type).
+				Observe(time.Since(fetchStart).Seconds())
 			if err != nil {
+				metrics.CollectorErrors.WithLabelValues(crd.Type).Inc()
 				c.log.ErrorContext(
 					ctx,
 					"Error while fetching data",

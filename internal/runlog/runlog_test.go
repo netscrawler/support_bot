@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,4 +205,15 @@ func TestTgAlerter(t *testing.T) {
 	require.NoError(t, NewTgAlerter(AlertsConfig{}, tg, ad).Alert(t.Context(), "y"))
 	assert.Equal(t, "y", ad.text)
 	assert.Empty(t, tg.text)
+}
+
+func TestRecordCountsRun(t *testing.T) {
+	r, st, _ := setup()
+	st.insertErr = errors.New("db down") // метрика пишется и при ошибке БД
+	c := metrics.ReportRuns.WithLabelValues("cron", "failed")
+	before := testutil.ToFloat64(c)
+
+	r.Record(t.Context(), run(models.RunKindCron, models.RunStatusFailed, "boom"))
+
+	assert.InDelta(t, 1, testutil.ToFloat64(c)-before, 0)
 }

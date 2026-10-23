@@ -14,6 +14,7 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
@@ -51,6 +52,7 @@ type Config struct {
 	Alerts         runlog.AlertsConfig                 `yaml:"alerts"          comment:"Уведомления администраторов о сбоях отчётов."`
 	Runs           runlog.Config                       `yaml:"runs"            comment:"Журнал запусков отчётов."`
 	Delivery       delivery                            `yaml:"delivery"        comment:"Доставка отчётов."`
+	Metrics        metrics.Config                      `yaml:"metrics"         comment:"Сервер /metrics и /healthz."`
 }
 
 type delivery struct {

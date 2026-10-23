@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"support_bot/internal/app"
 	"support_bot/internal/config"
+	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 
 	"go.uber.org/fx"
@@ -35,6 +36,8 @@ func Run(version, commit, buildTime string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setup logger: %w", err)
 	}
+
+	metrics.BuildInfo.WithLabelValues(version, commit).Set(1)
 
 	log.Info(
 		"starting with config",

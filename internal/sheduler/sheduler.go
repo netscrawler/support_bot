@@ -3,6 +3,7 @@ package sheduler
 import (
 	"context"
 	"log/slog"
+	"support_bot/internal/metrics"
 
 	models2 "support_bot/internal/models"
 
@@ -72,6 +73,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 	s.log.InfoContext(ctx, "Scheduler started")
 
 	s.cron.Start()
+	metrics.SchedulerRunning.Set(1)
 	s.startMonitor(ctx)
 
 	return nil
@@ -80,6 +82,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 func (s *Sheduler) Stop() {
 	s.log.Info("stoping sheduler")
 	s.cron.Stop()
+	metrics.SchedulerRunning.Set(0)
 }
 
 func (s *Sheduler) startMonitor(ctx context.Context) {

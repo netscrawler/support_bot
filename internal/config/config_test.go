@@ -80,3 +80,12 @@ func TestLoadDeliveryDelays(t *testing.T) {
 	cfg = loadYAML(t, "delivery:\n  retry:\n    delays: []\n")
 	assert.Empty(t, cfg.Delivery.Retry.Delays)
 }
+
+func TestLoadMetricsAddrDefault(t *testing.T) {
+	cfg := loadYAML(t, "metabase_domain: x\n")
+	assert.Equal(t, "127.0.0.1:9090", cfg.Metrics.Addr)
+	assert.False(t, cfg.Metrics.Enabled)
+
+	cfg = loadYAML(t, "metrics:\n  enabled: true\n")
+	assert.True(t, cfg.Metrics.Enabled)
+}

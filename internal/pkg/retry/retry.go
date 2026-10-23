@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"support_bot/internal/metrics"
 	"time"
 )
 
@@ -60,6 +61,8 @@ func Do(
 		}
 
 		if p, ok := errors.AsType[permanentError](err); ok {
+			metrics.DeliveryFailures.WithLabelValues(op).Inc()
+
 			return p.err
 		}
 
@@ -68,7 +71,13 @@ func Do(
 			err = a.err
 		}
 
-		if i >= len(delays) || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			return err
+		}
+
+		if i >= len(delays) {
+			metrics.DeliveryFailures.WithLabelValues(op).Inc()
+
 			return err
 		}
 
@@ -77,6 +86,7 @@ func Do(
 			d = a.d
 		}
 
+		metrics.DeliveryRetries.WithLabelValues(op).Inc()
 		log.WarnContext(ctx, "retry", "op", op, "attempt", i+2, "delay", d, "error", err)
 
 		timer := time.NewTimer(d)

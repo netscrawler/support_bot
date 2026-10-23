@@ -3,8 +3,11 @@ package retry
 import (
 	"context"
 	"errors"
+	"support_bot/internal/metrics"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 var errBoom = errors.New("boom")
@@ -111,5 +114,32 @@ func TestDo_EmptyDelays(t *testing.T) {
 	})
 	if !errors.Is(err, errBoom) || calls != 1 {
 		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+}
+
+func TestDo_Metrics(t *testing.T) {
+	retries := metrics.DeliveryRetries.WithLabelValues("metrics_op")
+	failures := metrics.DeliveryFailures.WithLabelValues("metrics_op")
+	r0, f0 := testutil.ToFloat64(retries), testutil.ToFloat64(failures)
+
+	calls := 0
+	err := Do(context.Background(), Delays{time.Millisecond}, nil, "metrics_op",
+		func(context.Context) error {
+			calls++
+			if calls == 1 {
+				return errBoom
+			}
+
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if d := testutil.ToFloat64(retries) - r0; d != 1 {
+		t.Fatalf("retries delta=%v", d)
+	}
+	if d := testutil.ToFloat64(failures) - f0; d != 0 {
+		t.Fatalf("failures delta=%v", d)
 	}
 }

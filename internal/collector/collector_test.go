@@ -3,9 +3,11 @@ package collector_test
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
 	"support_bot/internal/collector"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"sync"
 	"testing"
@@ -13,6 +15,7 @@ import (
 
 	cmock "support_bot/internal/collector/mock"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -368,4 +371,23 @@ func TestCollect(t *testing.T) {
 
 		df.AssertExpectations(t)
 	})
+}
+
+// Не parallel: сравнивает глобальный счётчик до/после.
+func TestCollectErrorMetric(t *testing.T) {
+	pg := &cmock.MockQueryFetcher{}
+	pg.On("Fetch", mock.Anything, "analytics", "select 1", mock.Anything).
+		Return(nil, errors.New("boom"))
+	card := models.Card{
+		Title: "c", CardUUID: "analytics", Type: models.CollectTypePostgres, Query: "select 1",
+	}
+	c := metrics.CollectorErrors.WithLabelValues("pg")
+	before := testutil.ToFloat64(c)
+
+	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+	col := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, nil, l)
+	_, err := col.Collect(t.Context(), card)
+
+	require.Error(t, err)
+	assert.InDelta(t, 1, testutil.ToFloat64(c)-before, 0)
 }

@@ -10,6 +10,7 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
@@ -109,7 +110,8 @@ func Default() *Config {
 		Delivery: delivery{Retry: deliveryRetry{
 			Delays: retry.Delays{time.Second, 5 * time.Second, 15 * time.Second},
 		}},
-		Runs: runlog.Config{Retention: 720 * time.Hour},
+		Runs:    runlog.Config{Retention: 720 * time.Hour},
+		Metrics: metrics.Config{Enabled: true, Addr: "127.0.0.1:9090"},
 		Databases: map[string]pgcollector.Config{
 			"example": {
 				DSN:              "dsn://",

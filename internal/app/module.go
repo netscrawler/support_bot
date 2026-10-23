@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"support_bot/internal/metrics"
 	"support_bot/internal/orchestrator"
 	"support_bot/internal/sheduler"
 
@@ -26,6 +27,7 @@ var Module = fx.Options(
 	fx.Invoke(func(
 		*tgbot.Router,
 		*apihttp.Server,
+		*metrics.Server,
 		*sheduler.Sheduler,
 		*eventcreator.EventCreator,
 		*orchestrator.Deleter,
