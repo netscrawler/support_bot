@@ -12,8 +12,6 @@ import (
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
-	"support_bot/internal/pkg/retry"
-	"time"
 
 	"go.uber.org/fx"
 )
@@ -31,7 +29,6 @@ var collectorsModule = fx.Module(
 		newGrafanaAlertsCollector,
 		newZabbixCollector,
 		newCollector,
-		newRetry,
 	),
 )
 
@@ -122,19 +119,4 @@ func newCollector(
 	return collector.NewCollector(
 		collectorsParallel, mb, appM, jiraColl, pg, prom, alerts, zbx, log,
 	)
-}
-
-func newRetry(log *slog.Logger) *retry.Retry {
-	return retry.New(retry.Config{
-		QueueSize:  100,
-		Workers:    4,
-		MaxRetries: 3,
-		Backoff: retry.ExponentialBackoff{
-			Base: 3 * time.Second,
-			Max:  30 * time.Second,
-		},
-		Policy: retry.PolicyAlways{},
-		Logger: log,
-		Silent: false,
-	})
 }

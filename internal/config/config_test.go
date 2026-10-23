@@ -2,11 +2,17 @@ package config_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
+	"support_bot/internal/pkg/retry"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -46,4 +52,31 @@ func TestLogValueMasksPrometheus(t *testing.T) {
 	assert.Equal(t, "bearer-secret", cfg.Prometheus["a"].BearerToken)
 	assert.Equal(t, "pass-secret", cfg.Prometheus["b"].BasicAuth.Password)
 	assert.Equal(t, "zbx-secret", cfg.Zabbix["z"].Token)
+}
+
+func loadYAML(t *testing.T, body string) *config.Config {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "c.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+
+	return cfg
+}
+
+func TestLoadDeliveryDelays(t *testing.T) {
+	cfg := loadYAML(t, "delivery:\n  retry:\n    delays: [2s, 3s]\n")
+	assert.Equal(t, retry.Delays{2 * time.Second, 3 * time.Second}, cfg.Delivery.Retry.Delays)
+
+	cfg = loadYAML(t, "metabase_domain: x\n")
+	assert.Equal(
+		t,
+		retry.Delays{time.Second, 5 * time.Second, 15 * time.Second},
+		cfg.Delivery.Retry.Delays,
+	)
+
+	cfg = loadYAML(t, "delivery:\n  retry:\n    delays: []\n")
+	assert.Empty(t, cfg.Delivery.Retry.Delays)
 }

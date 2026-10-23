@@ -15,6 +15,7 @@ import (
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
+	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
@@ -49,6 +50,15 @@ type Config struct {
 	HTTP           apihttp.Config                      `yaml:"http"            comment:"Настройки публичного HTTP API."`
 	Alerts         runlog.AlertsConfig                 `yaml:"alerts"          comment:"Уведомления администраторов о сбоях отчётов."`
 	Runs           runlog.Config                       `yaml:"runs"            comment:"Журнал запусков отчётов."`
+	Delivery       delivery                            `yaml:"delivery"        comment:"Доставка отчётов."`
+}
+
+type delivery struct {
+	Retry deliveryRetry `yaml:"retry"`
+}
+
+type deliveryRetry struct {
+	Delays retry.Delays `yaml:"delays" env-default:"1s,5s,15s" comment:"Паузы между повторами неудавшейся отправки; попыток = пауз + 1. Пустой список — без повторов."`
 }
 
 type timeout struct {

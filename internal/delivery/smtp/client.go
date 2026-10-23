@@ -14,32 +14,41 @@ import (
 	"net/smtp"
 	"path/filepath"
 	"strings"
+	"support_bot/internal/pkg/retry"
 	"time"
 )
 
 type Sender struct {
-	cfg Config
-	log *slog.Logger
+	cfg    Config
+	delays retry.Delays
+	log    *slog.Logger
 }
 
-func New(cfg Config, log *slog.Logger) *Sender {
+func New(cfg Config, delays retry.Delays, log *slog.Logger) *Sender {
 	l := log.With(slog.Any("module", "smtp_sender"))
 
 	return &Sender{
-		cfg: cfg,
-		log: l,
+		cfg:    cfg,
+		delays: delays,
+		log:    l,
 	}
 }
 
 func (s *Sender) Send(ctx context.Context, mail Mail) error {
-	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
-
 	message := s.buildMessage(mail)
 
 	recipients := append(mail.Recipients, mail.Copy...)
 	if len(recipients) == 0 {
 		return fmt.Errorf("no recipients specified")
 	}
+
+	return retry.Do(ctx, s.delays, s.log, "smtp.Send", func(ctx context.Context) error {
+		return classify(s.send(ctx, message, recipients))
+	})
+}
+
+func (s *Sender) send(ctx context.Context, message []byte, recipients []string) error {
+	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
 
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 

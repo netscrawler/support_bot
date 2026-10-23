@@ -11,6 +11,7 @@ import (
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
+	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
@@ -105,6 +106,9 @@ func Default() *Config {
 			MaxHeaderBytes:    1 << 20,
 			MaxBodyBytes:      10 << 20,
 		},
+		Delivery: delivery{Retry: deliveryRetry{
+			Delays: retry.Delays{time.Second, 5 * time.Second, 15 * time.Second},
+		}},
 		Runs: runlog.Config{Retention: 720 * time.Hour},
 		Databases: map[string]pgcollector.Config{
 			"example": {

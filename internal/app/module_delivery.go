@@ -9,7 +9,6 @@ import (
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/models"
-	"support_bot/internal/pkg/retry"
 
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/mymmrac/telego"
@@ -24,23 +23,22 @@ var deliveryModule = fx.Module(
 
 func newTelegramAdaptor(
 	tgBot *telego.Bot,
-	retr *retry.Retry,
+	cfg *config.Config,
 	log *slog.Logger,
 ) *telegram.ChatAdaptor {
-	return telegram.NewChatAdaptor(tgBot, retr, log)
+	return telegram.NewChatAdaptor(tgBot, cfg.Delivery.Retry.Delays, log)
 }
 
 func newMaxAdaptor(
 	maxBot *maxcli.Api,
-	retr *retry.Retry,
 	cfg *config.Config,
 	log *slog.Logger,
 ) *maxadp.Adaptor {
-	return maxadp.New(maxBot, retr, cfg.MaxBot.Enabled, log)
+	return maxadp.New(maxBot, cfg.Delivery.Retry.Delays, cfg.MaxBot.Enabled, log)
 }
 
 func newSMTP(cfg *config.Config, log *slog.Logger) *smtp.Sender {
-	return smtp.New(cfg.SMTP, log)
+	return smtp.New(cfg.SMTP, cfg.Delivery.Retry.Delays, log)
 }
 
 func newSMB(
@@ -49,7 +47,7 @@ func newSMB(
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) (*smb.SMB, error) {
-	smbS, err := smb.New(ctx, cfg.SMB, log)
+	smbS, err := smb.New(ctx, cfg.SMB, cfg.Delivery.Retry.Delays, log)
 	if err != nil {
 		return nil, err
 	}
