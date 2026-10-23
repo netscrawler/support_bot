@@ -74,7 +74,11 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 
 		value := def
 		if value == "" {
-			value = fmt.Sprint(fv.Interface())
+			if fv.Kind() == reflect.String {
+				value = fv.String() // не Sprint: secret.String печатается как "***"
+			} else {
+				value = fmt.Sprint(fv.Interface())
+			}
 		}
 
 		if comment != "" {

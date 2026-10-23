@@ -3,10 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
@@ -17,6 +16,7 @@ import (
 	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
+	"support_bot/internal/pkg/secret"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
@@ -97,12 +97,90 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	registerSecrets(&cfg)
+
 	return &cfg, nil
 }
 
+// registerSecrets передаёт все секреты конфига в secret.Redact.
+func registerSecrets(cfg *Config) {
+	secret.Register(
+		cfg.Database.Password, cfg.TgBot.TelegramToken, cfg.MaxBot.Token,
+		cfg.SMTP.Password, cfg.SMB.Password, cfg.Jira.AuthToken, cfg.AppMetrica.OAuthToken,
+	)
+
+	// Database.DSN здесь ещё пуст: его регистрирует postgres.Config.getDSN.
+	for _, d := range cfg.Databases {
+		registerDSN(d.DSN)
+	}
+
+	for _, p := range cfg.Prometheus {
+		secret.Register(p.BearerToken)
+
+		if p.BasicAuth != nil {
+			secret.Register(p.BasicAuth.Password)
+		}
+	}
+
+	for _, g := range cfg.Grafana {
+		secret.Register(g.Token)
+	}
+
+	for _, z := range cfg.Zabbix {
+		secret.Register(z.Token)
+	}
+}
+
+// registerDSN регистрирует DSN целиком и пароль из него.
+func registerDSN(dsn secret.String) {
+	secret.Register(dsn)
+
+	if u, err := url.Parse(dsn.Value()); err == nil && u.User != nil {
+		if pw, ok := u.User.Password(); ok {
+			secret.Register(secret.String(pw))
+		}
+	}
+}
+
+// Validate проверяет обязательные поля: токен Telegram и БД всегда,
+// остальные секции — только если задано их ключевое поле.
+// Map-секции (databases, prometheus, grafana, zabbix) проверяют конструкторы коллекторов.
 func (c Config) Validate() error {
-	// TODO: add full config validation.
-	return errors.Join(c.Log.Validate(), c.HTTP.Validate())
+	var errs []error
+
+	need := func(path string, empty bool) {
+		if empty {
+			errs = append(errs, fmt.Errorf("%s: не задано", path))
+		}
+	}
+
+	need("telegram.telegram_token", c.TgBot.TelegramToken == "")
+	need("database.host", c.Database.Host == "")
+	need("database.user", c.Database.User == "")
+	need("database.name", c.Database.Name == "")
+
+	if c.SMTP.Host != "" {
+		need("smtp.email", c.SMTP.Email == "")
+		need("smtp.password", c.SMTP.Password == "")
+		need("smtp.port", c.SMTP.Port == "")
+	}
+
+	if c.SMB.Active {
+		need("smb.address", c.SMB.Address == "")
+		need("smb.user", c.SMB.User == "")
+		need("smb.password", c.SMB.Password == "")
+		need("smb.share", c.SMB.Share == "")
+	}
+
+	if c.MaxBot.Enabled {
+		need("max.max_token", c.MaxBot.Token == "")
+	}
+
+	if c.Jira.JiraHost != "" {
+		need("jira.auth_token", c.Jira.AuthToken == "")
+	}
+
+	return errors.Join(append(errs, c.Log.Validate(), c.HTTP.Validate())...)
 }
 
 // Приоритет: 1) аргумент командной строки, 2) переменная окружения, 3) значение по умолчанию.
@@ -116,65 +194,11 @@ func fetchConfigPath(path string) string {
 	}
 
 	if path != "" {
+		//nolint:gosec // путь конфига задаёт оператор
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return ""
 		}
 	}
 
 	return path
-}
-
-type safeConfig Config
-
-func (c Config) LogValue() slog.Value {
-	c.Database.Password = strings.Repeat("*", len(c.Database.Password))
-	c.TgBot.TelegramToken = strings.Repeat("*", len(c.TgBot.TelegramToken))
-	c.MaxBot.Token = strings.Repeat("*", len(c.MaxBot.Token))
-	c.Database.DSN = "postgres://***"
-	c.SMB.Password = strings.Repeat("*", len(c.SMB.Password))
-	c.SMTP.Password = strings.Repeat("*", len(c.SMTP.Password))
-	c.Jira.AuthToken = strings.Repeat("*", len(c.Jira.AuthToken))
-	c.AppMetrica.OAuthToken = strings.Repeat("*", len(c.AppMetrica.OAuthToken))
-
-	// map ссылочный: копируем, чтобы не затереть DSN в исходном конфиге.
-	dbs := make(map[string]pgcollector.Config, len(c.Databases))
-	for k, v := range c.Databases {
-		v.DSN = "postgres://***"
-		dbs[k] = v
-	}
-
-	c.Databases = dbs
-
-	// то же для токенов Prometheus/Grafana; BasicAuth — указатель, копируем структуру.
-	graf := make(map[string]prometheus.GrafanaConfig, len(c.Grafana))
-	for k, v := range c.Grafana {
-		v.Token = "***"
-		graf[k] = v
-	}
-
-	c.Grafana = graf
-
-	prom := make(map[string]prometheus.Config, len(c.Prometheus))
-	for k, v := range c.Prometheus {
-		v.BearerToken = "***"
-		if v.BasicAuth != nil {
-			ba := *v.BasicAuth
-			ba.Password = "***"
-			v.BasicAuth = &ba
-		}
-
-		prom[k] = v
-	}
-
-	c.Prometheus = prom
-
-	zbx := make(map[string]zabbix.Config, len(c.Zabbix))
-	for k, v := range c.Zabbix {
-		v.Token = "***"
-		zbx[k] = v
-	}
-
-	c.Zabbix = zbx
-
-	return slog.AnyValue(safeConfig(c))
 }

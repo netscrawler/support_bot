@@ -39,7 +39,7 @@ func NewTelegramBot(
 		opts = append(opts, telego.WithAPIServer(cfg.ApiProxy))
 	}
 
-	tgBot, err := telego.NewBot(cfg.TelegramToken, opts...)
+	tgBot, err := telego.NewBot(cfg.TelegramToken.Value(), opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create telegram bot: %w", err)
 	}

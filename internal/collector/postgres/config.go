@@ -2,13 +2,14 @@ package postgres
 
 import (
 	"fmt"
+	"support_bot/internal/pkg/secret"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Config struct {
-	DSN              string        `yaml:"dsn"               comment:"DSN подключения к Postgres"`
+	DSN              secret.String `yaml:"dsn"               comment:"DSN подключения к Postgres"`
 	ReadOnly         *bool         `yaml:"read_only"         comment:"Только чтение (по умолчанию true)"`
 	StatementTimeout time.Duration `yaml:"statement_timeout" comment:"Таймаут запроса (по умолчанию 30s)"`
 	MaxConns         int32         `yaml:"max_conns"         comment:"Максимум соединений в пуле (по умолчанию 4)"`
@@ -35,7 +36,7 @@ func (c Config) withDefaults() Config {
 func poolConfig(cfg Config) (*pgxpool.Config, error) {
 	cfg = cfg.withDefaults()
 
-	pc, err := pgxpool.ParseConfig(cfg.DSN)
+	pc, err := pgxpool.ParseConfig(cfg.DSN.Value())
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}

@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,5 +35,13 @@ func TestNew_PoolConfigMapping(t *testing.T) {
 
 	if pgxCfg.MaxConnIdleTime != cfg.MaxConnIdleTime {
 		t.Errorf("MaxConnIdleTime = %v, want %v", pgxCfg.MaxConnIdleTime, cfg.MaxConnIdleTime)
+	}
+}
+
+func TestGetDSNKeepsRealPassword(t *testing.T) {
+	cfg := Config{Host: "h", Port: 5432, User: "u", Password: "p@ss", Name: "db", SSL: "disable"}
+
+	if got := cfg.getDSN().Value(); !strings.Contains(got, "u:p%40ss@h:5432") {
+		t.Errorf("getDSN() = %q, want real password", got)
 	}
 }

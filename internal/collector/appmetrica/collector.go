@@ -59,7 +59,7 @@ func (c *Collector) Fetch(
 	}
 	defer raw.Body.Close()
 
-	c.log.Debug("parsing response", raw.Status)
+	c.log.Debug("parsing response", "status", raw.Status)
 
 	mediaType, _, err := mime.ParseMediaType(raw.Header.Get("Content-Type"))
 	if err != nil {
@@ -117,7 +117,7 @@ func (c *Collector) GetApplications(ctx context.Context) ([]SupportedApplication
 }
 
 func (c *Collector) do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "OAuth "+c.cfg.OAuthToken)
+	req.Header.Set("Authorization", "OAuth "+c.cfg.OAuthToken.Value())
 
 	resp, err := c.client.Do(req)
 	if err != nil {

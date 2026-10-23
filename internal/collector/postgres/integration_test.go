@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"support_bot/internal/pkg/secret"
 	"testing"
 	"time"
 
@@ -34,8 +35,11 @@ func TestIntegrationReadOnly(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	c, err := New(ctx, map[string]Config{"db": {DSN: dsn, StatementTimeout: time.Second}},
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c, err := New(
+		ctx,
+		map[string]Config{"db": {DSN: secret.String(dsn), StatementTimeout: time.Second}},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
 	require.NoError(t, err)
 	t.Cleanup(c.Close)
 

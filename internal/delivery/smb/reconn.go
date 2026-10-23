@@ -45,7 +45,7 @@ func (smb *SMB) connect() error {
 	d := &smb2.Dialer{
 		Initiator: &smb2.NTLMInitiator{
 			User:     smb.cfg.User,
-			Password: smb.cfg.Password,
+			Password: smb.cfg.Password.Value(),
 			Domain:   smb.cfg.Domain,
 		},
 	}

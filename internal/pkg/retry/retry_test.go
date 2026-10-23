@@ -1,9 +1,13 @@
 package retry
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"support_bot/internal/metrics"
+	"support_bot/internal/pkg/secret"
 	"testing"
 	"time"
 
@@ -141,5 +145,35 @@ func TestDo_Metrics(t *testing.T) {
 	}
 	if d := testutil.ToFloat64(failures) - f0; d != 0 {
 		t.Fatalf("failures delta=%v", d)
+	}
+}
+
+func TestDo_RedactsSecretInLog(t *testing.T) {
+	secret.Register("retry-tok-777")
+
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, nil))
+	calls := 0
+	err := Do(
+		context.Background(),
+		Delays{time.Millisecond},
+		log,
+		"op",
+		func(context.Context) error {
+			calls++
+			if calls == 1 {
+				return errors.New("Get https://api/botretry-tok-777/x: EOF")
+			}
+
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+	if strings.Contains(out, "retry-tok-777") || !strings.Contains(out, "***") {
+		t.Fatalf("log=%s", out)
 	}
 }

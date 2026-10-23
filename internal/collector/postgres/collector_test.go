@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"support_bot/internal/pkg/secret"
 	"testing"
 	"time"
 
@@ -12,7 +13,9 @@ import (
 
 func TestPoolConfig(t *testing.T) {
 	f := false
-	dsn := "postgres://u:p@localhost:5432/db" //nolint:gosec // фиктивный DSN для теста
+	dsn := secret.String(
+		"postgres://u:p@localhost:5432/db",
+	) //nolint:gosec // фиктивный DSN для теста
 
 	pc, err := poolConfig(Config{DSN: dsn})
 	require.NoError(t, err)

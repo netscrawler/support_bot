@@ -1,8 +1,11 @@
 package appmetrica
 
-import "time"
+import (
+	"support_bot/internal/pkg/secret"
+	"time"
+)
 
 type Config struct {
-	OAuthToken string        `yaml:"o_auth_token" env:"O_AUTH_TOKEN"`
+	OAuthToken secret.String `yaml:"o_auth_token" env:"O_AUTH_TOKEN"`
 	Timeout    time.Duration `yaml:"Timeout"      env:"TIMEOUT"`
 }

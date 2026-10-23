@@ -9,6 +9,7 @@ import (
 	"strings"
 	"support_bot/internal/metrics"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/secret"
 	"sync"
 	"testing"
 	"time"
@@ -216,4 +217,21 @@ func TestRecordCountsRun(t *testing.T) {
 	r.Record(t.Context(), run(models.RunKindCron, models.RunStatusFailed, "boom"))
 
 	assert.InDelta(t, 1, testutil.ToFloat64(c)-before, 0)
+}
+
+func TestRecordRedactsSecrets(t *testing.T) {
+	secret.Register("tok-12345")
+
+	r, st, al := setup()
+	r.Record(
+		t.Context(),
+		run(models.RunKindCron, models.RunStatusFailed, "GET /bottok-12345/x: boom"),
+	)
+
+	require.Len(t, st.runs, 1)
+	assert.Contains(t, st.runs[0].Error, "***")
+	assert.NotContains(t, st.runs[0].Error, "tok-12345")
+	require.Len(t, al.texts, 1)
+	assert.Contains(t, al.texts[0], "***")
+	assert.NotContains(t, al.texts[0], "tok-12345")
 }

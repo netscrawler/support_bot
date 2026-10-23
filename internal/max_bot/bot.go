@@ -27,7 +27,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*maxcli.Api, error)
 		opts = append(opts, maxcli.WithBaseURL(cfg.ApiProxy))
 	}
 
-	api, err := maxcli.NewApi(cfg.Token, opts...)
+	api, err := maxcli.NewApi(cfg.Token.Value(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create max api: %w", err)
 	}

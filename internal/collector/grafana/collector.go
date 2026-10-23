@@ -46,7 +46,7 @@ func New(grafanas map[string]prometheus.GrafanaConfig, log *slog.Logger) *Collec
 	for name, g := range grafanas {
 		sources[name] = source{
 			baseURL: strings.TrimRight(g.URL, "/"),
-			token:   g.Token,
+			token:   g.Token.Value(),
 			timeout: cmp.Or(g.Timeout, defaultTimeout),
 		}
 	}

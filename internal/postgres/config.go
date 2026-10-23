@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"support_bot/internal/pkg/secret"
 	"time"
 )
 
@@ -17,12 +18,12 @@ const (
 )
 
 type Config struct {
-	Port     int    `env:"DATABASE_PORT"     env-default:"5432"      yaml:"port"     comment:"Порт для подключения к базе"`
-	Host     string `env:"DATABASE_HOST"     env-default:"localhost" yaml:"host"     comment:"Адрес базы данных"`
-	User     string `env:"DATABASE_USER"     env-default:"user"      yaml:"user"                                                                               Comment:"Пользователь"`
-	Password string `env:"DATABASE_PASSWORD" env-default:"password"  yaml:"password" comment:"Пароль для подключения"`
-	Name     string `env:"DATABASE_NAME"     env-default:"postgres"  yaml:"name"     comment:"Имя базы данных"`
-	SSL      string `env:"DATABASE_SSL_MODE" env-default:"false"     yaml:"sslmode"  comment:"SSL режим: (disable|require|verify-ca|verify-full|allow|prefer)"`
+	Port     int           `env:"DATABASE_PORT"     env-default:"5432"      yaml:"port"     comment:"Порт для подключения к базе"`
+	Host     string        `env:"DATABASE_HOST"     env-default:"localhost" yaml:"host"     comment:"Адрес базы данных"`
+	User     string        `env:"DATABASE_USER"     env-default:"user"      yaml:"user"                                                                               Comment:"Пользователь"`
+	Password secret.String `env:"DATABASE_PASSWORD" env-default:"password"  yaml:"password" comment:"Пароль для подключения"`
+	Name     string        `env:"DATABASE_NAME"     env-default:"postgres"  yaml:"name"     comment:"Имя базы данных"`
+	SSL      string        `env:"DATABASE_SSL_MODE" env-default:"false"     yaml:"sslmode"  comment:"SSL режим: (disable|require|verify-ca|verify-full|allow|prefer)"`
 
 	MaxConns        int           `env:"DATABASE_MAX_CONNS"          env-default:"10"  yaml:"max_conns"          comment:"Максимально количество соединений"`
 	MaxIdleConns    int           `env:"DATABASE_MAX_IDLE_CONNS"     env-default:"2"   yaml:"max_idle_conns"     comment:"Максимальное количество ожидающий соединений"`
@@ -31,10 +32,10 @@ type Config struct {
 
 	DatabaseConnect time.Duration `env:"DATABASE_CONNECT_TIMEOUT" env-default:"30s" yaml:"database_connect" comment:"Таймаут на подключения к базе данных"`
 
-	DSN string `yaml:"-"`
+	DSN secret.String `yaml:"-"`
 }
 
-func (pc *Config) getDSN() string {
+func (pc *Config) getDSN() secret.String {
 	mode := sslDisable
 	modes := map[string]struct{}{
 		sslDisable:    {},
@@ -51,7 +52,7 @@ func (pc *Config) getDSN() string {
 
 	dsn := &url.URL{
 		Scheme: "postgres",
-		User:   url.UserPassword(pc.User, pc.Password),
+		User:   url.UserPassword(pc.User, pc.Password.Value()),
 		Host:   net.JoinHostPort(pc.Host, strconv.Itoa(pc.Port)),
 		Path:   pc.Name,
 	}
@@ -61,7 +62,9 @@ func (pc *Config) getDSN() string {
 	q.Set("connect_timeout", strconv.Itoa(int(pc.DatabaseConnect.Seconds())))
 	dsn.RawQuery = q.Encode()
 
-	pc.DSN = dsn.String()
+	pc.DSN = secret.String(dsn.String())
+	// в DSN пароль URL-кодирован и может не совпасть с зарегистрированным Password
+	secret.Register(pc.DSN)
 
 	return pc.DSN
 }

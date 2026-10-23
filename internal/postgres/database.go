@@ -18,7 +18,7 @@ type DB struct {
 }
 
 func parsePoolConfig(cfg Config) (*pgxpool.Config, error) {
-	pgxCfg, err := pgxpool.ParseConfig(cfg.getDSN())
+	pgxCfg, err := pgxpool.ParseConfig(cfg.getDSN().Value())
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}

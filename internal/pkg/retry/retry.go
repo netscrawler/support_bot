@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"support_bot/internal/metrics"
+	"support_bot/internal/pkg/secret"
 	"time"
 )
 
@@ -87,7 +88,18 @@ func Do(
 		}
 
 		metrics.DeliveryRetries.WithLabelValues(op).Inc()
-		log.WarnContext(ctx, "retry", "op", op, "attempt", i+2, "delay", d, "error", err)
+		log.WarnContext(
+			ctx,
+			"retry",
+			"op",
+			op,
+			"attempt",
+			i+2,
+			"delay",
+			d,
+			"error",
+			secret.Redact(err.Error()),
+		)
 
 		timer := time.NewTimer(d)
 		select {

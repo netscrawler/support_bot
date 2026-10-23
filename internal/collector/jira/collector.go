@@ -67,7 +67,7 @@ func (c *Collector) Fetch(
 }
 
 func (c *Collector) do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+c.cfg.AuthToken)
+	req.Header.Set("Authorization", "Bearer "+c.cfg.AuthToken.Value())
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.client.Do(req)

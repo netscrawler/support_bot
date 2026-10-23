@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"support_bot/internal/metrics"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/secret"
 	"time"
 )
 
@@ -64,6 +65,8 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 			)
 		}
 	}
+
+	run.Error = secret.Redact(run.Error)
 
 	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status)).Inc()
 	metrics.ReportRunDuration.WithLabelValues(string(run.Kind)).

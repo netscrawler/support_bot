@@ -48,7 +48,7 @@ func (s *Sender) Send(ctx context.Context, mail Mail) error {
 }
 
 func (s *Sender) send(ctx context.Context, message []byte, recipients []string) error {
-	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
+	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password.Value(), s.cfg.Host)
 
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 

@@ -51,7 +51,7 @@ func New(cfgs map[string]Config, log *slog.Logger) (*Collector, error) {
 
 		sources[name] = source{
 			endpoint: strings.TrimRight(c.URL, "/") + "/api_jsonrpc.php",
-			token:    c.Token,
+			token:    c.Token.Value(),
 			timeout:  cmp.Or(c.Timeout, defaultTimeout),
 		}
 	}
