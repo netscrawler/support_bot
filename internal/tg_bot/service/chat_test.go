@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 // fakeChatProvider — рукописная реализация ChatProvider для тестов Chat.Add.
@@ -20,19 +21,30 @@ type fakeChatProvider struct {
 	createErr    error
 }
 
-func (f *fakeChatProvider) Create(_ context.Context, chat *models.TgChatDTO) error {
+func (f *fakeChatProvider) Create(
+	_ context.Context,
+	chat *models.TgChatDTO,
+) error {
 	f.createCalled = true
 	f.createChat = chat
 
 	return f.createErr
 }
 
-func (f *fakeChatProvider) Exists(ctx context.Context, chatID int64) (bool, error) {
+func (f *fakeChatProvider) Exists(
+	ctx context.Context,
+	chatID int64,
+) (bool, error) {
 	return f.existsFn(ctx, chatID)
 }
 
-func (f *fakeChatProvider) GetByTitle(context.Context, string) (*models.TgChatDTO, error) {
-	panic("GetByTitle must not be called by Chat.Add: duplicates are now identified by chat_id")
+func (f *fakeChatProvider) GetByTitle(
+	context.Context,
+	string,
+) (*models.TgChatDTO, error) {
+	panic(
+		"GetByTitle must not be called by Chat.Add: duplicates are now identified by chat_id",
+	)
 }
 
 func (f *fakeChatProvider) GetAll(context.Context) ([]models.TgChatDTO, error) {
@@ -80,11 +92,16 @@ func TestChat_Add_AllowsSameTitleWithDifferentChatID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add() error = %v, want nil", err)
 	}
+
 	if !repo.createCalled {
 		t.Error("Create() was not called, want it to be called")
 	}
+
 	if repo.createChat.ChatID != 200 {
-		t.Errorf("Create() called with ChatID=%d, want 200", repo.createChat.ChatID)
+		t.Errorf(
+			"Create() called with ChatID=%d, want 200",
+			repo.createChat.ChatID,
+		)
 	}
 }
 
@@ -108,8 +125,12 @@ func TestChat_Add_RejectsDuplicateChatID(t *testing.T) {
 
 	err := c.Add(context.Background(), chat)
 	if !errors.Is(err, models.ErrAlreadyExist) {
-		t.Fatalf("Add() error = %v, want errors.Is(err, models.ErrAlreadyExist)", err)
+		t.Fatalf(
+			"Add() error = %v, want errors.Is(err, models.ErrAlreadyExist)",
+			err,
+		)
 	}
+
 	if repo.createCalled {
 		t.Error("Create() was called, want it not to be called")
 	}
@@ -135,11 +156,16 @@ func TestChat_Add_LookupErrorNotifiesAndDoesNotCreate(t *testing.T) {
 
 	err := c.Add(context.Background(), chat)
 	if !errors.Is(err, models.ErrInternal) {
-		t.Errorf("Add() error = %v, want errors.Is(err, models.ErrInternal)", err)
+		t.Errorf(
+			"Add() error = %v, want errors.Is(err, models.ErrInternal)",
+			err,
+		)
 	}
+
 	if !errors.Is(err, dbErr) {
 		t.Errorf("Add() error = %v, want errors.Is(err, dbErr)", err)
 	}
+
 	if repo.createCalled {
 		t.Error("Create() was called, want it not to be called")
 	}

@@ -1,19 +1,20 @@
 package pkg
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 )
 
-func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
+func GenerateEnv(v any, prefix, groupComment string) (string, error) {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 
 	if rv.Kind() != reflect.Struct {
-		return "", fmt.Errorf("expected struct")
+		return "", errors.New("expected struct")
 	}
 
 	rt := rv.Type()
@@ -28,7 +29,7 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 		b.WriteString("\n")
 	}
 
-	for i := 0; i < rv.NumField(); i++ {
+	for i := range rv.NumField() {
 		field := rt.Field(i)
 		fv := rv.Field(i)
 
@@ -53,7 +54,11 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 
 			subGroupComment := comment
 
-			subEnv, err := GenerateEnv(fv.Interface(), subPrefix, subGroupComment)
+			subEnv, err := GenerateEnv(
+				fv.Interface(),
+				subPrefix,
+				subGroupComment,
+			)
 			if err != nil {
 				return "", err
 			}
@@ -89,7 +94,7 @@ func GenerateEnv(v any, prefix string, groupComment string) (string, error) {
 
 		if fv.Kind() == reflect.Slice {
 			sliceVals := make([]string, fv.Len())
-			for j := 0; j < fv.Len(); j++ {
+			for j := range fv.Len() {
 				sliceVals[j] = fmt.Sprint(fv.Index(j).Interface())
 			}
 

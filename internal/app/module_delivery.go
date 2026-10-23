@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/config"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/smb"
@@ -12,13 +13,18 @@ import (
 
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/mymmrac/telego"
-
 	"go.uber.org/fx"
 )
 
 var deliveryModule = fx.Module(
 	"delivery",
-	fx.Provide(newTelegramAdaptor, newMaxAdaptor, newSMTP, newSMB, newSenderProvider),
+	fx.Provide(
+		newTelegramAdaptor,
+		newMaxAdaptor,
+		newSMTP,
+		newSMB,
+		newSenderProvider,
+	),
 )
 
 func newTelegramAdaptor(
@@ -34,7 +40,12 @@ func newMaxAdaptor(
 	cfg *config.Config,
 	log *slog.Logger,
 ) *maxadp.Adaptor {
-	return maxadp.New(maxBot, cfg.Delivery.Retry.Delays, cfg.MaxBot.Enabled, log)
+	return maxadp.New(
+		maxBot,
+		cfg.Delivery.Retry.Delays,
+		cfg.MaxBot.Enabled,
+		log,
+	)
 }
 
 func newSMTP(cfg *config.Config, log *slog.Logger) *smtp.Sender {

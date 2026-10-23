@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
@@ -16,7 +17,9 @@ import (
 	"go.uber.org/fx"
 )
 
-const collectorsParallel uint8 = 30
+const (
+	collectorsParallel uint8 = 30
+)
 
 var collectorsModule = fx.Module(
 	"collectors",

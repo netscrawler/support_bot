@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/models"
 )
 
@@ -39,12 +40,19 @@ func (c *Chat) Add(ctx context.Context, chat *models.TgChatDTO) error {
 	exists, err := c.repo.Exists(ctx, chat.ChatID)
 	if err != nil {
 		wrapped := fmt.Errorf("%w: check chat id: %w", models.ErrInternal, err)
-		c.notify.SendAdminNotify(ctx, newAddNewChatErrorTemplate(*chat, wrapped))
+		c.notify.SendAdminNotify(
+			ctx,
+			newAddNewChatErrorTemplate(*chat, wrapped),
+		)
 
 		return wrapped
 	}
+
 	if exists {
-		c.notify.SendAdminNotify(ctx, newAddNewChatErrorTemplate(*chat, models.ErrAlreadyExist))
+		c.notify.SendAdminNotify(
+			ctx,
+			newAddNewChatErrorTemplate(*chat, models.ErrAlreadyExist),
+		)
 
 		return models.ErrAlreadyExist
 	}

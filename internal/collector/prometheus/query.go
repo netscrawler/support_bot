@@ -10,7 +10,10 @@ import (
 var placeholder = regexp.MustCompile(`\$\{(\w+)\}`)
 
 // buildRequest подставляет ${name} в PromQL и выбирает instant/range по params.
-func buildRequest(query string, params map[string]string) (string, url.Values, error) {
+func buildRequest(
+	query string,
+	params map[string]string,
+) (string, url.Values, error) {
 	var missing string
 
 	q := placeholder.ReplaceAllStringFunc(query, func(m string) string {
@@ -23,6 +26,7 @@ func buildRequest(query string, params map[string]string) (string, url.Values, e
 
 		return v
 	})
+
 	if missing != "" {
 		return "", nil, fmt.Errorf("в params нет значения для ${%s}", missing)
 	}
@@ -48,6 +52,7 @@ func buildRequest(query string, params map[string]string) (string, url.Values, e
 		}
 
 		return "/api/v1/query", vals, nil
+
 	default:
 		return "", nil, fmt.Errorf(
 			"неполный range-запрос, не хватает: %s",

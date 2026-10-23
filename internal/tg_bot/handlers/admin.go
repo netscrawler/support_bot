@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
-	"time"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
@@ -44,7 +45,10 @@ func (h *AdminHandler) Start(ctx *th.Context, message telego.Message) error {
 	return showAdminMenu(ctx.Bot(), message)
 }
 
-func (h *AdminHandler) ListReports(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ListReports(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
 	}); err != nil {
@@ -56,7 +60,12 @@ func (h *AdminHandler) ListReports(ctx *th.Context, query telego.CallbackQuery) 
 
 	rpl, err := h.report.LoadReportsWithPagination(tctx)
 	if err != nil {
-		return editOrSend(ctx, query, "Ошибка получения отчетов", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Ошибка получения отчетов",
+			menu.BackMarkup,
+		)
 	}
 
 	mark := mapReportRPLToAdminMarkup(rpl)
@@ -66,12 +75,15 @@ func (h *AdminHandler) ListReports(ctx *th.Context, query telego.CallbackQuery) 
 	return err
 }
 
-func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) LoadReportPage(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	data := strings.Split(query.Data, ";")
 	if len(data) != 2 {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить страницу",
+			Text:            msgNoPage,
 		})
 	}
 
@@ -79,13 +91,14 @@ func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuer
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить страницу",
+			Text:            msgNoPage,
 		})
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
@@ -111,7 +124,10 @@ func (h *AdminHandler) LoadReportPage(ctx *th.Context, query telego.CallbackQuer
 	return err
 }
 
-func (h *AdminHandler) IgnoreReportPage(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) IgnoreReportPage(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
 	})
@@ -119,18 +135,22 @@ func (h *AdminHandler) IgnoreReportPage(ctx *th.Context, query telego.CallbackQu
 	return err
 }
 
-func (h *AdminHandler) SelectReport(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) SelectReport(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	repInf, err := getReportInfoFromQuery(query)
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить отчет" + err.Error(),
+			Text:            msgNoReport + err.Error(),
 		})
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
@@ -152,12 +172,15 @@ func (h *AdminHandler) SelectReport(ctx *th.Context, query telego.CallbackQuery)
 	return editOrSendRich(ctx, query, rpInf.String(), &mark)
 }
 
-func (h *AdminHandler) ListRuns(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ListRuns(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	repInf, err := getReportInfoFromQuery(query)
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить отчет",
+			Text:            msgNoReport,
 		})
 	}
 
@@ -168,28 +191,40 @@ func (h *AdminHandler) ListRuns(ctx *th.Context, query telego.CallbackQuery) err
 
 	mark := telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{{{
-			Text: "⬅️ Назад",
+			Text: msgBack,
 			CallbackData: fmt.Sprintf(
-				"admin_report_select;%s;%s;%d", repInf.ID, repInf.ReportName, repInf.PageFrom,
+				"admin_report_select;%s;%s;%d",
+				repInf.ID,
+				repInf.ReportName,
+				repInf.PageFrom,
 			),
 		}}},
 	}
 
-	return editOrSend(ctx, query, formatRuns(repInf.ReportName, runs, err), &mark)
+	return editOrSend(
+		ctx,
+		query,
+		formatRuns(repInf.ReportName, runs, err),
+		&mark,
+	)
 }
 
-func (h *AdminHandler) ResendSelectReport(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ResendSelectReport(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	repInf, err := getReportInfoFromQuery(query)
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить отчет",
+			Text:            msgNoReport,
 		})
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
@@ -214,13 +249,14 @@ func (h *AdminHandler) GenerateSelectedReport(
 	if err != nil {
 		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить отчет",
+			Text:            msgNoReport,
 		})
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
@@ -229,11 +265,19 @@ func (h *AdminHandler) GenerateSelectedReport(
 
 	uses, err := h.report.UsesPeriod(tctx, repInf.ReportName)
 	if err != nil {
-		return editOrSend(ctx, query, "Не удалось получить информацию об отчете", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось получить информацию об отчете",
+			menu.BackMarkup,
+		)
 	}
 
 	period, mark := periodStep(repInf, uses, fmt.Sprintf(
-		"admin_report_select;%s;%s;%d", repInf.ID, repInf.ReportName, repInf.PageFrom,
+		"admin_report_select;%s;%s;%d",
+		repInf.ID,
+		repInf.ReportName,
+		repInf.PageFrom,
 	))
 	if mark != nil {
 		return editOrSend(ctx, query, "Выберите период отчёта.", mark)
@@ -249,7 +293,12 @@ func (h *AdminHandler) GenerateSelectedReport(
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateTestReportByName(tctx, repInf.ReportName, chat, period); err != nil {
+	if err := h.report.GenerateTestReportByName(
+		tctx,
+		repInf.ReportName,
+		chat,
+		period,
+	); err != nil {
 		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:      telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID:   query.Message.Message().MessageID,
@@ -270,20 +319,33 @@ func (h *AdminHandler) GenerateSelectedReport(
 	)
 }
 
-func (h *AdminHandler) ManageUsers(ctx *th.Context, query telego.CallbackQuery) error {
-	mkp := telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{{
-		menu.ListUser,
-	}, {
-		menu.AddUser,
-		menu.RemoveUser,
-	}, {
-		menu.Back,
-	}}}
+func (h *AdminHandler) ManageUsers(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	mkp := telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{{
+			menu.ListUser,
+		}, {
+			menu.AddUser,
+			menu.RemoveUser,
+		}, {
+			menu.Back,
+		}},
+	}
 
-	return editOrSend(ctx, query, "Выберите действие для управления пользователями.", &mkp)
+	return editOrSend(
+		ctx,
+		query,
+		"Выберите действие для управления пользователями.",
+		&mkp,
+	)
 }
 
-func (h *AdminHandler) AddUser(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) AddUser(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	h.state.set(query.Message.GetChat().ID, addUserState)
 
 	return editOrSend(
@@ -294,7 +356,10 @@ func (h *AdminHandler) AddUser(ctx *th.Context, query telego.CallbackQuery) erro
 	)
 }
 
-func (h *AdminHandler) RemoveUser(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) RemoveUser(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	h.state.set(query.Message.GetChat().ID, removeUserState)
 
 	return editOrSend(
@@ -305,21 +370,34 @@ func (h *AdminHandler) RemoveUser(ctx *th.Context, query telego.CallbackQuery) e
 	)
 }
 
-func (h *AdminHandler) ListUsers(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ListUsers(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	users, err := h.userService.GetAll(ctx.Context())
 	if err != nil {
-		return editOrSend(ctx, query, "Не удалось получить список пользователей", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось получить список пользователей",
+			menu.BackMarkup,
+		)
 	}
 
 	if len(users) == 0 {
-		return editOrSend(ctx, query, "Список пользователей пуст", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Список пользователей пуст",
+			menu.BackMarkup,
+		)
 	}
 
 	rows := make([][]telego.InlineKeyboardButton, 0, len(users)+1)
 	for _, user := range users {
 		text := user.Username
 		if user.Username == "" {
-			text = fmt.Sprintf("%d", user.TelegramID)
+			text = strconv.FormatInt(user.TelegramID, 10)
 		}
 
 		rows = append(rows, []telego.InlineKeyboardButton{{
@@ -329,7 +407,7 @@ func (h *AdminHandler) ListUsers(ctx *th.Context, query telego.CallbackQuery) er
 	}
 
 	rows = append(rows, []telego.InlineKeyboardButton{{
-		Text:         "🔙 Назад",
+		Text:         msgBackMenu,
 		CallbackData: "manage_users",
 	}})
 
@@ -338,7 +416,10 @@ func (h *AdminHandler) ListUsers(ctx *th.Context, query telego.CallbackQuery) er
 	return editOrSend(ctx, query, "Список пользователей", &mkp)
 }
 
-func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) DeleteUser(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	parts := strings.Split(query.Data, ";")
 	if len(parts) == 1 || parts[1] == "" {
 		users, err := h.userService.GetAll(ctx.Context())
@@ -355,7 +436,7 @@ func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) e
 		for _, user := range users {
 			name := user.Username
 			if name == "" {
-				name = fmt.Sprintf("%d", user.TelegramID)
+				name = strconv.FormatInt(user.TelegramID, 10)
 			}
 
 			rows = append(rows, []telego.InlineKeyboardButton{{
@@ -365,13 +446,18 @@ func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) e
 		}
 
 		rows = append(rows, []telego.InlineKeyboardButton{{
-			Text:         "🔙 Назад",
+			Text:         msgBackMenu,
 			CallbackData: "manage_users",
 		}})
 
 		mkp := telego.InlineKeyboardMarkup{InlineKeyboard: rows}
 
-		return editOrSend(ctx, query, "Выберите пользователя для удаления", &mkp)
+		return editOrSend(
+			ctx,
+			query,
+			"Выберите пользователя для удаления",
+			&mkp,
+		)
 	}
 
 	username := parts[1]
@@ -384,13 +470,26 @@ func (h *AdminHandler) DeleteUser(ctx *th.Context, query telego.CallbackQuery) e
 		)
 	}
 
-	return editOrSend(ctx, query, fmt.Sprintf("Пользователь %s удалён", username), menu.BackMarkup)
+	return editOrSend(
+		ctx,
+		query,
+		fmt.Sprintf("Пользователь %s удалён", username),
+		menu.BackMarkup,
+	)
 }
 
-func (h *AdminHandler) ShowUser(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ShowUser(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	parts := strings.Split(query.Data, ";")
 	if len(parts) != 2 {
-		return editOrSend(ctx, query, "Не удалось определить пользователя", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось определить пользователя",
+			menu.BackMarkup,
+		)
 	}
 
 	user, err := h.userService.GetByUsername(ctx.Context(), parts[1])
@@ -414,7 +513,8 @@ func (h *AdminHandler) ShowUser(ctx *th.Context, query telego.CallbackQuery) err
 }
 
 func (h *AdminHandler) AddChat(ctx *th.Context, message telego.Message) error {
-	if message.Chat.Type != telego.ChatTypePrivate && message.Chat.Type != telego.ChatTypeGroup {
+	if message.Chat.Type != telego.ChatTypePrivate &&
+		message.Chat.Type != telego.ChatTypeGroup {
 		_, err := ctx.Bot().SendMessage(ctx, &telego.SendMessageParams{
 			ChatID: telego.ChatID{ID: message.Chat.ID},
 			Text:   "Добавление чата возможно только группе.",
@@ -439,7 +539,10 @@ func (h *AdminHandler) AddChat(ctx *th.Context, message telego.Message) error {
 	return err
 }
 
-func (h *AdminHandler) ListChats(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ListChats(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	chats, err := h.chatService.GetAll(ctx.Context())
 	if err != nil {
 		return editOrSend(
@@ -463,7 +566,7 @@ func (h *AdminHandler) ListChats(ctx *th.Context, query telego.CallbackQuery) er
 	}
 
 	rows = append(rows, []telego.InlineKeyboardButton{{
-		Text:         "🔙 Назад",
+		Text:         msgBackMenu,
 		CallbackData: "back",
 	}})
 
@@ -472,7 +575,10 @@ func (h *AdminHandler) ListChats(ctx *th.Context, query telego.CallbackQuery) er
 	return editOrSend(ctx, query, "Список чатов", &mkp)
 }
 
-func (h *AdminHandler) DeleteChat(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) DeleteChat(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	parts := strings.Split(query.Data, ";")
 	title := parts[1]
 
@@ -499,16 +605,27 @@ func (h *AdminHandler) DeleteChat(ctx *th.Context, query telego.CallbackQuery) e
 	)
 }
 
-func (h *AdminHandler) ConfirmDeleteChat(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ConfirmDeleteChat(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	parts := strings.Split(query.Data, ";")
 
 	if len(parts) != 2 {
-		return editOrSend(ctx, query, "Не удалось определить чат", menu.BackMarkup)
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось определить чат",
+			menu.BackMarkup,
+		)
 	}
 
 	title := parts[1]
 
-	tctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	tctx, cancel := context.WithTimeout(
+		context.WithoutCancel(ctx),
+		15*time.Second,
+	)
 	defer cancel()
 
 	err := h.chatService.Remove(tctx, title)
@@ -529,7 +646,10 @@ func (h *AdminHandler) ConfirmDeleteChat(ctx *th.Context, query telego.CallbackQ
 	)
 }
 
-func (h *AdminHandler) ShowChat(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ShowChat(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	parts := strings.Split(query.Data, ";")
 	if len(parts) != 3 {
 		return editOrSend(ctx, query, "Не удалось определить чат", nil)
@@ -552,7 +672,12 @@ func (h *AdminHandler) ShowChat(ctx *th.Context, query telego.CallbackQuery) err
 			)
 		}
 
-		return editOrSend(ctx, query, "Не удалось получить информацию о чатах"+err.Error(), nil)
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось получить информацию о чатах"+err.Error(),
+			nil,
+		)
 	}
 
 	text := fmt.Sprintf(
@@ -568,29 +693,43 @@ func (h *AdminHandler) ShowChat(ctx *th.Context, query telego.CallbackQuery) err
 			{
 				menu.Back,
 				telego.InlineKeyboardButton{
-					Text:         "Удалить чат",
-					CallbackData: fmt.Sprintf("delete_chat;%s;%d", chat.Title, chat.ID),
+					Text: "Удалить чат",
+					CallbackData: fmt.Sprintf(
+						"delete_chat;%s;%d",
+						chat.Title,
+						chat.ID,
+					),
 				},
 			},
 		},
 	})
 }
 
-func (h *AdminHandler) ManageCrons(ctx *th.Context, query telego.CallbackQuery) error {
-	mkp := telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{{
-		menu.StartCron,
-	}, {
-		menu.StopCron,
-	}, {
-		menu.Back,
-	}}}
+func (h *AdminHandler) ManageCrons(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	mkp := telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{{
+			menu.StartCron,
+		}, {
+			menu.StopCron,
+		}, {
+			menu.Back,
+		}},
+	}
 
-	return editOrSend(ctx, query, "Управляйте автоматическими рассылками отчётов.", &mkp)
+	return editOrSend(
+		ctx,
+		query,
+		"Управляйте автоматическими рассылками отчётов.",
+		&mkp,
+	)
 }
 
 // Back button: return to admin main menu.
 func (h *AdminHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
-	_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+	answerCallback(ctx, query)
 
 	rmkp := tu.InlineKeyboard(
 		tu.InlineKeyboardCols(
@@ -601,10 +740,18 @@ func (h *AdminHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 			menu.ManageUsers,
 		)...)
 
-	return editOrSend(ctx, query, "Панель администратора. Выберите нужное действие.", rmkp)
+	return editOrSend(
+		ctx,
+		query,
+		"Панель администратора. Выберите нужное действие.",
+		rmkp,
+	)
 }
 
-func (h *AdminHandler) ListCrons(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) ListCrons(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	return editOrSend(
 		ctx,
 		query,
@@ -613,11 +760,22 @@ func (h *AdminHandler) ListCrons(ctx *th.Context, query telego.CallbackQuery) er
 	)
 }
 
-func (h *AdminHandler) SwitchCronStatus(ctx *th.Context, query telego.CallbackQuery) error {
-	return editOrSend(ctx, query, "Выберите действие для расписаний", menu.BackMarkup)
+func (h *AdminHandler) SwitchCronStatus(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	return editOrSend(
+		ctx,
+		query,
+		"Выберите действие для расписаний",
+		menu.BackMarkup,
+	)
 }
 
-func (h *AdminHandler) StartJobs(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) StartJobs(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	h.report.Start()
 
 	return editOrSend(
@@ -628,7 +786,10 @@ func (h *AdminHandler) StartJobs(ctx *th.Context, query telego.CallbackQuery) er
 	)
 }
 
-func (h *AdminHandler) StopJobs(ctx *th.Context, query telego.CallbackQuery) error {
+func (h *AdminHandler) StopJobs(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	h.report.Stop()
 
 	return editOrSend(

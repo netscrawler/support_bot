@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"embed"
+
 	"support_bot/assets"
 
 	"golang.org/x/image/font"
@@ -16,7 +17,11 @@ func GetFontFaceNormal(fontSize float64) (font.Face, error) {
 	return getFontFaceFromEmbedFS(assets.FontFS, "fonts/font.ttf", fontSize)
 }
 
-func getFontFaceFromEmbedFS(fs embed.FS, path string, fontSize float64) (font.Face, error) {
+func getFontFaceFromEmbedFS(
+	fs embed.FS,
+	path string,
+	fontSize float64,
+) (font.Face, error) {
 	// Чтение шрифта из embed.FS
 	fontBytes, err := fs.ReadFile(path)
 	if err != nil {

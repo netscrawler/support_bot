@@ -10,12 +10,3 @@ const (
 	ReportFormatCsv  reportFormat = "csv"
 	ReportFormatXlsx reportFormat = "xlsx"
 )
-
-var _ = map[string]reportFormat{
-	"text": ReportFormatText,
-	"html": ReportFormatHTML,
-	"png":  ReportFormatPng,
-	"pdf":  ReportFormatPdf,
-	"csv":  ReportFormatCsv,
-	"xlsx": ReportFormatXlsx,
-}

@@ -2,6 +2,7 @@ package runlog
 
 import (
 	"context"
+
 	"support_bot/internal/models"
 )
 
@@ -10,7 +11,11 @@ type Alerter interface {
 }
 
 type TextSender interface {
-	SendText(ctx context.Context, rcpt models.TgChat, s string) (*models.SentMessage, error)
+	SendText(
+		ctx context.Context,
+		rcpt models.TgChat,
+		s string,
+	) (*models.SentMessage, error)
 }
 
 type AdminNotifier interface {
@@ -24,7 +29,11 @@ type tgAlerter struct {
 }
 
 // NewTgAlerter шлёт в alerts.chat_id, а если он не задан — всем админам в личку.
-func NewTgAlerter(cfg AlertsConfig, tg TextSender, admins AdminNotifier) Alerter {
+func NewTgAlerter(
+	cfg AlertsConfig,
+	tg TextSender,
+	admins AdminNotifier,
+) Alerter {
 	return &tgAlerter{cfg: cfg, tg: tg, admins: admins}
 }
 
@@ -35,8 +44,11 @@ func (a *tgAlerter) Alert(ctx context.Context, text string) error {
 			models.TgChat{ChatID: a.cfg.ChatID, ThreadID: a.cfg.ThreadID},
 			text,
 		)
+
 		return err
 	}
+
 	a.admins.SendAdminNotify(ctx, text)
+
 	return nil
 }

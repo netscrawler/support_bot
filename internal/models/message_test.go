@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"support_bot/internal/delivery/smtp"
 	"testing"
+
+	"support_bot/internal/delivery/smtp"
 )
 
 type fakeTg struct{ TgSender }
@@ -22,7 +23,7 @@ type fakeProvider struct{ smtpErr error }
 
 func (fakeProvider) Tg() TgSender       { return fakeTg{} }
 func (fakeProvider) SMB() SmbSender     { return nil }
-func (f fakeProvider) SMTP() SmtpSender { return fakeSMTP{err: f.smtpErr} }
+func (f fakeProvider) SMTP() SMTPSender { return fakeSMTP{err: f.smtpErr} }
 func (fakeProvider) MAX() MaxSender     { return nil }
 
 func TestMessageSendDelivered(t *testing.T) {
@@ -31,7 +32,10 @@ func TestMessageSendDelivered(t *testing.T) {
 		Chat:                    &Chat{ChatID: 1, ChType: ChatTypeTg},
 		NeedDeleteAfterEndOfDay: true,
 	}
-	mail := Recipient{Type: EmailRecipient, Email: &EmailTemplate{Dest: []string{"a@b.c"}}}
+	mail := Recipient{
+		Type:  EmailRecipient,
+		Email: &EmailTemplate{Dest: []string{"a@b.c"}},
+	}
 	text := []Data{{Data: bytes.NewBufferString("hi"), Type: SendTextKind}}
 
 	tests := []struct {
@@ -42,7 +46,14 @@ func TestMessageSendDelivered(t *testing.T) {
 		wantErr   bool
 		wantSent  int
 	}{
-		{"tg ok, email fails", []Recipient{tg, mail}, errors.New("boom"), 1, true, 1},
+		{
+			"tg ok, email fails",
+			[]Recipient{tg, mail},
+			errors.New("boom"),
+			1,
+			true,
+			1,
+		},
 		{"both ok", []Recipient{tg, mail}, nil, 2, false, 1},
 		{"unsupported type", []Recipient{{Type: "bogus"}}, nil, 0, true, 0},
 	}
@@ -51,9 +62,18 @@ func TestMessageSendDelivered(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMessage("r", text, nil, tt.rcpts...)
 
-			sent, delivered, err := m.Send(context.Background(), fakeProvider{smtpErr: tt.smtpErr})
-			if delivered != tt.delivered || (err != nil) != tt.wantErr || len(sent) != tt.wantSent {
-				t.Fatalf("delivered=%d err=%v sent=%d", delivered, err, len(sent))
+			sent, delivered, err := m.Send(
+				context.Background(),
+				fakeProvider{smtpErr: tt.smtpErr},
+			)
+			if delivered != tt.delivered || (err != nil) != tt.wantErr ||
+				len(sent) != tt.wantSent {
+				t.Fatalf(
+					"delivered=%d err=%v sent=%d",
+					delivered,
+					err,
+					len(sent),
+				)
 			}
 		})
 	}

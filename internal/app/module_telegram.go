@@ -3,23 +3,22 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/config"
 	"support_bot/internal/delivery/telegram"
+	eventcreator "support_bot/internal/event_creator"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/postgres"
 	"support_bot/internal/sheduler"
 	reportstore "support_bot/internal/store"
+	tgbot "support_bot/internal/tg_bot"
 	"support_bot/internal/tg_bot/handlers"
 	"support_bot/internal/tg_bot/middlewares"
 	"support_bot/internal/tg_bot/service"
 
-	eventcreator "support_bot/internal/event_creator"
-	maxbot "support_bot/internal/max_bot"
-	tgbot "support_bot/internal/tg_bot"
-
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
-
 	"go.uber.org/fx"
 )
 
@@ -52,7 +51,11 @@ func newTelegramBot(
 	return tgbot.NewTelegramBot(ctx, cfg.TgBot, log)
 }
 
-func newMaxBot(ctx context.Context, cfg *config.Config, log *slog.Logger) (*maxcli.Api, error) {
+func newMaxBot(
+	ctx context.Context,
+	cfg *config.Config,
+	log *slog.Logger,
+) (*maxcli.Api, error) {
 	maxBot, err := maxbot.New(ctx, cfg.MaxBot, log)
 	if err != nil && cfg.MaxBot.Enabled {
 		return nil, err
@@ -89,7 +92,10 @@ func newChatService(
 	return service.NewChat(chatStore, notify, log)
 }
 
-func newUserService(userStore *reportstore.UserStore, log *slog.Logger) *service.User {
+func newUserService(
+	userStore *reportstore.UserStore,
+	log *slog.Logger,
+) *service.User {
 	return service.NewUser(userStore, log)
 }
 
@@ -105,7 +111,14 @@ func newReportService(
 	cfg *config.Config,
 	log *slog.Logger,
 ) *service.Report {
-	return service.NewReportService(shed, evAPI, reportStore, runStore, cfg.MetabaseDomain, log)
+	return service.NewReportService(
+		shed,
+		evAPI,
+		reportStore,
+		runStore,
+		cfg.MetabaseDomain,
+		log,
+	)
 }
 
 func newAdminHandler(
@@ -115,7 +128,13 @@ func newAdminHandler(
 	reportService *service.Report,
 	state *handlers.State,
 ) *handlers.AdminHandler {
-	return handlers.NewAdminHandler(tgBot, userService, chatService, reportService, state)
+	return handlers.NewAdminHandler(
+		tgBot,
+		userService,
+		chatService,
+		reportService,
+		state,
+	)
 }
 
 func newUserHandler(
@@ -125,7 +144,13 @@ func newUserHandler(
 	reportService *service.Report,
 	state *handlers.State,
 ) *handlers.UserHandler {
-	userHandler := handlers.NewUserHandler(tgBot, chatService, userService, reportService, state)
+	userHandler := handlers.NewUserHandler(
+		tgBot,
+		chatService,
+		userService,
+		reportService,
+		state,
+	)
 
 	return &userHandler
 }
@@ -151,7 +176,14 @@ func newRouter(
 	mw *middlewares.Mw,
 	lc fx.Lifecycle,
 ) *tgbot.Router {
-	router := tgbot.NewRouter(tgBot, tHandler, adminHandler, userHandler, textHandler, mw)
+	router := tgbot.NewRouter(
+		tgBot,
+		tHandler,
+		adminHandler,
+		userHandler,
+		textHandler,
+		mw,
+	)
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {

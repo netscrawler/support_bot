@@ -1,4 +1,4 @@
-// Package telegram
+// Package telegram реализует доставку отчётов в Telegram.
 package telegram
 
 import (
@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/retry"
 
@@ -22,7 +23,11 @@ type ChatAdaptor struct {
 	delays retry.Delays
 }
 
-func NewChatAdaptor(bot *telego.Bot, delays retry.Delays, log *slog.Logger) *ChatAdaptor {
+func NewChatAdaptor(
+	bot *telego.Bot,
+	delays retry.Delays,
+	log *slog.Logger,
+) *ChatAdaptor {
 	l := log.With(slog.Any("module", "telegram_sender"))
 
 	return &ChatAdaptor{
@@ -61,16 +66,20 @@ func (ca *ChatAdaptor) SendText(
 
 	var tgMsg *telego.Message
 
-	err := ca.do(ctx, "telegram.SendText", func(ctx context.Context) (err error) {
-		tgMsg, err = ca.bot.SendMessage(ctx, &telego.SendMessageParams{
-			ChatID:          telego.ChatID{ID: chat.ChatID},
-			MessageThreadID: chat.ThreadID,
-			Text:            msg,
-			ParseMode:       telego.ModeHTML,
-		})
+	err := ca.do(
+		ctx,
+		"telegram.SendText",
+		func(ctx context.Context) (err error) {
+			tgMsg, err = ca.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID:          telego.ChatID{ID: chat.ChatID},
+				MessageThreadID: chat.ThreadID,
+				Text:            msg,
+				ParseMode:       telego.ModeHTML,
+			})
 
-		return err
-	})
+			return err
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error send text message: %w", err)
 	}
@@ -93,15 +102,22 @@ func (ca *ChatAdaptor) SendRichText(
 
 	var tgMsg *telego.Message
 
-	err := ca.do(ctx, "telegram.SendRichText", func(ctx context.Context) (err error) {
-		tgMsg, err = ca.bot.SendRichMessage(ctx, &telego.SendRichMessageParams{
-			ChatID:          telego.ChatID{ID: chat.ChatID},
-			MessageThreadID: chat.ThreadID,
-			RichMessage:     telego.InputRichMessage{HTML: msg},
-		})
+	err := ca.do(
+		ctx,
+		"telegram.SendRichText",
+		func(ctx context.Context) (err error) {
+			tgMsg, err = ca.bot.SendRichMessage(
+				ctx,
+				&telego.SendRichMessageParams{
+					ChatID:          telego.ChatID{ID: chat.ChatID},
+					MessageThreadID: chat.ThreadID,
+					RichMessage:     telego.InputRichMessage{HTML: msg},
+				},
+			)
 
-		return err
-	})
+			return err
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error send rich text message: %w", err)
 	}
@@ -129,23 +145,30 @@ func (ca *ChatAdaptor) SendMedia(
 
 	var tgMsg []telego.Message
 
-	err := ca.do(ctx, "telegram.SendMedia", func(ctx context.Context) (err error) {
-		album := make([]telego.InputMedia, 0, len(fresh))
-		for _, f := range fresh {
-			album = append(album, &telego.InputMediaPhoto{
-				Type:  telego.MediaTypePhoto,
-				Media: telego.InputFile{File: f()},
-			})
-		}
+	err := ca.do(
+		ctx,
+		"telegram.SendMedia",
+		func(ctx context.Context) (err error) {
+			album := make([]telego.InputMedia, 0, len(fresh))
+			for _, f := range fresh {
+				album = append(album, &telego.InputMediaPhoto{
+					Type:  telego.MediaTypePhoto,
+					Media: telego.InputFile{File: f()},
+				})
+			}
 
-		tgMsg, err = ca.bot.SendMediaGroup(ctx, &telego.SendMediaGroupParams{
-			ChatID:          telego.ChatID{ID: chat.ChatID},
-			MessageThreadID: chat.ThreadID,
-			Media:           album,
-		})
+			tgMsg, err = ca.bot.SendMediaGroup(
+				ctx,
+				&telego.SendMediaGroupParams{
+					ChatID:          telego.ChatID{ID: chat.ChatID},
+					MessageThreadID: chat.ThreadID,
+					Media:           album,
+				},
+			)
 
-		return err
-	})
+			return err
+		},
+	)
 	if err != nil {
 		l.ErrorContext(ctx, "Error send media", slog.Any("error", err))
 
@@ -179,15 +202,22 @@ func (ca *ChatAdaptor) SendDocument(
 
 		var tgMsg *telego.Message
 
-		err := ca.do(ctx, "telegram.SendDocument", func(ctx context.Context) (err error) {
-			tgMsg, err = ca.bot.SendDocument(ctx, &telego.SendDocumentParams{
-				ChatID:          telego.ChatID{ID: chat.ChatID},
-				MessageThreadID: chat.ThreadID,
-				Document:        telego.InputFile{File: fresh()},
-			})
+		err := ca.do(
+			ctx,
+			"telegram.SendDocument",
+			func(ctx context.Context) (err error) {
+				tgMsg, err = ca.bot.SendDocument(
+					ctx,
+					&telego.SendDocumentParams{
+						ChatID:          telego.ChatID{ID: chat.ChatID},
+						MessageThreadID: chat.ThreadID,
+						Document:        telego.InputFile{File: fresh()},
+					},
+				)
 
-			return err
-		})
+				return err
+			},
+		)
 		if err != nil {
 			l.ErrorContext(
 				ctx,
@@ -195,6 +225,7 @@ func (ca *ChatAdaptor) SendDocument(
 				slog.Any("error", err),
 				slog.Any("document_name", f.FileName),
 			)
+
 			retErr = errors.Join(retErr, err)
 
 			continue
@@ -202,13 +233,20 @@ func (ca *ChatAdaptor) SendDocument(
 
 		retMsg = append(retMsg, *models.NewFromTelego(tgMsg))
 
-		l.InfoContext(ctx, "Successfully send document", slog.Any("document_name", f.FileName))
+		l.InfoContext(
+			ctx,
+			"Successfully send document",
+			slog.Any("document_name", f.FileName),
+		)
 	}
 
 	return retMsg, retErr
 }
 
-func (ca *ChatAdaptor) DeleteMsg(ctx context.Context, message models.SentMessage) error {
+func (ca *ChatAdaptor) DeleteMsg(
+	ctx context.Context,
+	message models.SentMessage,
+) error {
 	return ca.do(ctx, "telegram.DeleteMsg", func(ctx context.Context) error {
 		return ca.bot.DeleteMessage(ctx, &telego.DeleteMessageParams{
 			MessageID: message.MessageID,
@@ -218,12 +256,22 @@ func (ca *ChatAdaptor) DeleteMsg(ctx context.Context, message models.SentMessage
 }
 
 // do прогоняет вызов API через retry.Do; лимитер ждётся на каждую попытку.
-func (ca *ChatAdaptor) do(ctx context.Context, op string, call func(context.Context) error) error {
-	return retry.Do(ctx, ca.delays, ca.log, op, func(ctx context.Context) error {
-		if err := ca.rl.Wait(ctx); err != nil {
-			return retry.Permanent(err)
-		}
+func (ca *ChatAdaptor) do(
+	ctx context.Context,
+	op string,
+	call func(context.Context) error,
+) error {
+	return retry.Do(
+		ctx,
+		ca.delays,
+		ca.log,
+		op,
+		func(ctx context.Context) error {
+			if err := ca.rl.Wait(ctx); err != nil {
+				return retry.Permanent(err)
+			}
 
-		return classify(call(ctx))
-	})
+			return classify(call(ctx))
+		},
+	)
 }

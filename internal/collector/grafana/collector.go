@@ -12,21 +12,29 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/pkg/retry"
-	"time"
 )
 
 const (
 	defaultTimeout = 30 * time.Second
 	defaultLimit   = 10000
+
+	colAlertname = "alertname"
+	paramFolder  = "folder"
+	paramGroup   = "group"
+	paramState   = "state"
+	modeRules    = "rules"
+	modeHistory  = "history"
 )
 
 // allowed: допустимые ключи params по режимам.
 var allowed = map[string][]string{
-	"active":  {"folder", "group", "state", "alertname"},
-	"rules":   {"folder", "group", "state", "alertname"},
-	"history": {"from", "to", "limit", "alertname"},
+	"active":    {paramFolder, paramGroup, paramState, colAlertname},
+	modeRules:   {paramFolder, paramGroup, paramState, colAlertname},
+	modeHistory: {"from", "to", "limit", colAlertname},
 }
 
 type source struct {
@@ -41,7 +49,10 @@ type Collector struct {
 	log     *slog.Logger
 }
 
-func New(grafanas map[string]prometheus.GrafanaConfig, log *slog.Logger) *Collector {
+func New(
+	grafanas map[string]prometheus.GrafanaConfig,
+	log *slog.Logger,
+) *Collector {
 	sources := make(map[string]source, len(grafanas))
 	for name, g := range grafanas {
 		sources[name] = source{
@@ -53,8 +64,10 @@ func New(grafanas map[string]prometheus.GrafanaConfig, log *slog.Logger) *Collec
 
 	return &Collector{
 		sources: sources,
-		client:  &http.Client{Transport: retry.NewRoundTripper(http.DefaultTransport)},
-		log:     log,
+		client: &http.Client{
+			Transport: retry.NewRoundTripper(http.DefaultTransport),
+		},
+		log: log,
 	}
 }
 
@@ -127,7 +140,7 @@ func (c *Collector) Fetch(
 
 	path := "/api/prometheus/grafana/api/v1/rules"
 
-	if mode == "history" {
+	if mode == modeHistory {
 		q, err := historyQuery(params)
 		if err != nil {
 			return nil, fmt.Errorf("grafana %s: %w", target, err)
@@ -150,7 +163,7 @@ func (c *Collector) Fetch(
 
 	var rows []map[string]any
 
-	if mode == "history" {
+	if mode == modeHistory {
 		rows, err = historyRows(body, code)
 	} else {
 		rows, err = ruleRows(body, code, mode)
@@ -163,11 +176,20 @@ func (c *Collector) Fetch(
 	return filter(rows, params, mode), nil
 }
 
-func (c *Collector) get(ctx context.Context, src source, path string) ([]byte, int, error) {
+func (c *Collector) get(
+	ctx context.Context,
+	src source,
+	path string,
+) ([]byte, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, src.timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.baseURL+path, http.NoBody)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		src.baseURL+path,
+		http.NoBody,
+	)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -179,7 +201,8 @@ func (c *Collector) get(ctx context.Context, src source, path string) ([]byte, i
 	if err != nil {
 		return nil, 0, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 
@@ -194,7 +217,10 @@ func historyQuery(params map[string]string) (string, error) {
 	if s, ok := params["limit"]; ok {
 		n, err := strconv.Atoi(s)
 		if err != nil || n <= 0 {
-			return "", fmt.Errorf("параметр limit: нужно положительное целое, получено %q", s)
+			return "", fmt.Errorf(
+				"параметр limit: нужно положительное целое, получено %q",
+				s,
+			)
 		}
 
 		limit = n
@@ -211,7 +237,11 @@ func historyQuery(params map[string]string) (string, error) {
 		if _, err := strconv.ParseInt(s, 10, 64); err != nil {
 			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
-				return "", fmt.Errorf("параметр %s: ожидается epoch ms или RFC3339: %w", k, err)
+				return "", fmt.Errorf(
+					"параметр %s: ожидается epoch ms или RFC3339: %w",
+					k,
+					err,
+				)
 			}
 
 			s = strconv.FormatInt(t.UnixMilli(), 10)
@@ -233,6 +263,7 @@ func historyRows(body []byte, code int) ([]map[string]any, error) {
 	}
 
 	var as []annotation
+
 	if err := json.Unmarshal(body, &as); err != nil {
 		return nil, fmt.Errorf("HTTP %d, ответ не JSON-массив: %w", code, err)
 	}
@@ -242,7 +273,7 @@ func historyRows(body []byte, code int) ([]map[string]any, error) {
 		rows = append(rows, map[string]any{
 			"time":       fmtMS(a.Time),
 			"time_end":   fmtMS(a.TimeEnd),
-			"alertname":  alertName(a),
+			colAlertname: alertName(a),
 			"prev_state": a.PrevState,
 			"new_state":  a.NewState,
 			"text":       a.Text,
@@ -274,12 +305,17 @@ func ruleRows(body []byte, code int, mode string) ([]map[string]any, error) {
 		if r.Status != "success" {
 			return nil, fmt.Errorf("%s: %s", r.ErrorType, r.Error)
 		}
+
 	case !ok2xx(code):
 		return nil, httpErr(code, body)
 	case jerr != nil:
 		return nil, fmt.Errorf("HTTP %d, ответ не JSON: %w", code, jerr)
 	default:
-		return nil, fmt.Errorf("HTTP %d, ответ не rules API: %.200s", code, body)
+		return nil, fmt.Errorf(
+			"HTTP %d, ответ не rules API: %.200s",
+			code,
+			body,
+		)
 	}
 
 	var rows []map[string]any
@@ -287,13 +323,17 @@ func ruleRows(body []byte, code int, mode string) ([]map[string]any, error) {
 	for _, g := range r.Data.Groups {
 		for _, rule := range g.Rules {
 			// Grafana кладёт в alerts и Normal-экземпляры («Normal (MissingSeries)» и т.п.) — активными их не считаем.
-			rule.Alerts = slices.DeleteFunc(rule.Alerts, func(a ruleAlert) bool {
-				return strings.HasPrefix(a.State, "Normal")
-			})
+			rule.Alerts = slices.DeleteFunc(
+				rule.Alerts,
+				func(a ruleAlert) bool {
+					return strings.HasPrefix(a.State, "Normal")
+				},
+			)
 
-			if mode == "rules" {
+			if mode == modeRules {
 				row := map[string]any{}
 				copyLabels(row, rule.Labels)
+
 				row["folder"] = g.File
 				row["group"] = g.Name
 				row["rule"] = rule.Name
@@ -314,7 +354,7 @@ func ruleRows(body []byte, code int, mode string) ([]map[string]any, error) {
 					row["annotation_"+k] = v
 				}
 
-				row["alertname"] = rule.Name
+				row[colAlertname] = rule.Name
 				row["state"] = a.State
 				row["active_at"] = fmtTime(a.ActiveAt)
 				row["value"] = a.Value
@@ -352,9 +392,13 @@ func fmtMS(ms int64) any {
 }
 
 // filter: точное совпадение; в rules alertname сравниваем с именем правила.
-func filter(rows []map[string]any, params map[string]string, mode string) []map[string]any {
-	nameCol := "alertname"
-	if mode == "rules" {
+func filter(
+	rows []map[string]any,
+	params map[string]string,
+	mode string,
+) []map[string]any {
+	nameCol := colAlertname
+	if mode == modeRules {
 		nameCol = "rule"
 	}
 
@@ -362,14 +406,14 @@ func filter(rows []map[string]any, params map[string]string, mode string) []map[
 
 next:
 	for _, row := range rows {
-		for _, k := range []string{"folder", "group", "state", "alertname"} {
+		for _, k := range []string{paramFolder, paramGroup, paramState, colAlertname} {
 			want, ok := params[k]
 			if !ok {
 				continue
 			}
 
 			col := k
-			if k == "alertname" {
+			if k == colAlertname {
 				col = nameCol
 			}
 

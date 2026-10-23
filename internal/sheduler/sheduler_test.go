@@ -2,8 +2,9 @@ package sheduler
 
 import (
 	"log/slog"
-	"support_bot/internal/metrics"
 	"testing"
+
+	"support_bot/internal/metrics"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"

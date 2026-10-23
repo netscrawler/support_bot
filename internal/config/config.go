@@ -3,9 +3,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
+
+	apihttp "support_bot/internal/api/http"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
@@ -13,6 +17,7 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
@@ -20,12 +25,6 @@ import (
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
-	"time"
-
-	apihttp "support_bot/internal/api/http"
-
-	maxbot "support_bot/internal/max_bot"
-
 	tgbot "support_bot/internal/tg_bot"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -33,26 +32,26 @@ import (
 )
 
 type Config struct {
-	Log            logger.LogConfig                    `yaml:"log"             comment:"Настройки логгирования"`
-	MetabaseDomain string                              `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                                                  env:"METABASE_DOMAIN"`
-	AppMetrica     appmetrica.Config                   `yaml:"appmetrica"                                                                                                                                                                                                                  env:"APP_METRICA"`
-	Jira           jira.Config                         `yaml:"jira"                                                                                                                                                                                                                        env:"JIRA"`
-	Lua            lua.Config                          `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                                                         env:"LUA"`
-	Database       postgres.Config                     `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	Databases      map[string]pgcollector.Config       `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
-	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."`
-	Prometheus     map[string]prometheus.Config        `yaml:"prometheus"      comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
-	Zabbix         map[string]zabbix.Config            `yaml:"zabbix"          comment:"Источники Zabbix для коллектора типа zabbix.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
-	TgBot          tgbot.Config                        `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
-	Timeout        timeout                             `yaml:"timeout"         comment:"Настройка таймаутов"`
-	SMB            smb.Config                          `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
-	SMTP           smtp.Config                         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
-	MaxBot         maxbot.Config                       `yaml:"max"             comment:"Настройка Max бота"`
-	HTTP           apihttp.Config                      `yaml:"http"            comment:"Настройки публичного HTTP API."`
-	Alerts         runlog.AlertsConfig                 `yaml:"alerts"          comment:"Уведомления администраторов о сбоях отчётов."`
-	Runs           runlog.Config                       `yaml:"runs"            comment:"Журнал запусков отчётов."`
-	Delivery       delivery                            `yaml:"delivery"        comment:"Доставка отчётов."`
-	Metrics        metrics.Config                      `yaml:"metrics"         comment:"Сервер /metrics и /healthz."`
+	Log            logger.LogConfig                    `comment:"Настройки логгирования"                                                                                                                                                                                                                                                                             yaml:"log"`
+	MetabaseDomain string                              `comment:"Адрес Metabase для забора данных"                                                                                                                                                                                                                                                                   env:"METABASE_DOMAIN" yaml:"metabase_domain"`
+	AppMetrica     appmetrica.Config                   `env:"APP_METRICA"                                                                                                                                                                                                                                                                                            yaml:"appmetrica"`
+	Jira           jira.Config                         `env:"JIRA"                                                                                                                                                                                                                                                                                                   yaml:"jira"`
+	Lua            lua.Config                          `comment:"Настройки Lua-процессора."                                                                                                                                                                                                                                                                          env:"LUA"             yaml:"lua"`
+	Database       postgres.Config                     `comment:"Настройки подключения к Postgres"                                                                                                                                                                                                                                                                   yaml:"database"`
+	Databases      map[string]pgcollector.Config       `comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."                                                                                                                                                                                   yaml:"databases"`
+	Grafana        map[string]prometheus.GrafanaConfig `comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."                                                                                                  yaml:"grafana"`
+	Prometheus     map[string]prometheus.Config        `comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."                                                                                                                                                                                     yaml:"prometheus"`
+	Zabbix         map[string]zabbix.Config            `comment:"Источники Zabbix для коллектора типа zabbix.\nКлюч — имя источника, которое указывается в card_uuid запроса."                                                                                                                                                                                       yaml:"zabbix"`
+	TgBot          tgbot.Config                        `comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."                                                                                                                                                                                                                   yaml:"telegram"`
+	Timeout        timeout                             `comment:"Настройка таймаутов"                                                                                                                                                                                                                                                                                yaml:"timeout"`
+	SMB            smb.Config                          `comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."                                                                                                                                yaml:"smb"`
+	SMTP           smtp.Config                         `comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."                                                                                                                                                                 yaml:"smtp"`
+	MaxBot         maxbot.Config                       `comment:"Настройка Max бота"                                                                                                                                                                                                                                                                                 yaml:"max"`
+	HTTP           apihttp.Config                      `comment:"Настройки публичного HTTP API."                                                                                                                                                                                                                                                                     yaml:"http"`
+	Alerts         runlog.AlertsConfig                 `comment:"Уведомления администраторов о сбоях отчётов."                                                                                                                                                                                                                                                       yaml:"alerts"`
+	Runs           runlog.Config                       `comment:"Журнал запусков отчётов."                                                                                                                                                                                                                                                                           yaml:"runs"`
+	Delivery       delivery                            `comment:"Доставка отчётов."                                                                                                                                                                                                                                                                                  yaml:"delivery"`
+	Metrics        metrics.Config                      `comment:"Сервер /metrics и /healthz."                                                                                                                                                                                                                                                                        yaml:"metrics"`
 }
 
 type delivery struct {
@@ -60,11 +59,11 @@ type delivery struct {
 }
 
 type deliveryRetry struct {
-	Delays retry.Delays `yaml:"delays" env-default:"1s,5s,15s" comment:"Паузы между повторами неудавшейся отправки; попыток = пауз + 1. Пустой список — без повторов."`
+	Delays retry.Delays `comment:"Паузы между повторами неудавшейся отправки; попыток = пауз + 1. Пустой список — без повторов." env-default:"1s,5s,15s" yaml:"delays"`
 }
 
 type timeout struct {
-	Shutdown time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"10s" yaml:"shutdown" comment:"Shutdown — максимальное время на корректное завершение приложения.\nЗа это время должны завершиться все активные операции.\nЕсли указать слишком маленький период не все процеесы могут завершится корректно"`
+	Shutdown time.Duration `comment:"Shutdown — максимальное время на корректное завершение приложения.\nЗа это время должны завершиться все активные операции.\nЕсли указать слишком маленький период не все процеесы могут завершится корректно" env:"SHUTDOWN_TIMEOUT" env-default:"10s" yaml:"shutdown"`
 }
 
 // Load загружает конфигурацию из файла или из переменных окружения.
@@ -75,23 +74,27 @@ func Load(path string) (*Config, error) {
 
 	ext := filepath.Ext(configPath)
 
+	envFile := ".env"
 	if ext == ".env" {
-		_ = godotenv.Load(configPath)
-	} else {
-		_ = godotenv.Load()
+		envFile = configPath
 	}
-	//nolint:errcheck //not need
+
+	// Отсутствие .env — не ошибка.
+	err := godotenv.Load(envFile)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("load env file %s: %w", envFile, err)
+	}
 
 	// Загрузка конфигурации
 	if configPath != "" {
 		// Если путь к файлу указан, загружаем из YAML
-		err := cleanenv.ReadConfig(configPath, &cfg)
+		err = cleanenv.ReadConfig(configPath, &cfg)
 		if err != nil {
 			return nil, fmt.Errorf("error readYaml config: %w", err)
 		}
 	} else {
 		// Если путь не указан, загружаем из переменных окружения
-		err := cleanenv.ReadEnv(&cfg)
+		err = cleanenv.ReadEnv(&cfg)
 		if err != nil {
 			return nil, fmt.Errorf("error readEnv config: %w", err)
 		}
@@ -105,8 +108,13 @@ func Load(path string) (*Config, error) {
 // registerSecrets передаёт все секреты конфига в secret.Redact.
 func registerSecrets(cfg *Config) {
 	secret.Register(
-		cfg.Database.Password, cfg.TgBot.TelegramToken, cfg.MaxBot.Token,
-		cfg.SMTP.Password, cfg.SMB.Password, cfg.Jira.AuthToken, cfg.AppMetrica.OAuthToken,
+		cfg.Database.Password,
+		cfg.TgBot.TelegramToken,
+		cfg.MaxBot.Token,
+		cfg.SMTP.Password,
+		cfg.SMB.Password,
+		cfg.Jira.AuthToken,
+		cfg.AppMetrica.OAuthToken,
 	)
 
 	// Database.DSN здесь ещё пуст: его регистрирует postgres.Config.getDSN.

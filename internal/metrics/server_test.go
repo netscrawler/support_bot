@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-func get(t *testing.T, ping func(context.Context) error, path string) (int, string) {
+func get(
+	t *testing.T,
+	ping func(context.Context) error,
+	path string,
+) (int, string) {
 	t.Helper()
 
 	ts := httptest.NewServer(NewServer("", ping, slog.Default()).srv.Handler)
@@ -22,6 +26,7 @@ func get(t *testing.T, ping func(context.Context) error, path string) (int, stri
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	b, _ := io.ReadAll(resp.Body)
@@ -37,7 +42,11 @@ func TestHealthzOK(t *testing.T) {
 }
 
 func TestHealthzError(t *testing.T) {
-	code, body := get(t, func(context.Context) error { return errors.New("db down") }, "/healthz")
+	code, body := get(
+		t,
+		func(context.Context) error { return errors.New("db down") },
+		"/healthz",
+	)
 	if code != 503 || !strings.Contains(body, "db down") {
 		t.Fatalf("got %d %q", code, body)
 	}
@@ -47,6 +56,7 @@ func TestHealthzTimeout(t *testing.T) {
 	start := time.Now()
 	code, _ := get(t, func(ctx context.Context) error {
 		<-ctx.Done()
+
 		return ctx.Err()
 	}, "/healthz")
 

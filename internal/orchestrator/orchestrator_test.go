@@ -5,12 +5,13 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"support_bot/internal/generator"
-	"support_bot/internal/models"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"support_bot/internal/generator"
+	"support_bot/internal/models"
 )
 
 type fakeCollector struct {
@@ -18,7 +19,10 @@ type fakeCollector struct {
 	err  error
 }
 
-func (f fakeCollector) Collect(_ context.Context, _ ...models.Card) (models.Dataset, error) {
+func (f fakeCollector) Collect(
+	_ context.Context,
+	_ ...models.Card,
+) (models.Dataset, error) {
 	return f.data, f.err
 }
 
@@ -26,16 +30,21 @@ type fakeEvaluator struct {
 	approve bool
 }
 
-func (f fakeEvaluator) Evaluate(_ context.Context, _ models.Dataset, _ string) (bool, error) {
+func (f fakeEvaluator) Evaluate(
+	_ context.Context,
+	_ models.Dataset,
+	_ string,
+) (bool, error) {
 	return f.approve, nil
 }
 
-func (f fakeEvaluator) EvalStr(_ context.Context, expr string, _, _ time.Time) (string, error) {
+func (f fakeEvaluator) EvalStr(
+	_ context.Context,
+	expr string,
+	_, _ time.Time,
+) (string, error) {
 	return expr, nil
 }
-
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
 
 func newTestGenerator(t *testing.T, approve bool) *generator.Generator {
 	t.Helper()
@@ -60,12 +69,17 @@ func newTestGenerator(t *testing.T, approve bool) *generator.Generator {
 // положительной оценке условия Orchestrator.Generate возвращает
 // экспортированный файл, полученный от generator.Generator.
 func TestOrchestrator_Generate_ReturnsFirstExport(t *testing.T) {
-	o := &Orchestrator{gen: newTestGenerator(t, true), log: slog.New(slog.DiscardHandler)}
+	o := &Orchestrator{
+		gen: newTestGenerator(t, true),
+		log: slog.New(slog.DiscardHandler),
+	}
 
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -85,7 +99,10 @@ func TestOrchestrator_Generate_ReturnsFirstExport(t *testing.T) {
 // отрицательной оценке условия Orchestrator.Generate транслирует это в
 // models.ErrNotFound (отчет не подлежит отправке).
 func TestOrchestrator_Generate_NegativeEvaluationIsNotFound(t *testing.T) {
-	o := &Orchestrator{gen: newTestGenerator(t, false), log: slog.New(slog.DiscardHandler)}
+	o := &Orchestrator{
+		gen: newTestGenerator(t, false),
+		log: slog.New(slog.DiscardHandler),
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -100,9 +117,17 @@ type fakeLoader struct {
 	report models.Report
 }
 
-func (f fakeLoader) LoadActive(_ context.Context) ([]models.Report, error) { return nil, nil }
+func (f fakeLoader) LoadActive(
+	_ context.Context,
+) ([]models.Report, error) {
+	return nil, nil
+}
 
-func (f fakeLoader) LoadByEvent(_ context.Context, _ string, _ bool) (*models.Report, error) {
+func (f fakeLoader) LoadByEvent(
+	_ context.Context,
+	_ string,
+	_ bool,
+) (*models.Report, error) {
 	r := f.report
 
 	return &r, nil
@@ -117,7 +142,10 @@ type blockingCollector struct {
 	peak     *int32
 }
 
-func (b blockingCollector) Collect(_ context.Context, _ ...models.Card) (models.Dataset, error) {
+func (b blockingCollector) Collect(
+	_ context.Context,
+	_ ...models.Card,
+) (models.Dataset, error) {
 	n := atomic.AddInt32(b.inFlight, 1)
 
 	for {
@@ -138,11 +166,17 @@ func (b blockingCollector) Collect(_ context.Context, _ ...models.Card) (models.
 // от утечки горутин на каждое событие: processGenReportEvent никогда не
 // должен допускать больше maxInFlightGenerations одновременных вызовов
 // generateAndDeliver, сколько бы событий ни пришло параллельно.
-func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing.T) {
+func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(
+	t *testing.T,
+) {
 	var inFlight, peak int32
 
 	release := make(chan struct{})
-	clct := blockingCollector{release: release, inFlight: &inFlight, peak: &peak}
+	clct := blockingCollector{
+		release:  release,
+		inFlight: &inFlight,
+		peak:     &peak,
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -157,17 +191,27 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	g.Start(ctx)
 
 	o := &Orchestrator{
-		gen:    g,
-		rL:     fakeLoader{report: models.Report{Name: "r1", Evaluation: "false"}},
+		gen: g,
+		rL: fakeLoader{
+			report: models.Report{Name: "r1", Evaluation: "false"},
+		},
 		runs:   &fakeRecorder{},
 		genSem: make(chan struct{}, maxInFlightGenerations),
 		log:    slog.New(slog.DiscardHandler),
 	}
 
 	var wg sync.WaitGroup
+
 	for range maxInFlightGenerations * 4 {
 		wg.Go(func() {
-			o.processGenReportEvent(ctx, "ev", true, nil, models.RunKindCron, "")
+			o.processGenReportEvent(
+				ctx,
+				"ev",
+				true,
+				nil,
+				models.RunKindCron,
+				"",
+			)
 		})
 	}
 
@@ -199,7 +243,11 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	}
 
 	if p := atomic.LoadInt32(&peak); p > maxInFlightGenerations {
-		t.Fatalf("peak in-flight generations = %d, want <= %d", p, maxInFlightGenerations)
+		t.Fatalf(
+			"peak in-flight generations = %d, want <= %d",
+			p,
+			maxInFlightGenerations,
+		)
 	}
 }
 
@@ -213,7 +261,10 @@ type fakeRecorder struct {
 	hashCalls int
 }
 
-func (f *fakeRecorder) LastSuccessHash(_ context.Context, _ string) (string, bool) {
+func (f *fakeRecorder) LastSuccessHash(
+	_ context.Context,
+	_ string,
+) (string, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -229,22 +280,26 @@ func (f *fakeRecorder) Record(_ context.Context, run models.Run) {
 	f.runs = append(f.runs, run)
 }
 
-// wait ждёт n записей (генерация идёт в горутине) и возвращает их копию.
-func (f *fakeRecorder) wait(t *testing.T, n int) []models.Run {
+// wait ждёт запись (генерация идёт в горутине) и возвращает копию записей.
+func (f *fakeRecorder) wait(t *testing.T) []models.Run {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		f.mu.Lock()
+
 		got := append([]models.Run(nil), f.runs...)
 		f.mu.Unlock()
 
-		if len(got) >= n {
+		if len(got) >= 1 {
 			return got
 		}
 
 		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %d run records, got %d", n, len(got))
+			t.Fatalf(
+				"timed out waiting for a run record, got %d",
+				len(got),
+			)
 		}
 
 		time.Sleep(5 * time.Millisecond)
@@ -264,7 +319,13 @@ func (fakeSmb) Upload(_ context.Context, remote string, _ models.Data) error {
 
 type fakeSaver struct{}
 
-func (fakeSaver) SaveTgMsg(context.Context, string, []models.SentMessage) error { return nil }
+func (fakeSaver) SaveTgMsg(
+	context.Context,
+	string,
+	[]models.SentMessage,
+) error {
+	return nil
+}
 
 // fakeTg записывает тексты SendText.
 type fakeTg struct {
@@ -284,7 +345,7 @@ func (f *fakeTg) SendText(
 
 	f.texts = append(f.texts, s)
 
-	return nil, nil
+	return &models.SentMessage{}, nil
 }
 
 func (f *fakeTg) got() []string {
@@ -302,18 +363,30 @@ func goodReport(rcpts ...models.Recipient) models.Report {
 	return models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 		Recipients: rcpts,
 	}
 }
 
-func newRunOrch(t *testing.T, coll fakeCollector, approve bool) (*Orchestrator, *fakeRecorder) {
+func newRunOrch(
+	t *testing.T,
+	coll fakeCollector,
+	approve bool,
+) (*Orchestrator, *fakeRecorder) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	g := generator.New(coll, nil, fakeEvaluator{approve: approve}, 1, slog.New(slog.DiscardHandler))
+	g := generator.New(
+		coll,
+		nil,
+		fakeEvaluator{approve: approve},
+		1,
+		slog.New(slog.DiscardHandler),
+	)
 	g.Start(ctx)
 
 	rec := &fakeRecorder{}
@@ -333,6 +406,7 @@ func newRunOrch(t *testing.T, coll fakeCollector, approve bool) (*Orchestrator, 
 func TestOrchestrator_GenerateAndDeliver_RecordsRun(t *testing.T) {
 	data := models.Dataset{"q1": {{"col": "val"}}}
 	badExport := goodReport(smbRcpt("ok"))
+
 	badExport.Exports = []models.Export{{Format: "nope"}}
 
 	tests := []struct {
@@ -414,9 +488,14 @@ func TestOrchestrator_GenerateAndDeliver_RecordsRun(t *testing.T) {
 			o, rec := newRunOrch(t, tt.coll, tt.approve)
 
 			chatID := int64(7)
-			o.generateAndDeliver(context.Background(), tt.report, models.RunKindManual, &chatID)
+			o.generateAndDeliver(
+				context.Background(),
+				tt.report,
+				models.RunKindManual,
+				&chatID,
+			)
 
-			runs := rec.wait(t, 1)
+			runs := rec.wait(t)
 			if len(runs) != 1 {
 				t.Fatalf("got %d records, want exactly 1", len(runs))
 			}
@@ -432,11 +511,17 @@ func TestOrchestrator_GenerateAndDeliver_RecordsRun(t *testing.T) {
 				)
 			}
 
-			if tt.wantErr == "" && r.Error != "" || !strings.Contains(r.Error, tt.wantErr) {
-				t.Fatalf("error = %q, want it to contain %q", r.Error, tt.wantErr)
+			if tt.wantErr == "" && r.Error != "" ||
+				!strings.Contains(r.Error, tt.wantErr) {
+				t.Fatalf(
+					"error = %q, want it to contain %q",
+					r.Error,
+					tt.wantErr,
+				)
 			}
 
-			if r.ReportName != "r1" || r.Kind != models.RunKindManual || r.ChatID != &chatID {
+			if r.ReportName != "r1" || r.Kind != models.RunKindManual ||
+				r.ChatID != &chatID {
 				t.Fatalf("unexpected run fields: %+v", r)
 			}
 
@@ -497,14 +582,16 @@ func TestOrchestrator_GenerateAndDeliver_Dedup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			o, rec := newRunOrch(t, fakeCollector{data: data}, true)
+
 			rec.prevHash, rec.prevOK = tt.prevHash, tt.prevOK
 
 			report := goodReport(smbRcpt("ok"))
+
 			report.Dedup = tt.dedup
 
 			o.generateAndDeliver(context.Background(), report, tt.kind, nil)
 
-			r := rec.wait(t, 1)[0]
+			r := rec.wait(t)[0]
 			if r.Status != tt.wantStatus || r.Reason != tt.wantReason {
 				t.Fatalf("status/reason = %s/%q, want %s/%q",
 					r.Status, r.Reason, tt.wantStatus, tt.wantReason)
@@ -515,11 +602,16 @@ func TestOrchestrator_GenerateAndDeliver_Dedup(t *testing.T) {
 			}
 
 			rec.mu.Lock()
+
 			calls := rec.hashCalls
 			rec.mu.Unlock()
 
 			if calls != tt.wantCalls {
-				t.Fatalf("LastSuccessHash calls = %d, want %d", calls, tt.wantCalls)
+				t.Fatalf(
+					"LastSuccessHash calls = %d, want %d",
+					calls,
+					tt.wantCalls,
+				)
 			}
 		})
 	}
@@ -529,6 +621,7 @@ func TestOrchestrator_GenerateAndDeliver_Dedup(t *testing.T) {
 // каналы событий типам запуска, а для ЛК пробрасывает ChatID получателя.
 func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
 	rcpt := smbRcpt("ok")
+
 	rcpt.Chat = &models.Chat{ChatID: 42}
 
 	tests := []struct {
@@ -568,6 +661,7 @@ func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
 				fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
 				true,
 			)
+
 			o.EventC = make(chan models.Event)
 			o.SpecialEventC = make(chan models.SpecialEventForLK)
 			o.rL = fakeLoader{report: goodReport(smbRcpt("ok"))}
@@ -576,9 +670,10 @@ func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
 			t.Cleanup(cancel)
 
 			go o.run(ctx)
+
 			tt.send(o)
 
-			r := rec.wait(t, 1)[0]
+			r := rec.wait(t)[0]
 			if r.Kind != tt.wantKind {
 				t.Fatalf("kind = %s, want %s", r.Kind, tt.wantKind)
 			}
@@ -630,15 +725,18 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			o, rec := newRunOrch(t, tt.coll, false)
 			tg := &fakeTg{}
+
 			o.snd = *models.NewSenderProvider(tg, fakeSmb{}, nil, nil)
 
 			report := goodReport(smbRcpt("ok"))
+
 			report.IgnoreEvaluate = tt.kind == models.RunKindTest
 
 			o.generateAndDeliver(context.Background(), report, tt.kind, &chatID)
 
-			r := rec.wait(t, 1)[0]
-			if r.Kind != tt.kind || r.Status != tt.wantStatus || r.Reason != tt.wantReason {
+			r := rec.wait(t)[0]
+			if r.Kind != tt.kind || r.Status != tt.wantStatus ||
+				r.Reason != tt.wantReason {
 				t.Fatalf("run = %s/%s/%q", r.Kind, r.Status, r.Reason)
 			}
 
@@ -653,7 +751,12 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 
 			if len(texts) != 1 || !strings.Contains(texts[0], tt.wantNote) ||
 				!strings.Contains(texts[0], tt.wantEscape) {
-				t.Fatalf("notes = %q, want %q / %q", texts, tt.wantNote, tt.wantEscape)
+				t.Fatalf(
+					"notes = %q, want %q / %q",
+					texts,
+					tt.wantNote,
+					tt.wantEscape,
+				)
 			}
 
 			if tt.wantNote == "❌" && !strings.HasPrefix(texts[0], "❌") {
@@ -665,10 +768,15 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 
 type spanEvaluator struct {
 	fakeEvaluator
+
 	span chan time.Duration
 }
 
-func (s spanEvaluator) EvalStr(_ context.Context, expr string, from, to time.Time) (string, error) {
+func (s spanEvaluator) EvalStr(
+	_ context.Context,
+	expr string,
+	from, to time.Time,
+) (string, error) {
 	s.span <- to.Sub(from)
 
 	return expr, nil
@@ -682,7 +790,12 @@ func TestOrchestrator_ProcessGenReportEvent_Period(t *testing.T) {
 		period models.PeriodName
 		want   time.Duration
 	}{
-		{"lk берёт период события", models.RunKindLK, models.PeriodWeek, 7 * 24 * time.Hour},
+		{
+			"lk берёт период события",
+			models.RunKindLK,
+			models.PeriodWeek,
+			7 * 24 * time.Hour,
+		},
 		{"cron игнорирует период", models.RunKindCron, "", 24 * time.Hour},
 	}
 
@@ -702,8 +815,10 @@ func TestOrchestrator_ProcessGenReportEvent_Period(t *testing.T) {
 			g.Start(ctx)
 
 			report := models.Report{
-				Name:    "r1",
-				Queries: []models.Card{{Title: "q1", RawParams: []byte(`{"a":"period_from"}`)}},
+				Name: "r1",
+				Queries: []models.Card{
+					{Title: "q1", RawParams: []byte(`{"a":"period_from"}`)},
+				},
 			}
 			o := &Orchestrator{
 				gen:    g,
@@ -721,6 +836,7 @@ func TestOrchestrator_ProcessGenReportEvent_Period(t *testing.T) {
 				if got.Round(24*time.Hour) != c.want {
 					t.Errorf("range length = %v, want about %v", got, c.want)
 				}
+
 			case <-time.After(2 * time.Second):
 				t.Fatal("EvalStr not called")
 			}

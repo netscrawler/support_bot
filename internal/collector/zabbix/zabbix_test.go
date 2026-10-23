@@ -11,18 +11,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestCollector(t *testing.T, h http.HandlerFunc) (*Collector, *atomic.Int32) {
+func newTestCollector(
+	t *testing.T,
+	h http.HandlerFunc,
+) (*Collector, *atomic.Int32) {
 	t.Helper()
 
 	var calls atomic.Int32
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		h(w, r)
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			h(w, r)
+		}),
+	)
 	t.Cleanup(srv.Close)
 
 	c, err := New(map[string]Config{
@@ -35,28 +41,47 @@ func newTestCollector(t *testing.T, h http.HandlerFunc) (*Collector, *atomic.Int
 
 func reply(result string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","result":` + result + `,"id":1}`))
+		_, _ = w.Write(
+			[]byte(`{"jsonrpc":"2.0","result":` + result + `,"id":1}`),
+		)
 	}
 }
 
-func fetch(c *Collector, query string, params map[string]string) ([]map[string]any, error) {
+func fetch(
+	c *Collector,
+	query string,
+	params map[string]string,
+) ([]map[string]any, error) {
 	return c.Fetch(context.Background(), "z", query, params)
 }
 
 func TestRequestShape(t *testing.T) {
-	c, calls := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api_jsonrpc.php", r.URL.Path)
-		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
-		require.Equal(t, "application/json-rpc", r.Header.Get("Content-Type"))
+	c, calls := newTestCollector(
+		t,
+		func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/api_jsonrpc.php", r.URL.Path)
+			assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+			assert.Equal(
+				t,
+				"application/json-rpc",
+				r.Header.Get("Content-Type"),
+			)
 
-		b, _ := io.ReadAll(r.Body)
-		require.JSONEq(t,
-			`{"jsonrpc":"2.0","method":"problem.get","params":{"severities":[4,5]},"id":1}`,
-			string(b))
-		reply("[]")(w, r)
-	})
+			b, _ := io.ReadAll(r.Body)
+			assert.JSONEq(
+				t,
+				`{"jsonrpc":"2.0","method":"problem.get","params":{"severities":[4,5]},"id":1}`,
+				string(b),
+			)
+			reply("[]")(w, r)
+		},
+	)
 
-	_, err := fetch(c, `{"method":"problem.get","params":{"severities":[4,5]}}`, nil)
+	_, err := fetch(
+		c,
+		`{"method":"problem.get","params":{"severities":[4,5]}}`,
+		nil,
+	)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, calls.Load())
 }
@@ -90,20 +115,31 @@ func TestSubstitution(t *testing.T) {
 
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
-		require.NoError(t, json.Unmarshal(b, &got))
+		assert.NoError(t, json.Unmarshal(b, &got))
 		reply("[]")(w, r)
 	})
 
-	_, err := fetch(c, `{"method":"host.get","params":{"groupids":["${group}"]}}`,
-		map[string]string{"group": "15"})
+	_, err := fetch(
+		c,
+		`{"method":"host.get","params":{"groupids":["${group}"]}}`,
+		map[string]string{"group": "15"},
+	)
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{"groupids": []any{"15"}}, got["params"])
 
-	_, err = fetch(c, `{"method":"host.get","params":{"search":{"name":"${q}"}}}`,
-		map[string]string{"q": `a", "x": "1`})
+	_, err = fetch(
+		c,
+		`{"method":"host.get","params":{"search":{"name":"${q}"}}}`,
+		map[string]string{"q": `a", "x": "1`},
+	)
 	require.NoError(t, err)
-	require.Equal(t,
-		map[string]any{"search": map[string]any{"name": `a", "x": "1`}}, got["params"])
+	require.Equal(
+		t,
+		map[string]any{
+			"search": map[string]any{"name": `a", "x": "1`},
+		},
+		got["params"],
+	)
 }
 
 func TestMissingPlaceholder(t *testing.T) {
@@ -117,11 +153,15 @@ func TestMissingPlaceholder(t *testing.T) {
 func TestNumberLiteralKept(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
-		require.Contains(t, string(b), `"time_from":1729700000`)
+		assert.Contains(t, string(b), `"time_from":1729700000`)
 		reply("[]")(w, r)
 	})
 
-	_, err := fetch(c, `{"method":"problem.get","params":{"time_from":1729700000}}`, nil)
+	_, err := fetch(
+		c,
+		`{"method":"problem.get","params":{"time_from":1729700000}}`,
+		nil,
+	)
 	require.NoError(t, err)
 }
 
@@ -159,14 +199,16 @@ func TestScalarObjectEmptyAndNumber(t *testing.T) {
 	c, _ = newTestCollector(t, reply(`[{"n":5}]`))
 	rows, err = fetch(c, q, nil)
 	require.NoError(t, err)
-	require.Equal(t, float64(5), rows[0]["n"])
+	require.InEpsilon(t, 5.0, rows[0]["n"], 1e-9)
 }
 
 func TestRPCError(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(
-			[]byte(`{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params.",` +
-				`"data":"Invalid parameter \"/\": unexpected parameter \"foo\"."},"id":1}`),
+			[]byte(
+				`{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params.",` +
+					`"data":"Invalid parameter \"/\": unexpected parameter \"foo\"."},"id":1}`,
+			),
 		)
 	})
 
@@ -179,6 +221,7 @@ func TestRPCError(t *testing.T) {
 func TestHTTP502(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
+
 		_, _ = w.Write([]byte("<html>Bad Gateway</html>"))
 	})
 
@@ -189,7 +232,12 @@ func TestHTTP502(t *testing.T) {
 func TestUnknownSource(t *testing.T) {
 	c, _ := newTestCollector(t, reply("[]"))
 
-	_, err := c.Fetch(context.Background(), "nope", `{"method":"host.get"}`, nil)
+	_, err := c.Fetch(
+		context.Background(),
+		"nope",
+		`{"method":"host.get"}`,
+		nil,
+	)
 	require.ErrorContains(t, err, "nope")
 }
 

@@ -3,8 +3,9 @@ package store
 import (
 	"context"
 	"errors"
-	"support_bot/internal/db/sqlcgen"
 	"testing"
+
+	"support_bot/internal/db/sqlcgen"
 
 	"github.com/pashagolub/pgxmock/v4"
 )
@@ -20,17 +21,21 @@ func TestExecTx_BeginFails(t *testing.T) {
 	pool.ExpectBegin().WillReturnError(beginErr)
 
 	called := false
+
 	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		called = true
+
 		return nil
 	})
 
 	if called {
 		t.Fatal("fn was called despite Begin failing")
 	}
+
 	if !errors.Is(err, beginErr) {
 		t.Fatalf("ExecTx() error = %v, want wrapping %v", err, beginErr)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -47,6 +52,7 @@ func TestExecTx_FnErrorRollsBack(t *testing.T) {
 	pool.ExpectRollback()
 
 	fnErr := errors.New("boom")
+
 	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		return fnErr
 	})
@@ -54,8 +60,12 @@ func TestExecTx_FnErrorRollsBack(t *testing.T) {
 	if !errors.Is(err, fnErr) {
 		t.Fatalf("ExecTx() error = %v, want %v", err, fnErr)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet expectations (commit must not have been called): %v", err)
+		t.Fatalf(
+			"unmet expectations (commit must not have been called): %v",
+			err,
+		)
 	}
 }
 
@@ -68,7 +78,6 @@ func TestExecTx_CommitsOnSuccess(t *testing.T) {
 
 	pool.ExpectBegin()
 	pool.ExpectCommit()
-	pool.ExpectRollback() // the deferred rollback after a successful commit is a documented pgx no-op
 
 	err = ExecTx(context.Background(), pool, func(*sqlcgen.Queries) error {
 		return nil
@@ -76,6 +85,7 @@ func TestExecTx_CommitsOnSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecTx() error = %v, want nil", err)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}

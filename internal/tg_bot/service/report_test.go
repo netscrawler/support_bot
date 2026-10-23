@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"log/slog"
+	"testing"
+	"time"
+
 	eventcreator "support_bot/internal/event_creator"
 	"support_bot/internal/models"
 	service_mock "support_bot/internal/tg_bot/service/mock"
-	"testing"
-	"time"
 )
 
 func TestGenerateReportPeriod(t *testing.T) {
@@ -39,6 +40,7 @@ func TestGenerateReportPeriod(t *testing.T) {
 			if ev.Period != y {
 				t.Errorf("period=%q, want yesterday", ev.Period)
 			}
+
 		case <-time.After(time.Second):
 			t.Fatal("no event")
 		}
@@ -52,7 +54,9 @@ func TestGenerateReportPeriod(t *testing.T) {
 func TestUsesPeriod(t *testing.T) {
 	repo := service_mock.NewMockReportProvider(t)
 	repo.EXPECT().GetByName(context.Background(), "r").Return(&models.Report{
-		Queries: []models.Card{{RawParams: []byte(`{"from":"{{period_from}}"}`)}},
+		Queries: []models.Card{
+			{RawParams: []byte(`{"from":"{{period_from}}"}`)},
+		},
 	}, nil)
 
 	svc := &Report{repo: repo}

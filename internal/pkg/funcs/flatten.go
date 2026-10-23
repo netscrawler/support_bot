@@ -44,7 +44,12 @@ func flatten(prefix string, v any, out map[string]any, stripPrefixes []string) {
 
 		if allObjects {
 			for i, item := range x {
-				flatten(fmt.Sprintf("%s.%d", prefix, i), item, out, stripPrefixes)
+				flatten(
+					fmt.Sprintf("%s.%d", prefix, i),
+					item,
+					out,
+					stripPrefixes,
+				)
 			}
 
 			return

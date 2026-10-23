@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"strings"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/models"
 )
 
 type fakeLinks struct {
@@ -23,10 +24,14 @@ func (f *fakeLinks) CreatePublicLink(
 	ttl time.Duration,
 ) (string, error) {
 	f.report, f.ttl = r, ttl
+
 	return "uuid-1", f.err
 }
 
-func (f *fakeLinks) ListPublicLinks(context.Context, string) ([]models.PublicLink, error) {
+func (f *fakeLinks) ListPublicLinks(
+	context.Context,
+	string,
+) ([]models.PublicLink, error) {
 	return f.links, f.err
 }
 
@@ -40,7 +45,9 @@ func openFake(f *fakeLinks) openLinkStore {
 
 func TestLinkCreate(t *testing.T) {
 	f := &fakeLinks{}
+
 	var out bytes.Buffer
+
 	if err := linkCreate(
 		t.Context(),
 		openFake(f),
@@ -49,9 +56,11 @@ func TestLinkCreate(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+
 	if f.report != "r" || f.ttl != 168*time.Hour {
 		t.Fatalf("got %q %v", f.report, f.ttl)
 	}
+
 	if !strings.Contains(out.String(), "/api/v1/public/report/uuid-1") {
 		t.Fatalf("output: %q", out.String())
 	}
@@ -59,8 +68,14 @@ func TestLinkCreate(t *testing.T) {
 	if err := linkCreate(t.Context(), openFake(f), &out, nil); err == nil {
 		t.Fatal("want error without -report")
 	}
+
 	f.err = models.ErrNotFound
-	if err := linkCreate(t.Context(), openFake(f), &out, []string{"-report", "x"}); err == nil {
+	if err := linkCreate(
+		t.Context(),
+		openFake(f),
+		&out,
+		[]string{"-report", "x"},
+	); err == nil {
 		t.Fatal("want error for missing report")
 	}
 }
@@ -71,17 +86,23 @@ func TestLinkList(t *testing.T) {
 		{ID: "forever", Report: "r", CreatedAt: time.Now()},
 		{ID: "old", Report: "r", CreatedAt: time.Now(), ExpiresAt: &past},
 	}}
+
 	var out bytes.Buffer
+
 	if err := linkList(t.Context(), openFake(f), &out, nil); err != nil {
 		t.Fatal(err)
 	}
+
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) != 3 {
 		t.Fatalf("output: %q", out.String())
 	}
-	if !strings.Contains(lines[1], " - ") || !strings.Contains(lines[1], "активна") {
+
+	if !strings.Contains(lines[1], " - ") ||
+		!strings.Contains(lines[1], "активна") {
 		t.Errorf("forever: %q", lines[1])
 	}
+
 	if !strings.Contains(lines[2], "истекла") {
 		t.Errorf("old: %q", lines[2])
 	}
@@ -89,7 +110,9 @@ func TestLinkList(t *testing.T) {
 
 func TestLinkRevoke(t *testing.T) {
 	var out bytes.Buffer
+
 	f := &fakeLinks{revoked: true}
+
 	if err := linkRevoke(
 		t.Context(),
 		openFake(f),
@@ -99,7 +122,9 @@ func TestLinkRevoke(t *testing.T) {
 		!strings.Contains(out.String(), "отозвана") {
 		t.Fatalf("revoked: %v %q", err, out.String())
 	}
+
 	out.Reset()
+
 	f.revoked = false
 	if err := linkRevoke(
 		t.Context(),
@@ -110,6 +135,7 @@ func TestLinkRevoke(t *testing.T) {
 		!strings.Contains(out.String(), "уже неактивна") {
 		t.Fatalf("inactive: %v %q", err, out.String())
 	}
+
 	f.err = models.ErrNotFound
 	if err := linkRevoke(
 		t.Context(),
@@ -120,6 +146,7 @@ func TestLinkRevoke(t *testing.T) {
 		!strings.Contains(err.Error(), "не найдена") {
 		t.Fatalf("not found: %v", err)
 	}
+
 	if err := linkRevoke(t.Context(), openFake(f), &out, nil); err == nil {
 		t.Fatal("want error without uuid")
 	}

@@ -6,17 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
 	"support_bot/internal/models"
 	"support_bot/internal/processor"
-	"time"
 )
 
 // generationTimeout ограничивает время генерации одного отчёта: без него
 // зависшая генерация (SQL/Lua-пайплайн, CEL, экспорт) навсегда занимает
 // слот воркера в общем пуле (см. orchestrator.go).
-const generationTimeout = 5 * time.Minute
+const (
+	generationTimeout = 5 * time.Minute
+)
 
 type Collector interface {
 	Collect(ctx context.Context, cards ...models.Card) (models.Dataset, error)
@@ -28,7 +31,11 @@ type Evaluator interface {
 		data models.Dataset,
 		expr string,
 	) (bool, error)
-	EvalStr(ctx context.Context, expr string, from, to time.Time) (string, error)
+	EvalStr(
+		ctx context.Context,
+		expr string,
+		from, to time.Time,
+	) (string, error)
 }
 
 // job — единица работы, отправляемая в общий пул воркеров Generator. result
@@ -143,12 +150,12 @@ func (g *Generator) generate(
 	var queries []models.Card
 
 	for _, q := range report.Queries {
-		err := q.ResolveParams(ctx, g.eval, from, to)
-		if err != nil {
+		resolveErr := q.ResolveParams(ctx, g.eval, from, to)
+		if resolveErr != nil {
 			l.ErrorContext(
 				ctx,
 				"resolving query params",
-				slog.Any("error", err),
+				slog.Any("error", resolveErr),
 				slog.Any("query", q),
 			)
 		}
@@ -171,22 +178,27 @@ func (g *Generator) generate(
 			slog.Any("report", report.Name),
 		)
 
-		processed, err := g.proc.Process(ctx, data, report.Pipeline)
-		if err != nil {
+		processed, processErr := g.proc.Process(ctx, data, report.Pipeline)
+		if processErr != nil {
 			l.ErrorContext(
 				ctx,
 				"pipeline execution error, stop generate report",
-				slog.Any("error", err),
+				slog.Any("error", processErr),
 			)
 
-			return nil, nil, false, err
+			return nil, nil, false, processErr
 		}
+
 		data = processed
 	}
 
 	approve, err = g.eval.Evaluate(ctx, data, report.Evaluation)
 	if err != nil {
-		l.ErrorContext(ctx, "error while evaluate report", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"error while evaluate report",
+			slog.Any("error", err),
+		)
 
 		return nil, nil, false, err
 	}
@@ -221,7 +233,10 @@ func (g *Generator) generate(
 
 	// Частично упавшие экспорты не ошибка: доставляем то, что получилось.
 	if len(res) == 0 && len(report.Exports) > 0 {
-		return data, nil, approve, fmt.Errorf("all exports failed: %w", exportErr)
+		return data, nil, approve, fmt.Errorf(
+			"all exports failed: %w",
+			exportErr,
+		)
 	}
 
 	return data, res, approve, nil
@@ -236,6 +251,7 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
 			g.log.DebugContext(ctx, "context cancelled")
 
 			return
+
 		case j, ok := <-jobs:
 			if !ok {
 				g.log.DebugContext(ctx, "jobs chan closed")
@@ -245,6 +261,7 @@ func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
 
 			rCtx, cancel := context.WithTimeout(j.ctx, generationTimeout)
 			dataset, res, approve, err := g.generate(rCtx, j.report)
+
 			cancel()
 
 			j.result <- jobResult{dataset: dataset, data: res, approve: approve, err: err}

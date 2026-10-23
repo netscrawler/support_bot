@@ -5,11 +5,18 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
-	"time"
 
 	"github.com/xuri/excelize/v2"
+)
+
+const (
+	kindDate     = "date"
+	kindDateTime = "datetime"
 )
 
 type Exporter struct {
@@ -50,12 +57,23 @@ func (e *Exporter) createXlsxBook(
 	f := excelize.NewFile()
 	defer f.Close()
 
-	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy")})
-	dateTimeStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: ptr("dd.mm.yyyy hh:mm:ss")})
+	dateStyle, err := f.NewStyle(
+		&excelize.Style{CustomNumFmt: new("dd.mm.yyyy")},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("создание стиля даты: %w", err)
+	}
+
+	dateTimeStyle, err := f.NewStyle(
+		&excelize.Style{CustomNumFmt: new("dd.mm.yyyy hh:mm:ss")},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("создание стиля даты и времени: %w", err)
+	}
 
 	styles := map[string]int{
-		"date":     dateStyle,
-		"datetime": dateTimeStyle,
+		kindDate:     dateStyle,
+		kindDateTime: dateTimeStyle,
 	}
 
 	for unit, records := range dataMap {
@@ -71,6 +89,7 @@ func (e *Exporter) createXlsxBook(
 		}
 
 		var order []string
+
 		if o, ok := e.order[unit]; ok {
 			order = o
 		} else {
@@ -80,27 +99,51 @@ func (e *Exporter) createXlsxBook(
 		sortedRecords := pkg.ConvertSortedRows(data, order)
 
 		sheetName := sanitizeSheetName(unit)
-		f.NewSheet(sheetName)
+
+		if _, err = f.NewSheet(sheetName); err != nil {
+			return nil, fmt.Errorf("создание листа %s: %w", sheetName, err)
+		}
 
 		for rowIdx, row := range sortedRecords {
 			for colIdx, val := range row {
-				cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
+				cell, cErr := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
+				if cErr != nil {
+					return nil, fmt.Errorf("имя ячейки: %w", cErr)
+				}
+
 				v, kind := detectValueType(fmt.Sprint(val))
-				f.SetCellValue(sheetName, cell, v)
+				if err = f.SetCellValue(sheetName, cell, v); err != nil {
+					return nil, fmt.Errorf("запись ячейки %s: %w", cell, err)
+				}
+
 				if styleID, ok := styles[kind]; ok {
-					f.SetCellStyle(sheetName, cell, cell, styleID)
+					err = f.SetCellStyle(sheetName, cell, cell, styleID)
+					if err != nil {
+						return nil, fmt.Errorf("стиль ячейки %s: %w", cell, err)
+					}
 				}
 			}
 		}
 
 		// Добавление таблицы (с фильтрацией)
-		startCell, _ := excelize.CoordinatesToCellName(1, 1)
-		endCell, _ := excelize.CoordinatesToCellName(len(sortedRecords[0]), len(sortedRecords))
+		startCell, cErr := excelize.CoordinatesToCellName(1, 1)
+		if cErr != nil {
+			return nil, fmt.Errorf("имя ячейки: %w", cErr)
+		}
+
+		endCell, cErr := excelize.CoordinatesToCellName(
+			len(sortedRecords[0]),
+			len(sortedRecords),
+		)
+		if cErr != nil {
+			return nil, fmt.Errorf("имя ячейки: %w", cErr)
+		}
+
 		tableRange := fmt.Sprintf("%s:%s", startCell, endCell)
 
 		a := true
 
-		err := f.AddTable(sheetName, &excelize.Table{
+		err = f.AddTable(sheetName, &excelize.Table{
 			Range:             tableRange,
 			Name:              sheetName,
 			StyleName:         "TableStyleMedium9",
@@ -111,17 +154,36 @@ func (e *Exporter) createXlsxBook(
 			ShowRowStripes:    &a,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("ошибка создания таблицы на листе %s: %w", sheetName, err)
+			return nil, fmt.Errorf(
+				"ошибка создания таблицы на листе %s: %w",
+				sheetName,
+				err,
+			)
 		}
 
 		// Автоширина колонок
 		for colIdx := range sortedRecords[0] {
-			colLetter, _ := excelize.ColumnNumberToName(colIdx + 1)
+			colLetter, cErr := excelize.ColumnNumberToName(colIdx + 1)
+			if cErr != nil {
+				return nil, fmt.Errorf("имя колонки: %w", cErr)
+			}
+
 			colRange := colLetter + ":" + colLetter
-			f.SetColWidth(sheetName, colRange, colRange, getAutoWidth(sortedRecords, colIdx))
+
+			if err = f.SetColWidth(
+				sheetName,
+				colRange,
+				colRange,
+				getAutoWidth(sortedRecords, colIdx),
+			); err != nil {
+				return nil, fmt.Errorf("ширина колонки %s: %w", colLetter, err)
+			}
 		}
 	}
-	f.DeleteSheet("Sheet1")
+
+	if err = f.DeleteSheet("Sheet1"); err != nil {
+		return nil, fmt.Errorf("удаление листа Sheet1: %w", err)
+	}
 
 	return f.WriteToBuffer()
 }
@@ -131,6 +193,7 @@ func detectValueType(val string) (any, string) {
 	if val == "<nil>" {
 		return "", ""
 	}
+
 	// int
 	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return i, "int"
@@ -151,14 +214,22 @@ func detectValueType(val string) (any, string) {
 		layout string
 		kind   string
 	}
+
 	layouts := []timeLayout{
-		{time.RFC3339, "datetime"},                       // 2025-09-23T19:45:29+03:00
-		{"2006-01-02T15:04:05.999999-07:00", "datetime"}, // 2025-09-23T19:45:29.754093+03:00
-		{time.DateOnly, "date"},                          // 2025-09-23
-		{time.DateTime, "datetime"},                      // 2025-09-23 19:45:29
-		{"02.01.2006", "date"},                           // 23.09.2025
-		{"02.01.2006 15:04:05", "datetime"},              // 23.09.2025 19:45:29
+		{
+			time.RFC3339,
+			kindDateTime,
+		}, // 2025-09-23T19:45:29+03:00
+		{
+			"2006-01-02T15:04:05.999999-07:00",
+			kindDateTime,
+		}, // 2025-09-23T19:45:29.754093+03:00
+		{time.DateOnly, kindDate},             // 2025-09-23
+		{time.DateTime, kindDateTime},         // 2025-09-23 19:45:29
+		{"02.01.2006", kindDate},              // 23.09.2025
+		{"02.01.2006 15:04:05", kindDateTime}, // 23.09.2025 19:45:29
 	}
+
 	for _, l := range layouts {
 		if t, err := time.Parse(l.layout, val); err == nil {
 			return t, l.kind
@@ -167,10 +238,6 @@ func detectValueType(val string) (any, string) {
 
 	// строка по умолчанию
 	return val, ""
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
 
 func sanitizeSheetName(name string) string {
@@ -197,7 +264,8 @@ func sanitizeSheetName(name string) string {
 	sanitized = strings.TrimLeft(sanitized, " ")
 
 	// Если начинается не с буквы или _, добавим префикс
-	if sanitized == "" || !isValidSheetNameStart([]rune(sanitized)[0]) {
+	first, _ := utf8.DecodeRuneInString(sanitized)
+	if sanitized == "" || !isValidSheetNameStart(first) {
 		sanitized = "Sheet_" + sanitized
 	}
 
@@ -218,7 +286,9 @@ func getAutoWidth(records [][]any, colIdx int) float64 {
 
 	for _, row := range records {
 		if colIdx < len(row) {
-			width := float64(len([]rune(fmt.Sprint(row[colIdx])))) * 1.2 // запас
+			width := float64(
+				len([]rune(fmt.Sprint(row[colIdx]))),
+			) * 1.2 // запас
 			if width > maxWidth {
 				maxWidth = width
 			}
@@ -244,5 +314,6 @@ func splitMeta(records []map[string]any) (
 		data = append(data, record)
 	}
 
-	return
+	return meta,
+		data
 }

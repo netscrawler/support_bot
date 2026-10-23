@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/text"
 )
@@ -16,29 +17,49 @@ var (
 
 type TgSender interface {
 	SendText(ctx context.Context, rcpt TgChat, s string) (*SentMessage, error)
-	SendRichText(ctx context.Context, rcpt TgChat, s string) (*SentMessage, error)
-	SendDocument(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
-	SendMedia(ctx context.Context, rcpt TgChat, model []Data) ([]SentMessage, error)
+	SendRichText(
+		ctx context.Context,
+		rcpt TgChat,
+		s string,
+	) (*SentMessage, error)
+	SendDocument(
+		ctx context.Context,
+		rcpt TgChat,
+		model []Data,
+	) ([]SentMessage, error)
+	SendMedia(
+		ctx context.Context,
+		rcpt TgChat,
+		model []Data,
+	) ([]SentMessage, error)
 }
 
 type SmbSender interface {
 	Upload(ctx context.Context, remote string, data Data) error
 }
 
-type SmtpSender interface {
+type SMTPSender interface {
 	Send(ctx context.Context, mail smtp.Mail) error
 }
 
 type MaxSender interface {
 	SendText(ctx context.Context, rcpt MaxChat, s string) (*SentMessage, error)
-	SendDocument(ctx context.Context, rcpt MaxChat, model []Data) (*SentMessage, error)
-	SendMedia(ctx context.Context, rcpt MaxChat, model []Data) (*SentMessage, error)
+	SendDocument(
+		ctx context.Context,
+		rcpt MaxChat,
+		model []Data,
+	) (*SentMessage, error)
+	SendMedia(
+		ctx context.Context,
+		rcpt MaxChat,
+		model []Data,
+	) (*SentMessage, error)
 }
 
 type senderProvider interface {
 	Tg() TgSender
 	SMB() SmbSender
-	SMTP() SmtpSender
+	SMTP() SMTPSender
 	MAX() MaxSender
 }
 
@@ -106,6 +127,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 			if r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
 			}
+
 		case EmailRecipient:
 			err := m.sendSMTP(ctx, sp.SMTP(), r)
 			if err != nil {
@@ -115,6 +137,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 			}
 
 			delivered++
+
 		case SambaRecipient:
 			err := m.sendSMB(ctx, sp.SMB(), r)
 			if err != nil {
@@ -124,6 +147,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 			}
 
 			delivered++
+
 		case MaxRecipient:
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
 			if err != nil {
@@ -139,15 +163,21 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 			}
 
 		default:
-			sendErr = errors.Join(sendErr, fmt.Errorf("unsupported recipient type: %s", r.Type))
-
+			sendErr = errors.Join(
+				sendErr,
+				fmt.Errorf("unsupported recipient type: %s", r.Type),
+			)
 		}
 	}
 
 	return sentMsg, delivered, sendErr
 }
 
-func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]SentMessage, error) {
+func (m *Message) sendTg(
+	ctx context.Context,
+	sender TgSender,
+	r Recipient,
+) ([]SentMessage, error) {
 	if r.Chat == nil {
 		return nil, errEmptyRecipient
 	}
@@ -266,7 +296,11 @@ func (m *Message) sentMax(
 	return retMsg, sendErr
 }
 
-func (m *Message) sendSMB(ctx context.Context, sender SmbSender, r Recipient) error {
+func (m *Message) sendSMB(
+	ctx context.Context,
+	sender SmbSender,
+	r Recipient,
+) error {
 	var sendErr error
 
 	rcpt := r.RemotePath
@@ -288,7 +322,11 @@ func (m *Message) sendSMB(ctx context.Context, sender SmbSender, r Recipient) er
 	return sendErr
 }
 
-func (m *Message) sendSMTP(ctx context.Context, sender SmtpSender, r Recipient) error {
+func (m *Message) sendSMTP(
+	ctx context.Context,
+	sender SMTPSender,
+	r Recipient,
+) error {
 	rcpt := r.Email
 	if rcpt == nil {
 		return errEmptyRecipient
@@ -302,6 +340,7 @@ func (m *Message) sendSMTP(ctx context.Context, sender SmtpSender, r Recipient) 
 	body, err := text.ExecuteTemplate(deRef(rcpt.Body, ""), m.Meta)
 	if err != nil {
 		slog.Default().Error("email body template", slog.Any("error", err))
+
 		if len(m.Text) > 0 {
 			body = m.Text[0].Data.String()
 		} else {

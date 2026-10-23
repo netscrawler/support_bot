@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/models"
 	"sync"
 	"time"
+
+	"support_bot/internal/models"
 )
 
 type EventProvider interface {
 	LoadEvents(ctx context.Context) ([]models.ReportCronEvent, error)
-	LoadEventsByCronName(ctx context.Context, name string) ([]models.ReportCronEvent, error)
+	LoadEventsByCronName(
+		ctx context.Context,
+		name string,
+	) ([]models.ReportCronEvent, error)
 }
 
 type EventCreator struct {
@@ -57,6 +61,7 @@ func (e *EventCreator) Start(ctx context.Context) error {
 				e.log.InfoContext(ctx, "context cancelled")
 
 				return
+
 			case ev, ok := <-e.InC:
 				if !ok {
 					e.log.ErrorContext(ctx, "input chan closed")
@@ -90,7 +95,10 @@ func (e *EventCreator) reLoad() {
 	e.mu.Unlock()
 }
 
-func (e *EventCreator) createGenReportEvent(ctx context.Context, ev models.Event) {
+func (e *EventCreator) createGenReportEvent(
+	ctx context.Context,
+	ev models.Event,
+) {
 	events, err := e.getByCronName(ctx, ev.Name)
 	if err != nil {
 		e.log.ErrorContext(ctx, "error load events", slog.Any("error", err))
@@ -104,24 +112,36 @@ func (e *EventCreator) createGenReportEvent(ctx context.Context, ev models.Event
 			e.log.InfoContext(ctx, "context cancelled")
 
 			return
+
 		case e.OutC <- en:
-			e.log.DebugContext(ctx, "sending report event", slog.Any("event", ev))
+			e.log.DebugContext(
+				ctx,
+				"sending report event",
+				slog.Any("event", ev),
+			)
 		}
 	}
 }
 
-func (e *EventCreator) createDeleteSentReportEvent(ctx context.Context, ev models.Event) {
+func (e *EventCreator) createDeleteSentReportEvent(
+	ctx context.Context,
+	ev models.Event,
+) {
 	select {
 	case <-ctx.Done():
 		e.log.InfoContext(ctx, "context cancelled")
 
 		return
+
 	case e.OutC <- ev:
 		e.log.DebugContext(ctx, "sending deleting event", slog.Any("event", ev))
 	}
 }
 
-func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]models.Event, error) {
+func (e *EventCreator) getByCronName(
+	ctx context.Context,
+	name string,
+) ([]models.Event, error) {
 	e.mu.RLock()
 
 	if ev, ok := e.cache[name]; ok {
@@ -150,7 +170,9 @@ func (e *EventCreator) getByCronName(ctx context.Context, name string) ([]models
 
 		events, ok := e.cache[ev.CronName]
 		if !ok {
-			e.cache[ev.CronName] = []models.Event{{Name: name, Type: models.EventTypeGenReport}}
+			e.cache[ev.CronName] = []models.Event{
+				{Name: name, Type: models.EventTypeGenReport},
+			}
 
 			continue
 		}
@@ -203,7 +225,9 @@ func (e *EventCreator) heat(ctx context.Context) error {
 	for _, ev := range events {
 		events, ok := e.cache[ev.CronName]
 		if !ok {
-			e.cache[ev.CronName] = []models.Event{{Name: ev.Name, Type: models.EventTypeGenReport}}
+			e.cache[ev.CronName] = []models.Event{
+				{Name: ev.Name, Type: models.EventTypeGenReport},
+			}
 
 			continue
 		}

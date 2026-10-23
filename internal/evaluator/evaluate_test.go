@@ -1,10 +1,11 @@
 package evaluator_test
 
 import (
-	"support_bot/internal/evaluator"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/evaluator"
+	"support_bot/internal/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,6 +82,7 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 	t.Run("always expr", func(t *testing.T) {
 		t.Parallel()
+
 		ok, err := eval.Evaluate(t.Context(), nil, "[*]")
 		require.NoError(t, err)
 		assert.True(t, ok)

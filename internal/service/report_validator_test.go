@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 func baseReport() models.Report {
@@ -13,9 +14,6 @@ func baseReport() models.Report {
 		Evaluation: "true",
 	}
 }
-
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
 
 // TestValidateRecipient проверяет валидацию получателя отчета: для каждого
 // типа получателя (Telegram, Max, email, SMB) на входе подаются корректные и
@@ -86,7 +84,11 @@ func TestValidateRecipient(t *testing.T) {
 		},
 		{
 			"smb: путь указан — ошибки нет",
-			models.Recipient{Name: "a", Type: models.SambaRecipient, RemotePath: new("/x")},
+			models.Recipient{
+				Name:       "a",
+				Type:       models.SambaRecipient,
+				RemotePath: new("/x"),
+			},
 			false,
 		},
 		{
@@ -104,6 +106,7 @@ func TestValidateRecipient(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			report := baseReport()
+
 			report.Recipients = []models.Recipient{c.recipient}
 
 			err := v.Validate(ctx, report)
@@ -131,7 +134,11 @@ func TestValidateExport(t *testing.T) {
 			models.Export{Format: models.ReportFormatCsv, FileName: new("f")},
 			false,
 		},
-		{"csv: имя файла не указано — ошибка", models.Export{Format: models.ReportFormatCsv}, true},
+		{
+			"csv: имя файла не указано — ошибка",
+			models.Export{Format: models.ReportFormatCsv},
+			true,
+		},
 		{
 			"html: шаблон указан — ошибки нет",
 			models.Export{
@@ -163,12 +170,17 @@ func TestValidateExport(t *testing.T) {
 			},
 			false,
 		},
-		{"неподдерживаемый формат — ошибка", models.Export{Format: "carrier_pigeon"}, true},
+		{
+			"неподдерживаемый формат — ошибка",
+			models.Export{Format: "carrier_pigeon"},
+			true,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			report := baseReport()
+
 			report.Exports = []models.Export{c.export}
 
 			err := v.Validate(ctx, report)
@@ -182,13 +194,22 @@ func TestValidateExport(t *testing.T) {
 func TestValidateDefaultPeriod(t *testing.T) {
 	v := NewReportValidation()
 
-	for period, wantErr := range map[models.PeriodName]bool{"": false, "yesterday": false, "weak": true} {
+	for _, c := range []struct {
+		period  models.PeriodName
+		wantErr bool
+	}{{"", false}, {"yesterday", false}, {"weak", true}} {
 		r := baseReport()
-		r.DefaultPeriod = period
+
+		r.DefaultPeriod = c.period
 
 		err := v.Validate(context.Background(), r)
-		if (err != nil) != wantErr {
-			t.Errorf("period %q: err = %v, wantErr %v", period, err, wantErr)
+		if (err != nil) != c.wantErr {
+			t.Errorf(
+				"period %q: err = %v, wantErr %v",
+				c.period,
+				err,
+				c.wantErr,
+			)
 		}
 	}
 }

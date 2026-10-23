@@ -3,17 +3,16 @@ package collector_test
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"os"
-	"support_bot/internal/collector"
-	"support_bot/internal/metrics"
-	"support_bot/internal/models"
 	"sync"
 	"testing"
 	"time"
 
+	"support_bot/internal/collector"
 	cmock "support_bot/internal/collector/mock"
+	"support_bot/internal/metrics"
+	"support_bot/internal/models"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -24,16 +23,24 @@ import (
 func TestCollect(t *testing.T) {
 	t.Parallel()
 
-	th := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	th := slog.NewTextHandler(
+		os.Stdout,
+		&slog.HandlerOptions{Level: slog.LevelDebug},
+	)
 	l := slog.New(th)
 
 	t.Run("one query", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := t.Context()
 
 		df := &cmock.MockDataFetcher{}
 
-		card := models.Card{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase}
+		card := models.Card{
+			Title:    "card1",
+			CardUUID: "uuid1",
+			Type:     models.CollectTypeMetabase,
+		}
 
 		df.On("Fetch", ctx, "uuid1", mock.Anything).Return([]map[string]any{
 			{"field": "value1"},
@@ -52,13 +59,17 @@ func TestCollect(t *testing.T) {
 
 	t.Run("pg card", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := t.Context()
 
 		pg := &cmock.MockQueryFetcher{}
 		params := map[string]string{"a": "b"}
 		card := models.Card{
-			Title: "card1", CardUUID: "analytics", Type: models.CollectTypePostgres,
-			Query: "select 1", Params: params,
+			Title:    "card1",
+			CardUUID: "analytics",
+			Type:     models.CollectTypePostgres,
+			Query:    "select 1",
+			Params:   params,
 		}
 
 		pg.On("Fetch", ctx, "analytics", "select 1", params).
@@ -75,13 +86,17 @@ func TestCollect(t *testing.T) {
 
 	t.Run("prom card", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := t.Context()
 
 		prom := &cmock.MockQueryFetcher{}
 		params := map[string]string{"a": "b"}
 		card := models.Card{
-			Title: "card1", CardUUID: "main", Type: models.CollectTypePrometheus,
-			Query: "up", Params: params,
+			Title:    "card1",
+			CardUUID: "main",
+			Type:     models.CollectTypePrometheus,
+			Query:    "up",
+			Params:   params,
 		}
 
 		prom.On("Fetch", ctx, "main", "up", params).
@@ -98,13 +113,17 @@ func TestCollect(t *testing.T) {
 
 	t.Run("grafana alerts card", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := t.Context()
 
 		alerts := &cmock.MockQueryFetcher{}
 		params := map[string]string{"a": "b"}
 		card := models.Card{
-			Title: "card1", CardUUID: "ops", Type: models.CollectTypeGrafanaAlerts,
-			Query: "active", Params: params,
+			Title:    "card1",
+			CardUUID: "ops",
+			Type:     models.CollectTypeGrafanaAlerts,
+			Query:    "active",
+			Params:   params,
 		}
 
 		alerts.On("Fetch", ctx, "ops", "active", params).
@@ -121,6 +140,7 @@ func TestCollect(t *testing.T) {
 
 	t.Run("zabbix card", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := t.Context()
 
 		zbx := &cmock.MockQueryFetcher{}
@@ -151,16 +171,30 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
-			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
-			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
+			{
+				Title:    "card1",
+				CardUUID: "uuid1",
+				Type:     models.CollectTypeMetabase,
+			},
+			{
+				Title:    "card2",
+				CardUUID: "uuid2",
+				Type:     models.CollectTypeMetabase,
+			},
+			{
+				Title:    "card3",
+				CardUUID: "uuid3",
+				Type:     models.CollectTypeMetabase,
+			},
 		}
 
 		for _, card := range cards {
 			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid, mock.Anything).Run(func(_ mock.Arguments) {
-				time.Sleep(1 * time.Second)
-			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
+			df.On("Fetch", ctx, uuid, mock.Anything).
+				Run(func(_ mock.Arguments) {
+					time.Sleep(1 * time.Second)
+				}).
+				Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
 		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, l)
@@ -173,7 +207,11 @@ func TestCollect(t *testing.T) {
 		assert.Len(t, result, 3)
 
 		for _, card := range cards {
-			assert.Equal(t, "value_"+card.CardUUID, result[card.Title][0]["field"])
+			assert.Equal(
+				t,
+				"value_"+card.CardUUID,
+				result[card.Title][0]["field"],
+			)
 		}
 
 		df.AssertExpectations(t)
@@ -190,8 +228,16 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
-			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
+			{
+				Title:    "card1",
+				CardUUID: "uuid1",
+				Type:     models.CollectTypeMetabase,
+			},
+			{
+				Title:    "card2",
+				CardUUID: "uuid2",
+				Type:     models.CollectTypeMetabase,
+			},
 		}
 
 		df.On("Fetch", ctx, "uuid1", mock.Anything).Run(func(_ mock.Arguments) {
@@ -225,21 +271,51 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards1 := []models.Card{
-			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
-			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
+			{
+				Title:    "card1",
+				CardUUID: "uuid1",
+				Type:     models.CollectTypeMetabase,
+			},
+			{
+				Title:    "card2",
+				CardUUID: "uuid2",
+				Type:     models.CollectTypeMetabase,
+			},
 		}
 		cards2 := []models.Card{
-			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
-			{Title: "card4", CardUUID: "uuid4", Type: models.CollectTypeMetabase},
+			{
+				Title:    "card3",
+				CardUUID: "uuid3",
+				Type:     models.CollectTypeMetabase,
+			},
+			{
+				Title:    "card4",
+				CardUUID: "uuid4",
+				Type:     models.CollectTypeMetabase,
+			},
 		}
 
 		for _, card := range append(cards1, cards2...) {
-			df.On("Fetch", ctx, card.CardUUID, mock.Anything).Run(func(_ mock.Arguments) {
-				time.Sleep(200 * time.Millisecond) // симуляция долгой работы
-			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
+			df.On("Fetch", ctx, card.CardUUID, mock.Anything).
+				Run(func(_ mock.Arguments) {
+					time.Sleep(
+						200 * time.Millisecond,
+					) // симуляция долгой работы
+				}).
+				Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
 
-		c := collector.NewCollector(2, df, df, df, nil, nil, nil, nil, slog.Default())
+		c := collector.NewCollector(
+			2,
+			df,
+			df,
+			df,
+			nil,
+			nil,
+			nil,
+			nil,
+			slog.Default(),
+		)
 
 		start := time.Now()
 
@@ -287,90 +363,139 @@ func TestCollect(t *testing.T) {
 			)
 		}
 
-		assert.Less(t, duration.Seconds(), 0.6, "Semaphore should limit concurrent execution")
-
-		df.AssertExpectations(t)
-	})
-	t.Run("semaphore enforces parallelism across goroutines", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := context.Background()
-		df := &cmock.MockDataFetcher{}
-
-		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
-			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
-			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
-			{Title: "card4", CardUUID: "uuid4", Type: models.CollectTypeMetabase},
-			{Title: "card5", CardUUID: "uuid5", Type: models.CollectTypeMetabase},
-			{Title: "card6", CardUUID: "uuid6", Type: models.CollectTypeMetabase},
-		}
-
-		var mu sync.Mutex
-
-		currentRunning := 0
-		maxRunning := 0
-
-		for _, card := range cards {
-			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid, mock.Anything).Run(func(_ mock.Arguments) {
-				mu.Lock()
-
-				currentRunning++
-				if currentRunning > maxRunning {
-					maxRunning = currentRunning
-				}
-
-				mu.Unlock()
-
-				time.Sleep(100 * time.Millisecond)
-
-				mu.Lock()
-
-				currentRunning--
-
-				mu.Unlock()
-			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
-		}
-
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, slog.Default())
-
-		var wg sync.WaitGroup
-
-		var (
-			result1, result2 map[string][]map[string]any
-			err1, err2       error
+		assert.Less(
+			t,
+			duration.Seconds(),
+			0.6,
+			"Semaphore should limit concurrent execution",
 		)
 
-		wg.Go(func() {
-			result1, err1 = c.Collect(ctx, cards[:3]...)
-		})
-		wg.Go(func() {
-			result2, err2 = c.Collect(ctx, cards[3:]...)
-		})
-
-		wg.Wait()
-
-		assert.NoError(t, err1)
-		assert.NoError(t, err2)
-		assert.Len(t, result1, 3)
-		assert.Len(t, result2, 3)
-
-		for _, card := range cards {
-			expected := "value_" + card.CardUUID
-			if val, ok := result1[card.Title]; ok {
-				assert.Equal(t, expected, val[0]["field"])
-			}
-
-			if val, ok := result2[card.Title]; ok {
-				assert.Equal(t, expected, val[0]["field"])
-			}
-		}
-
-		assert.LessOrEqual(t, maxRunning, 3, "Semaphore should enforce max parallelism")
-
 		df.AssertExpectations(t)
 	})
+	t.Run(
+		"semaphore enforces parallelism across goroutines",
+		func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			df := &cmock.MockDataFetcher{}
+
+			cards := []models.Card{
+				{
+					Title:    "card1",
+					CardUUID: "uuid1",
+					Type:     models.CollectTypeMetabase,
+				},
+				{
+					Title:    "card2",
+					CardUUID: "uuid2",
+					Type:     models.CollectTypeMetabase,
+				},
+				{
+					Title:    "card3",
+					CardUUID: "uuid3",
+					Type:     models.CollectTypeMetabase,
+				},
+				{
+					Title:    "card4",
+					CardUUID: "uuid4",
+					Type:     models.CollectTypeMetabase,
+				},
+				{
+					Title:    "card5",
+					CardUUID: "uuid5",
+					Type:     models.CollectTypeMetabase,
+				},
+				{
+					Title:    "card6",
+					CardUUID: "uuid6",
+					Type:     models.CollectTypeMetabase,
+				},
+			}
+
+			var mu sync.Mutex
+
+			currentRunning := 0
+			maxRunning := 0
+
+			for _, card := range cards {
+				uuid := card.CardUUID
+				df.On("Fetch", ctx, uuid, mock.Anything).
+					Run(func(_ mock.Arguments) {
+						mu.Lock()
+
+						currentRunning++
+						if currentRunning > maxRunning {
+							maxRunning = currentRunning
+						}
+
+						mu.Unlock()
+
+						time.Sleep(100 * time.Millisecond)
+
+						mu.Lock()
+
+						currentRunning--
+
+						mu.Unlock()
+					}).
+					Return([]map[string]any{{"field": "value_" + uuid}}, nil)
+			}
+
+			c := collector.NewCollector(
+				3,
+				df,
+				df,
+				df,
+				nil,
+				nil,
+				nil,
+				nil,
+				slog.Default(),
+			)
+
+			var wg sync.WaitGroup
+
+			var (
+				result1, result2 map[string][]map[string]any
+				err1, err2       error
+			)
+
+			wg.Go(func() {
+				result1, err1 = c.Collect(ctx, cards[:3]...)
+			})
+			wg.Go(func() {
+				result2, err2 = c.Collect(ctx, cards[3:]...)
+			})
+
+			wg.Wait()
+
+			assert.NoError(t, err1)
+			assert.NoError(t, err2)
+			assert.Len(t, result1, 3)
+			assert.Len(t, result2, 3)
+
+			for _, card := range cards {
+				expected := "value_" + card.CardUUID
+				if val, ok := result1[card.Title]; ok {
+					assert.Equal(t, expected, val[0]["field"])
+				}
+
+				if val, ok := result2[card.Title]; ok {
+					assert.Equal(t, expected, val[0]["field"])
+				}
+			}
+
+			assert.LessOrEqual(
+				t,
+				maxRunning,
+				3,
+				"Semaphore should enforce max parallelism",
+			)
+
+			df.AssertExpectations(t)
+		},
+	)
 }
 
 // Не parallel: сравнивает глобальный счётчик до/после.
@@ -378,13 +503,17 @@ func TestCollectErrorMetric(t *testing.T) {
 	pg := &cmock.MockQueryFetcher{}
 	pg.On("Fetch", mock.Anything, "analytics", "select 1", mock.Anything).
 		Return(nil, errors.New("boom"))
+
 	card := models.Card{
-		Title: "c", CardUUID: "analytics", Type: models.CollectTypePostgres, Query: "select 1",
+		Title:    "c",
+		CardUUID: "analytics",
+		Type:     models.CollectTypePostgres,
+		Query:    "select 1",
 	}
 	c := metrics.CollectorErrors.WithLabelValues("pg")
 	before := testutil.ToFloat64(c)
 
-	l := slog.New(slog.NewTextHandler(io.Discard, nil))
+	l := slog.New(slog.DiscardHandler)
 	col := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, nil, l)
 	_, err := col.Collect(t.Context(), card)
 

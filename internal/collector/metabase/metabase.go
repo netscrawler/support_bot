@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"support_bot/internal/pkg/retry"
 	"time"
+
+	"support_bot/internal/pkg/retry"
 
 	"github.com/netscrawler/metabase-public-api"
 )

@@ -33,7 +33,7 @@ var ReportExample = Report{
 			Name: "TG",
 			Chat: &Chat{
 				ChatID: -2184218821847818,
-				Title:  ptr("Example Chat"),
+				Title:  new("Example Chat"),
 				Type:   "group",
 				ChType: "tg",
 			},
@@ -48,13 +48,13 @@ var ReportExample = Report{
 				Dest:    []string{"example@example.com"},
 				Copy:    []string{"example2@example.com"},
 				Subject: "EXAMPLE",
-				Body:    ptr("EXAMPLE TEMPLATE"),
+				Body:    new("EXAMPLE TEMPLATE"),
 			},
 			Type: "email",
 		},
 		{
 			Name:       "SMB",
-			RemotePath: ptr("/some/disk/path"),
+			RemotePath: new("/some/disk/path"),
 			Type:       "smb",
 		},
 	},
@@ -69,7 +69,7 @@ var ReportExample = Report{
 		},
 		{
 			Format:   "xlsx",
-			FileName: ptr("report.xlsx"),
+			FileName: new("report.xlsx"),
 			Order: map[string][]string{
 				"sheet1": {"example_mb", "example appmetrica query"},
 			},
@@ -102,8 +102,4 @@ var ReportExample = Report{
 			IsActive: true,
 		},
 	},
-}
-
-func ptr[T any](t T) *T {
-	return &t
 }

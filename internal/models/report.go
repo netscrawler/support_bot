@@ -35,7 +35,7 @@ type Report struct {
 	Period PeriodName `json:"-"`
 }
 
-// UsesPeriod: есть ли в параметрах карточек обращение к period_*.
+// UsesPeriod сообщает, есть ли в параметрах карточек обращение к period_*.
 func (r Report) UsesPeriod() bool {
 	for _, q := range r.Queries {
 		if bytes.Contains(q.RawParams, []byte("period_")) {
@@ -117,18 +117,22 @@ type Card struct {
 	Query     string            `json:"query"`
 }
 
-func (c Card) ToString(baseUrl string) string {
+func (c *Card) ToString(_ string) string {
 	return ""
 }
 
-func (c Card) GetFullURL(baseUrl string) string {
-	bUrl := strings.TrimRight(baseUrl, "/")
+func (c *Card) GetFullURL(baseURL string) string {
+	bURL := strings.TrimRight(baseURL, "/")
 
-	return fmt.Sprintf("%s/public/question/%s", bUrl, c.CardUUID)
+	return fmt.Sprintf("%s/public/question/%s", bURL, c.CardUUID)
 }
 
 type Evaluator interface {
-	EvalStr(ctx context.Context, expr string, from, to time.Time) (string, error)
+	EvalStr(
+		ctx context.Context,
+		expr string,
+		from, to time.Time,
+	) (string, error)
 }
 
 func (c *Card) ResolveParams(

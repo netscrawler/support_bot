@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
 	"support_bot/internal/metrics"
@@ -70,10 +71,12 @@ func Run(version, commit, buildTime string, args []string) error {
 		// process exits immediately after this return.
 		return fmt.Errorf("create app: %w", err)
 	}
+
 	// fx.App.Run() installs OS signal handlers and blocks until shutdown.
 	// On a start-hook failure it logs via the fxevent logger and calls
 	// os.Exit(1) directly, bypassing this function's normal error-return
 	// path — this is fx's standard Run() behavior, not a bug.
 	fxApp.Run()
+
 	return nil
 }

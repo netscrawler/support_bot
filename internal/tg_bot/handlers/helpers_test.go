@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"strings"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/models"
 
 	"github.com/mymmrac/telego"
 )
@@ -13,8 +14,12 @@ func TestFormatRun(t *testing.T) {
 	t0 := time.Date(2026, 1, 2, 15, 4, 0, 0, time.Local)
 	run := func(st models.RunStatus, reason, errText string) models.Run {
 		return models.Run{
-			Kind: models.RunKindCron, Status: st, Reason: reason, Error: errText,
-			StartedAt: t0, FinishedAt: t0.Add(3240 * time.Millisecond),
+			Kind:       models.RunKindCron,
+			Status:     st,
+			Reason:     reason,
+			Error:      errText,
+			StartedAt:  t0,
+			FinishedAt: t0.Add(3240 * time.Millisecond),
 		}
 	}
 
@@ -23,10 +28,18 @@ func TestFormatRun(t *testing.T) {
 		in   models.Run
 		want string
 	}{
-		{"success", run(models.RunStatusSuccess, "", ""), "02.01 15:04 · cron · ✅ success · 3.2s"},
 		{
-			"long error", run(models.RunStatusFailed, "", strings.Repeat("ы", 300)),
-			"02.01 15:04 · cron · ❌ failed · 3.2s · " + strings.Repeat("ы", 200) + "…",
+			"success",
+			run(models.RunStatusSuccess, "", ""),
+			"02.01 15:04 · cron · ✅ success · 3.2s",
+		},
+		{
+			"long error",
+			run(models.RunStatusFailed, "", strings.Repeat("ы", 300)),
+			"02.01 15:04 · cron · ❌ failed · 3.2s · " + strings.Repeat(
+				"ы",
+				200,
+			) + "…",
 		},
 		{
 			"escape", run(models.RunStatusFailed, "", "a<b"),
@@ -49,7 +62,8 @@ func TestFormatRun(t *testing.T) {
 
 func TestFormatRuns_Empty(t *testing.T) {
 	got := formatRuns("a<b", nil, nil)
-	if !strings.Contains(got, "a&lt;b") || !strings.HasSuffix(got, "Запусков пока нет.") {
+	if !strings.Contains(got, "a&lt;b") ||
+		!strings.HasSuffix(got, "Запусков пока нет.") {
 		t.Errorf("unexpected: %q", got)
 	}
 }
@@ -75,7 +89,12 @@ func TestGetReportInfoFromQueryPeriod(t *testing.T) {
 }
 
 func TestPeriodStep(t *testing.T) {
-	rep := reportInfoFromQuery{Callback: "report_get", ID: "1", ReportName: "rep", PageFrom: 2}
+	rep := reportInfoFromQuery{
+		Callback:   "report_get",
+		ID:         "1",
+		ReportName: "rep",
+		PageFrom:   2,
+	}
 
 	t.Run("uses period, no code: keyboard", func(t *testing.T) {
 		p, mark := periodStep(rep, true, "back")
@@ -100,15 +119,22 @@ func TestPeriodStep(t *testing.T) {
 
 	t.Run("code y: yesterday", func(t *testing.T) {
 		r := rep
+
 		r.PeriodCode = "y"
 
-		if p, mark := periodStep(r, true, "back"); p != models.PeriodYesterday || mark != nil {
+		if p, mark := periodStep(
+			r,
+			true,
+			"back",
+		); p != models.PeriodYesterday ||
+			mark != nil {
 			t.Fatalf("p=%q mark=%v", p, mark)
 		}
 	})
 
 	t.Run("unknown code: default period", func(t *testing.T) {
 		r := rep
+
 		r.PeriodCode = "zz"
 
 		if p, mark := periodStep(r, true, "back"); p != "" || mark != nil {
@@ -118,6 +144,7 @@ func TestPeriodStep(t *testing.T) {
 
 	t.Run("too long name: default period, no keyboard", func(t *testing.T) {
 		r := rep
+
 		r.ReportName = strings.Repeat("a", 60)
 
 		if p, mark := periodStep(r, true, "back"); p != "" || mark != nil {

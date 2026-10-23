@@ -12,11 +12,17 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
+	tmplTXT "text/template"
+	"time"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
@@ -27,10 +33,6 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
-	"sync"
-	"syscall"
-	tmplTXT "text/template"
-	"time"
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/fsnotify/fsnotify"
@@ -56,7 +58,12 @@ func modeStart() {
 	flag.BoolVar(&setModeVer, "v", false, "Версия приложения")
 	flag.BoolVar(&setModeHelp, "h", false, "Помощь")
 	flag.StringVar(&configPath, "config", "", "Путь к файлу конфигурации")
-	flag.StringVar(&templatesPath, "templates", "", "Путь к директории с шаблонами")
+	flag.StringVar(
+		&templatesPath,
+		"templates",
+		"",
+		"Путь к директории с шаблонами",
+	)
 	flag.BoolVar(
 		&setModeCreateConfig,
 		"example-config",
@@ -78,14 +85,18 @@ func modeStart() {
 	}
 }
 
+func writeOutput(value string) {
+	if _, err := os.Stdout.WriteString(value); err != nil {
+		slog.Error("write stdout", slog.Any("error", err))
+		os.Exit(1)
+	}
+}
+
 func version() {
-	fmt.Printf(
+	writeOutput(fmt.Sprintf(
 		"Version: %s\nCommit: %s\nBuildTime: %s\nRuntime: %s",
-		Version,
-		commit,
-		buildTime,
-		runtime.Version(),
-	)
+		Version, commit, buildTime, runtime.Version(),
+	))
 	os.Exit(0)
 }
 
@@ -110,16 +121,16 @@ func configDef() {
 		},
 	}, " ", "  ")
 	if err != nil {
-		fmt.Printf("unable create config: %s", err.Error())
+		slog.Error("unable create config", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	fmt.Println(string(raw))
+	writeOutput(string(raw) + "\n")
 	os.Exit(0)
 }
 
 func help() {
-	fmt.Println("Доступные флаги и их описания:")
+	writeOutput("Доступные флаги и их описания:\n")
 	flag.PrintDefaults()
 	os.Exit(0)
 }
@@ -158,7 +169,11 @@ func main() {
 
 	rawCfg, err := os.ReadFile(cfgPath)
 	if err != nil {
-		log.Error("error load config from", slog.Any("path", cfgPath), slog.Any("error", err))
+		log.Error(
+			"error load config from",
+			slog.Any("path", cfgPath),
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
 
@@ -195,14 +210,16 @@ func main() {
 	}
 
 	wsH := wsHandler{
-		upg:     websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
+		upg: websocket.Upgrader{
+			CheckOrigin: func(_ *http.Request) bool { return true },
+		},
 		clients: clientMap,
 		mu:      sync.Mutex{},
 	}
 
 	slog.Info("Starting watcher")
 
-	if err := watchTemplateDir(
+	if err = watchTemplateDir(
 		wsH.notifyReload,
 		append(templatesText, templatesHTML...)...); err != nil {
 		slog.Error("error watch for templates", slog.Any("error", err))
@@ -225,7 +242,6 @@ func main() {
 		log.Error("error create postgres collector", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer pg.Close()
 
 	clct := collector.NewCollector(
 		4,
@@ -244,8 +260,11 @@ func main() {
 	data, err := clct.Collect(ctx, cfg.Cards...)
 	if err != nil {
 		log.Error("error collecting data", slog.Any("error", err))
+		pg.Close()
 		os.Exit(1)
 	}
+
+	defer pg.Close()
 
 	h := handler{
 		data:      data,
@@ -254,14 +273,25 @@ func main() {
 
 	http.Handle(
 		"/html/{template}",
-		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.handleHTML)))),
+		logMiddleware(
+			h.existMiddleware(
+				liveReloadMiddleware(http.HandlerFunc(h.handleHTML)),
+			),
+		),
 	)
 	http.Handle(
 		"/text/{template}",
-		logMiddleware(h.existMiddleware(liveReloadMiddleware(http.HandlerFunc(h.handleTXT)))),
+		logMiddleware(
+			h.existMiddleware(
+				liveReloadMiddleware(http.HandlerFunc(h.handleTXT)),
+			),
+		),
 	)
 
-	http.Handle("/ws/{template}", h.existMiddleware(http.HandlerFunc(wsH.wsHandle)))
+	http.Handle(
+		"/ws/{template}",
+		h.existMiddleware(http.HandlerFunc(wsH.wsHandle)),
+	)
 
 	srv := &http.Server{
 		Addr:              "localhost:8080",
@@ -274,7 +304,8 @@ func main() {
 	go func() {
 		slog.Info(fmt.Sprintf("server started http://%s", srv.Addr))
 
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -325,8 +356,12 @@ func (h *handler) handleHTML(w http.ResponseWriter, r *http.Request) {
 		Funcs(allFuncs).
 		ParseFiles(templ)
 	if err != nil {
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Error while parse or load template file : %s", err.Error())
+		slog.ErrorContext(r.Context(), "load template", slog.Any("error", err))
+		http.Error(
+			w,
+			"Error while parse or load template file",
+			http.StatusNotImplemented,
+		)
 
 		return
 	}
@@ -335,12 +370,16 @@ func (h *handler) handleHTML(w http.ResponseWriter, r *http.Request) {
 
 	err = t.ExecuteTemplate(w, templ, h.data)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Error while execute template : %s", err.Error())
+		slog.ErrorContext(
+			r.Context(),
+			"execute template",
+			slog.Any("error", err),
+		)
 	}
 }
 
-const textWrap = `<!doctype html>
+const (
+	textWrap = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -353,6 +392,20 @@ const textWrap = `<!doctype html>
 </html>
 `
 
+	liveReloadScript = `
+<script>
+  (() => {
+    const ws = new WebSocket("ws://localhost:8080/ws/%s");
+    ws.onmessage = (e) => {
+      if (e.data === "reload") {
+        location.reload();
+      }
+    };
+  })();
+</script>
+`
+)
+
 func (h *handler) handleTXT(w http.ResponseWriter, r *http.Request) {
 	templ := r.PathValue("template")
 
@@ -363,8 +416,12 @@ func (h *handler) handleTXT(w http.ResponseWriter, r *http.Request) {
 		Funcs(allFuncs).
 		ParseFiles(templ)
 	if err != nil {
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Error while parse or load template file : %s", err.Error())
+		slog.ErrorContext(r.Context(), "load template", slog.Any("error", err))
+		http.Error(
+			w,
+			"Error while parse or load template file",
+			http.StatusNotImplemented,
+		)
 
 		return
 	}
@@ -373,22 +430,29 @@ func (h *handler) handleTXT(w http.ResponseWriter, r *http.Request) {
 
 	err = t.ExecuteTemplate(&buf, templ, h.data)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Error while execute template : %s", err.Error())
+		slog.ErrorContext(
+			r.Context(),
+			"execute template",
+			slog.Any("error", err),
+		)
 	}
 
 	dt := struct {
 		TemplateName string
-		Content      template.HTML
+		Content      string
 	}{
 		TemplateName: templ,
-		Content:      template.HTML(buf.String()),
+		Content:      buf.String(),
 	}
 
 	tW, err := template.New("text_wrap").Parse(textWrap)
 	if err != nil {
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Error while parse or load template file : %s", err.Error())
+		slog.ErrorContext(r.Context(), "load template", slog.Any("error", err))
+		http.Error(
+			w,
+			"Error while parse or load template file",
+			http.StatusNotImplemented,
+		)
 
 		return
 	}
@@ -397,8 +461,11 @@ func (h *handler) handleTXT(w http.ResponseWriter, r *http.Request) {
 
 	err = tW.ExecuteTemplate(w, "text_wrap", dt)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Error while execute template : %s", err.Error())
+		slog.ErrorContext(
+			r.Context(),
+			"execute template",
+			slog.Any("error", err),
+		)
 	}
 }
 
@@ -406,8 +473,7 @@ func (h *handler) existMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		templ := r.PathValue("template")
 		if _, ok := h.templates[templ]; !ok {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "Not found template: %s", templ)
+			http.Error(w, "Not found template", http.StatusNotFound)
 
 			return
 		}
@@ -420,7 +486,11 @@ func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rc := &responseCapture{ResponseWriter: w}
 
-		slog.InfoContext(r.Context(), "getting request", slog.Any("path", r.URL.String()))
+		slog.InfoContext(
+			r.Context(),
+			"getting request",
+			slog.Any("path", r.URL.String()),
+		)
 
 		next.ServeHTTP(rc, r)
 
@@ -436,7 +506,13 @@ func logMiddleware(next http.Handler) http.Handler {
 			w.WriteHeader(rc.statusCode)
 		}
 
-		w.Write([]byte(buf))
+		if _, err := w.Write([]byte(buf)); err != nil {
+			slog.ErrorContext(
+				r.Context(),
+				"write response",
+				slog.Any("error", err),
+			)
+		}
 	})
 }
 
@@ -455,19 +531,6 @@ func (r *responseCapture) Write(b []byte) (int, error) {
 	return r.buf.Write(b)
 }
 
-const liveReloadScript = `
-<script>
-  (() => {
-    const ws = new WebSocket("ws://localhost:8080/ws/%s");
-    ws.onmessage = (e) => {
-      if (e.data === "reload") {
-        location.reload();
-      }
-    };
-  })();
-</script>
-`
-
 func liveReloadMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rc := &responseCapture{ResponseWriter: w}
@@ -481,7 +544,12 @@ func liveReloadMiddleware(next http.Handler) http.Handler {
 			body = bytes.Replace(
 				body,
 				[]byte("</body>"),
-				[]byte(fmt.Sprintf(liveReloadScript, r.PathValue("template"))+"</body>"),
+				[]byte(
+					fmt.Sprintf(
+						liveReloadScript,
+						url.PathEscape(r.PathValue("template")),
+					)+"</body>",
+				),
 				1,
 			)
 		}
@@ -490,7 +558,13 @@ func liveReloadMiddleware(next http.Handler) http.Handler {
 			w.WriteHeader(rc.statusCode)
 		}
 
-		w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			slog.ErrorContext(
+				r.Context(),
+				"write live reload response",
+				slog.Any("error", err),
+			)
+		}
 	})
 }
 
@@ -525,7 +599,10 @@ func (h *wsHandler) wsHandle(w http.ResponseWriter, r *http.Request) {
 			h.mu.Lock()
 			delete(h.clients[tmpl], conn)
 			h.mu.Unlock()
-			conn.Close()
+
+			if err := conn.Close(); err != nil {
+				slog.Error("close websocket", slog.Any("error", err))
+			}
 		}()
 
 		for {
@@ -546,7 +623,12 @@ func (h *wsHandler) notifyReload(tmpl string) {
 	}
 
 	for c := range cl {
-		_ = c.WriteMessage(websocket.TextMessage, []byte("reload"))
+		if err := c.WriteMessage(
+			websocket.TextMessage,
+			[]byte("reload"),
+		); err != nil {
+			slog.Error("notify reload", slog.Any("error", err))
+		}
 	}
 }
 
@@ -611,26 +693,22 @@ func watchTemplate(path string, onEvent func(tmpl string)) error {
 }
 
 func loadTXTTemplates(f fs.FS, log *slog.Logger) []string {
-	var templates []string
-
 	match, err := fs.Glob(f, "*.txt")
 	if err != nil {
 		log.Info("error check glob", slog.Any("error", err))
 
-		return templates
+		return nil
 	}
 
-	templates = append(templates, match...)
-
-	if len(templates) > 0 {
+	if len(match) > 0 {
 		log.Info(
 			"loaded text templates",
-			slog.Any("count", len(templates)),
-			slog.Any("templates", templates),
+			slog.Any("count", len(match)),
+			slog.Any("templates", match),
 		)
 	}
 
-	return templates
+	return match
 }
 
 func loadHTMLTemplates(f fs.FS, log *slog.Logger) []string {

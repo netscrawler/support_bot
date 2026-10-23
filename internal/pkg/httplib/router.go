@@ -69,11 +69,22 @@ func (r *Router) Group(prefix string, fn func(r *Router)) {
 	fn(child)
 }
 
-func (r *Router) Handle(method HTTPMethod, pattern string, handler http.Handler) {
-	r.mux.Handle(string(method)+" "+r.prefix+pattern, Chain(handler, r.middlewares...))
+func (r *Router) Handle(
+	method HTTPMethod,
+	pattern string,
+	handler http.Handler,
+) {
+	r.mux.Handle(
+		string(method)+" "+r.prefix+pattern,
+		Chain(handler, r.middlewares...),
+	)
 }
 
-func (r *Router) HandleFunc(method HTTPMethod, pattern string, handler http.HandlerFunc) {
+func (r *Router) HandleFunc(
+	method HTTPMethod,
+	pattern string,
+	handler http.HandlerFunc,
+) {
 	r.Handle(method, pattern, handler)
 }
 

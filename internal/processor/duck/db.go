@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"support_bot/internal/models"
 	"time"
 
+	"support_bot/internal/models"
+
+	// Register the DuckDB database/sql driver.
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -27,7 +29,10 @@ func New() (*DB, error) {
 	return &DB{db: db, schema: make(map[string]map[string]string)}, nil
 }
 
-func (d *DB) LoadDataFromMapSlice(ctx context.Context, sample models.Dataset) error {
+func (d *DB) LoadDataFromMapSlice(
+	ctx context.Context,
+	sample models.Dataset,
+) error {
 	for table, data := range sample {
 		err := d.createTableFromMap(ctx, table, data)
 		if err != nil {
@@ -36,17 +41,28 @@ func (d *DB) LoadDataFromMapSlice(ctx context.Context, sample models.Dataset) er
 
 		err = d.InsertData(ctx, table, data)
 		if err != nil {
-			return fmt.Errorf("duckdb: error inserting data into table %s: %w", table, err)
+			return fmt.Errorf(
+				"duckdb: error inserting data into table %s: %w",
+				table,
+				err,
+			)
 		}
 	}
 
 	return nil
 }
 
-func (d *DB) ExecuteQuery(ctx context.Context, query string) ([]map[string]any, error) {
+func (d *DB) ExecuteQuery(
+	ctx context.Context,
+	query string,
+) ([]map[string]any, error) {
 	rows, err := d.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("duckdb: error executing query %s: %w", query, err)
+		return nil, fmt.Errorf(
+			"duckdb: error executing query %s: %w",
+			query,
+			err,
+		)
 	}
 	defer rows.Close()
 
@@ -65,7 +81,7 @@ func (d *DB) ExecuteQuery(ctx context.Context, query string) ([]map[string]any, 
 			valuePtrs[i] = &values[i]
 		}
 
-		if err := rows.Scan(valuePtrs...); err != nil {
+		if err = rows.Scan(valuePtrs...); err != nil {
 			return nil, fmt.Errorf("duckdb: error scanning row: %w", err)
 		}
 
@@ -91,7 +107,11 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any) error {
+func (d *DB) InsertData(
+	ctx context.Context,
+	table string,
+	rows []map[string]any,
+) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -111,11 +131,18 @@ func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any
 
 	placeholderStr := "(" + strings.Join(placeholders, ", ") + ")"
 
-	insertSQL := fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES ",
+	quotedColumns := make([]string, len(columns))
+	for i, column := range columns {
+		quotedColumns[i] = quoteIdentifier(column)
+	}
+
+	//nolint:gosec // Identifiers are quoted and escaped; row values use bind parameters.
+	insertSQL := "INSERT INTO " + quoteIdentifier(
 		table,
-		strings.Join(columns, ", "),
-	)
+	) + " (" + strings.Join(
+		quotedColumns,
+		", ",
+	) + ") VALUES "
 
 	values := make([]any, 0, len(rows)*len(columns))
 	placeholderRows := make([]string, len(rows))
@@ -135,7 +162,11 @@ func (d *DB) InsertData(ctx context.Context, table string, rows []map[string]any
 	return err
 }
 
-func (d *DB) createTableFromMap(ctx context.Context, table string, sample []map[string]any) error {
+func (d *DB) createTableFromMap(
+	ctx context.Context,
+	table string,
+	sample []map[string]any,
+) error {
 	colDefs := make([]string, 0, len(sample))
 	schema := make(map[string]string)
 
@@ -155,7 +186,7 @@ func (d *DB) createTableFromMap(ctx context.Context, table string, sample []map[
 			}
 
 			schema[name] = t
-			colDefs = append(colDefs, fmt.Sprintf("%s %s", name, t))
+			colDefs = append(colDefs, quoteIdentifier(name)+" "+t)
 		}
 	}
 
@@ -163,11 +194,13 @@ func (d *DB) createTableFromMap(ctx context.Context, table string, sample []map[
 		return ErrCreateTableNoColumnInData
 	}
 
-	query := fmt.Sprintf(
-		"CREATE TABLE %s (%s)",
+	//nolint:gosec // Identifiers are quoted and escaped; column types come from duckType.
+	query := "CREATE TABLE " + quoteIdentifier(
 		table,
-		strings.Join(colDefs, ","),
-	)
+	) + " (" + strings.Join(
+		colDefs,
+		",",
+	) + ")"
 
 	_, err := d.db.ExecContext(ctx, query)
 	if err != nil {
@@ -202,4 +235,9 @@ func duckType(v any) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported type: %T", v)
 	}
+}
+
+// quoteIdentifier экранирует имя таблицы или столбца для SQL DuckDB.
+func quoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
-	"support_bot/internal/pkg/retry"
 	"testing"
 	"time"
+
+	"support_bot/internal/pkg/retry"
 
 	"github.com/mymmrac/telego/telegoapi"
 )
@@ -31,22 +32,37 @@ func TestClassify(t *testing.T) {
 	}{
 		{"400 permanent", apiErr(400, 0), 1, nil, false},
 		{"403 permanent", apiErr(403, 0), 1, nil, false},
-		{"429 retry_after=3 ждёт 3s", apiErr(429, 3), 1, context.DeadlineExceeded, true},
+		{
+			"429 retry_after=3 ждёт 3s",
+			apiErr(429, 3),
+			1,
+			context.DeadlineExceeded,
+			true,
+		},
 		{"429 retry_after=120 permanent", apiErr(429, 120), 1, nil, false},
 		{"сеть повторяется", netErr, 2, nil, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithTimeout(
+				context.Background(),
+				50*time.Millisecond,
+			)
 			defer cancel()
 
 			calls := 0
-			got := retry.Do(ctx, retry.Delays{0}, nil, "t", func(context.Context) error {
-				calls++
+			got := retry.Do(
+				ctx,
+				retry.Delays{0},
+				nil,
+				"t",
+				func(context.Context) error {
+					calls++
 
-				return classify(tt.err)
-			})
+					return classify(tt.err)
+				},
+			)
 
 			if calls != tt.wantCalls {
 				t.Errorf("calls = %d, want %d", calls, tt.wantCalls)

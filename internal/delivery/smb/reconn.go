@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"time"
 
@@ -23,12 +23,19 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Info("SMB monitor stopped", slog.String("reason", ctx.Err().Error()))
+				log.Info(
+					"SMB monitor stopped",
+					slog.String("reason", ctx.Err().Error()),
+				)
 
 				return
+
 			case <-ticker.C:
 				if _, err := smb.fs.Stat("."); err != nil {
-					log.Warn("SMB check failed, starting reconnect", slog.Any("error", err))
+					log.Warn(
+						"SMB check failed, starting reconnect",
+						slog.Any("error", err),
+					)
 					smb.reconnectLoop(ctx)
 				}
 			}
@@ -36,8 +43,8 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 	}()
 }
 
-func (smb *SMB) connect() error {
-	conn, err := net.Dial("tcp", smb.cfg.Address)
+func (smb *SMB) connect(ctx context.Context) error {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", smb.cfg.Address)
 	if err != nil {
 		return fmt.Errorf("dial error: %w", err)
 	}
@@ -54,7 +61,10 @@ func (smb *SMB) connect() error {
 	if err != nil {
 		closeErr := conn.Close()
 		if closeErr != nil {
-			smb.log.Error("unable to close connection correctly", slog.Any("error", closeErr))
+			smb.log.Error(
+				"unable to close connection correctly",
+				slog.Any("error", closeErr),
+			)
 		}
 
 		return fmt.Errorf("smb session error: %w", err)
@@ -64,12 +74,18 @@ func (smb *SMB) connect() error {
 	if err != nil {
 		logoffErr := sess.Logoff()
 		if logoffErr != nil {
-			smb.log.Error("unable to logoff correctly", slog.Any("error", logoffErr))
+			smb.log.Error(
+				"unable to logoff correctly",
+				slog.Any("error", logoffErr),
+			)
 		}
 
 		closeErr := conn.Close()
 		if closeErr != nil {
-			smb.log.Error("unable to close connection correctly", slog.Any("error", closeErr))
+			smb.log.Error(
+				"unable to close connection correctly",
+				slog.Any("error", closeErr),
+			)
 		}
 
 		return fmt.Errorf("mount error: %w", err)
@@ -99,13 +115,17 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("SMB reconnect loop stopped", slog.String("reason", ctx.Err().Error()))
+			log.Info(
+				"SMB reconnect loop stopped",
+				slog.String("reason", ctx.Err().Error()),
+			)
 
 			return
+
 		default:
 			smb.cleanup()
 
-			err := smb.connect()
+			err := smb.connect(ctx)
 			if err == nil {
 				log.Info("SMB reconnected successfully")
 
@@ -114,8 +134,8 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 
 			log.Warn("Reconnect attempt failed", slog.Any("error", err))
 
-			//nolint: gosec //not need
-			sleep := delay/2 + time.Duration(rand.Int63n(int64(delay/2)))
+			//nolint:gosec // jitter для ретраев, не криптография
+			sleep := delay/2 + time.Duration(rand.Int64N(int64(delay/2)))
 			log.Info("Waiting before next retry", slog.Duration("delay", sleep))
 
 			select {

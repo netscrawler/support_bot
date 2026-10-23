@@ -18,7 +18,11 @@ func Setup(logCfg LogConfig) (*slog.Logger, error) {
 	return log, err
 }
 
-func getLogger(format string, writer io.Writer, opts *slog.HandlerOptions) *slog.Logger {
+func getLogger(
+	format string,
+	writer io.Writer,
+	opts *slog.HandlerOptions,
+) *slog.Logger {
 	if format == "json" {
 		return slog.New(
 			contextHandler{Handler: slog.NewJSONHandler(writer, opts)},

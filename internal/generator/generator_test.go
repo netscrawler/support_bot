@@ -4,9 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/models"
 )
 
 type fakeCollector struct {
@@ -14,7 +15,10 @@ type fakeCollector struct {
 	err  error
 }
 
-func (f fakeCollector) Collect(_ context.Context, _ ...models.Card) (models.Dataset, error) {
+func (f fakeCollector) Collect(
+	_ context.Context,
+	_ ...models.Card,
+) (models.Dataset, error) {
 	return f.data, f.err
 }
 
@@ -23,16 +27,21 @@ type fakeEvaluator struct {
 	err     error
 }
 
-func (f fakeEvaluator) Evaluate(_ context.Context, _ models.Dataset, _ string) (bool, error) {
+func (f fakeEvaluator) Evaluate(
+	_ context.Context,
+	_ models.Dataset,
+	_ string,
+) (bool, error) {
 	return f.approve, f.err
 }
 
-func (f fakeEvaluator) EvalStr(_ context.Context, expr string, _, _ time.Time) (string, error) {
+func (f fakeEvaluator) EvalStr(
+	_ context.Context,
+	expr string,
+	_, _ time.Time,
+) (string, error) {
 	return expr, nil
 }
-
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
 
 // TestGenerate_ExportsOnApprove проверяет generate() напрямую: при
 // положительном результате оценки условия (evaluate) собранные данные
@@ -47,7 +56,9 @@ func TestGenerate_ExportsOnApprove(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 	}
 
 	data, res, approve, err := g.generate(context.Background(), report)
@@ -114,7 +125,9 @@ func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 	}
 
 	_, data, approve, err := g.Generate(ctx, report)
@@ -134,7 +147,9 @@ func TestGenerator_Generate_ReturnsExportedFiles(t *testing.T) {
 // TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse проверяет,
 // что через воркер-пул при отрицательной оценке условия Generate
 // возвращает approve = false и data = nil без ошибки.
-func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(t *testing.T) {
+func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(
+	t *testing.T,
+) {
 	g := &Generator{
 		c:          make(chan job),
 		clct:       fakeCollector{data: models.Dataset{}},
@@ -148,7 +163,10 @@ func TestGenerator_Generate_NegativeEvaluationReturnsApproveFalse(t *testing.T) 
 
 	g.Start(ctx)
 
-	_, data, approve, err := g.Generate(ctx, models.Report{Name: "r1", Evaluation: "false"})
+	_, data, approve, err := g.Generate(
+		ctx,
+		models.Report{Name: "r1", Evaluation: "false"},
+	)
 	if err != nil {
 		t.Fatalf("Generate() error = %v, want nil", err)
 	}
@@ -181,7 +199,9 @@ func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 	report := models.Report{
 		Name:       "r1",
 		Evaluation: "true",
-		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 	}
 
 	type outcome struct {
@@ -208,6 +228,7 @@ func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 			if len(o.data) != 1 || o.data[0].FileName != "out_q1.csv" {
 				t.Errorf("Generate() data = %+v", o.data)
 			}
+
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for Generate result")
 		}
@@ -241,14 +262,20 @@ func TestGenerate_ExportErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := &Generator{
-				clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				clct: fakeCollector{
+					data: models.Dataset{"q1": {{"col": "val"}}},
+				},
 				eval: fakeEvaluator{approve: true},
 				log:  slog.New(slog.DiscardHandler),
 			}
 
 			_, res, approve, err := g.generate(
 				context.Background(),
-				models.Report{Name: "r1", Evaluation: "true", Exports: tt.exports},
+				models.Report{
+					Name:       "r1",
+					Evaluation: "true",
+					Exports:    tt.exports,
+				},
 			)
 
 			if !approve {
@@ -285,7 +312,9 @@ func TestGenerate_IgnoreEvaluateExportsOnNegative(t *testing.T) {
 		Name:           "r1",
 		Evaluation:     "false",
 		IgnoreEvaluate: true,
-		Exports:        []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Exports: []models.Export{
+			{Format: models.ReportFormatCsv, FileName: new("out")},
+		},
 	}
 
 	_, res, approve, err := g.generate(context.Background(), report)
@@ -304,6 +333,7 @@ func TestGenerate_IgnoreEvaluateExportsOnNegative(t *testing.T) {
 
 type rangeEvaluator struct {
 	fakeEvaluator
+
 	from, to *time.Time
 }
 
@@ -325,7 +355,12 @@ func TestGenerate_PeriodSelection(t *testing.T) {
 		wantDuration time.Duration
 	}{
 		{"default yesterday", "", models.PeriodYesterday, 24 * time.Hour},
-		{"run period overrides", models.PeriodWeek, models.PeriodYesterday, 7 * 24 * time.Hour},
+		{
+			"run period overrides",
+			models.PeriodWeek,
+			models.PeriodYesterday,
+			7 * 24 * time.Hour,
+		},
 	}
 
 	for _, c := range cases {
@@ -333,7 +368,9 @@ func TestGenerate_PeriodSelection(t *testing.T) {
 			var from, to time.Time
 
 			g := &Generator{
-				clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				clct: fakeCollector{
+					data: models.Dataset{"q1": {{"col": "val"}}},
+				},
 				eval: rangeEvaluator{from: &from, to: &to},
 				log:  slog.New(slog.DiscardHandler),
 			}
@@ -347,13 +384,22 @@ func TestGenerate_PeriodSelection(t *testing.T) {
 				},
 			}
 
-			if _, _, _, err := g.generate(context.Background(), report); err != nil {
+			if _, _, _, err := g.generate(
+				context.Background(),
+				report,
+			); err != nil {
 				t.Fatalf("generate() error = %v", err)
 			}
 
 			// Сутки в локали могут быть 23/25 ч при смене времени; сверяем по дням.
-			if days := to.Sub(from).Round(24 * time.Hour); days != c.wantDuration {
-				t.Errorf("range = %v..%v, want %v long", from, to, c.wantDuration)
+			if days := to.Sub(from).
+				Round(24 * time.Hour); days != c.wantDuration {
+				t.Errorf(
+					"range = %v..%v, want %v long",
+					from,
+					to,
+					c.wantDuration,
+				)
 			}
 		})
 	}

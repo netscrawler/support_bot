@@ -1,96 +1,806 @@
-# supported golangci-lint version = 2.6.0
 version: "2"
 
 run:
-  timeout: 5m
-  relative-path-mode: gomod
+  # Версия Go, под которую анализируется код. Линтеры (modernize, intrange, copyloopvar и др.)
+  # не будут предлагать возможности языка/stdlib новее этой версии. Должна совпадать с go.mod.
+  go: "1.27"
 
-linters:
-  disable-all: true
-  enable:
-    - bodyclose
-    - copyloopvar
-    - errcheck
-    - errorlint
-    - gocritic
-    - gosec
-    - govet
-    - ineffassign
-    - misspell
-    - errname
-    - funcorder
-    - modernize
-    - nakedret
-    - nilerr
-    - staticcheck
-    - unconvert
-    - unused
 
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
-  
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - whyNoLint
-      - appendAssign
-      - hugeParam
-      - rangeValCopy
-      - paramTypeCombine
-      - unnamedResult
-
-  revive:
-    ignore-generated-header: true
-    severity: warning
-    rules:
-      - name: indent-error-flow
-
-  gosec:
-    excludes:
-      - G104
-      - G203
-
-  staticcheck:
-    checks: ["all", "-ST1003"]
-
-  unused:
-    field-writes-are-uses: true
-    exported-fields-are-used: true
-
-  errcheck:
-    exclude-functions:
-        - fmt.Fprintf
-        - fmt.Fprint
-        - fmt.Fprintln
-        - fmt.Printf
-        - fmt.Print
-        - fmt.Println
-        - (*log.Logger).Print
-        - (*log.Logger).Printf
-        - (*log.Logger).Println
+  # Сколько парралельных воркеров могут работать
+  concurrency: 4
 
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
+  # Показывать только замечания в коде, изменённом относительно точки ответвления от master.
+  # Старый код не трогается — линтер не блокирует работу тысячами исторических замечаний.
+#  new-from-merge-base: master
+  # Максимум одинаковых (с одинаковым текстом) замечаний в выводе. 0 — без ограничения.
+  # По умолчанию: 3.
   max-same-issues: 0
+  max-issues-per-linter: 0
+
+  # Показывать проблемы в любой части изменненого файла.
+  # Если сделано изменение в файле то нужно поправить все ошибки в нем.
+  whole-files: true
+
+  # new-from-rev: HEAD
+  # Автоматически исправлять найденные ошибки. Если это поддерживается линтером.
+  # Может ломать код!!! поэтому линтер должен работать до build фазы
+  fix: true
 
 formatters:
   enable:
-    - gofumpt
-    - goimports
-    - golines
+    - gofmt
+    - gofumpt # строгий форматтер поверх gofmt: убирает лишние пустые строки, унифицирует запись литералов и т.п.
+    - golines # переносит слишком длинные строки кода (лимит — max-len)
+    # - goimports # сортирует импорты и делит их на группы: stdlib, сторонние, локальные (local-prefixes)
+    - gci
+
+  settings:
+    gci:
+      # Section configuration to compare against.
+      # Section names are case-insensitive and may contain parameters in ().
+      # The default order of sections is `standard > default > custom > blank > dot > alias > localmodule`.
+      # If `custom-order` is `true`, it follows the order of `sections` option.
+      # Default: ["standard", "default"]
+      sections:
+        - standard # Standard section: captures all standard packages.
+        # - alias # Alias section: contains all alias imports. This section is not present unless explicitly enabled.
+        - prefix(support_bot) # Custom section: groups all imports with the specified Prefix.
+        - localmodule # Local module section: contains all local packages. This section is not present unless explicitly enabled.
+        - default # Default section: contains all imports that could not be matched to another section type.
+        - blank # Blank section: contains all blank imports. This section is not present unless explicitly enabled.
+        - dot # Dot section: contains all dot imports. This section is not present unless explicitly enabled.
+      # Checks that no inline comments are present.
+      # Default: false
+      no-inline-comments: true
+      # Checks that no prefix comments (comment lines above an import) are present.
+      # Default: false
+      no-prefix-comments: true
+      # Enable custom order of sections.
+      # If `true`, make the section order the same as the order of `sections`.
+      # Default: false
+      custom-order: true
+      # Drops lexical ordering for custom sections.
+      # Default: false
+      no-lex-order: false
+    goimports:
+      # Префиксы импортов, которые выносятся в отдельную группу после сторонних пакетов.
+      # Совпадает с LOCAL_PACKAGE_PREFIXES в scripts/project_imports.xml (схема GoLand).
+      local-prefixes:
+        - support_bot
+    gofumpt:
+      module-path: "support_bot"
+
+    golines:
+      # Максимальная длина строки, после которой golines переносит код. По умолчанию: 100.
+      max-len: 80
+      # Длина таба
+      # Default: 4
+      tab-len: 4
+      # Сократить однострочные комментарии
+      # Default: false
+      shorten-comments: false
+      # Default: true
+      reformat-tags: false
+      # Разделять chain methods по точкам
+      # a.do().
+      # do().
+      # do()
+      # Default: true
+      chain-split-dots: true
+
+    gofmt:
+      simplify: true
+      ## Настройки замены некоторых паттернов на другие значения
+      # Например: map[string]interface{} будет заменен на map[string]any
+      # Выключен так как это делает modernize
+    # rewrite-rules:
+    #   - pattern: 'interface{}'
+    #     replacement: 'any'
+
+linters:
+  enable:
+    - asasalint # ловит передачу []any как одного аргумента в variadic-функцию func(...any) вместо распаковки slice...
+    - asciicheck # запрещает не-ASCII символы в идентификаторах (кириллица, похожие буквы)
+    - bidichk # ищет опасные unicode-символы смены направления текста (атака Trojan Source)
+    - bodyclose # проверяет, что тело HTTP-ответа (resp.Body) закрывается
+    - canonicalheader # проверяет, что ключи net/http.Header записаны в каноническом виде (Content-Type, а не content-type)
+    - copyloopvar # находит ненужное копирование переменной цикла (x := x), не нужное с Go 1.22
+    # - cyclop # ограничивает цикломатическую сложность функций и средний показатель по пакету
+    - depguard # запрещает импорт пакетов из списка (см. settings.depguard)
+    - dupl # находит дублирующиеся куски кода (копипасту)
+    - durationcheck # ловит перемножение двух time.Duration (обычно ошибка: получаются наносекунды в квадрате)
+    - embeddedstructfieldcheck # проверяет оформление встроенных полей в структурах (отделены от остальных пустой строкой, без мьютексов)
+    - errcheck # находит необработанные ошибки, возвращаемые функциями
+    - errname # требует, чтобы sentinel-ошибки начинались с Err, а типы ошибок заканчивались на Error
+    - errorlint # находит сравнение ошибок через == и type assertion вместо errors.Is/errors.As, а также %v вместо %w
+    - exhaustive # проверяет, что switch (и map-литералы) по enum-типу перечисляют все значения
+    - exptostd # предлагает заменить функции из golang.org/x/exp на аналоги из стандартной библиотеки
+    - fatcontext # ловит вложение context внутри цикла (ctx = context.WithX(ctx) — контекст растёт с каждой итерацией)
+    - forbidigo # запрещает идентификаторы по шаблону (по умолчанию — fmt.Print*, print, println)
+    - funcorder # проверяет порядок объявлений: конструкторы сразу после типа, затем методы
+    # - funlen # ограничивает длину функций в строках и инструкциях
+    - gocheckcompilerdirectives # проверяет корректность директив компилятора (//go:generate, //go:embed и т.п.)
+    # - gocognit # ограничивает когнитивную сложность функций (насколько код трудно читать)
+    - goconst # находит повторяющиеся строковые литералы, которые стоит вынести в константу
+    - gocritic # набор проверок на баги, производительность и стиль
+    - gocyclo # ограничивает цикломатическую сложность функций (дублирует cyclop, но без порога по пакету)
+    - godoclint # проверяет оформление doc-комментариев (godoc)
+    - godot # требует, чтобы комментарии заканчивались точкой
+    - gomoddirectives # контролирует директивы replace, retract и exclude в go.mod
+    - goprintffuncname # требует суффикс f у printf-подобных функций (Logf, Errorf)
+    - gosec # ищет проблемы безопасности: SQL-инъекции, хардкод секретов, слабая криптография, небезопасные права файлов
+    - govet # стандартный go vet: несовпадение формата Printf и аргументов, копирование мьютексов, затенение переменных и т.п.
+    - iface # ловит лишние интерфейсы: пустые, дублирующиеся, объявленные, но нигде не используемые
+    - ineffassign # находит присваивания, значение которых потом не используется
+    - intrange # предлагает for i := range n вместо for i := 0; i < n; i++ (Go 1.22+)
+    - iotamixing # запрещает смешивать iota и обычные значения в одном блоке const
+    - loggercheck # проверяет парность ключ-значение в вызовах логгеров (zap, logr, klog, kitlog, slog)
+    - makezero # ловит make([]T, n) с ненулевой длиной, после которого вызывается append (данные дописываются после n нулей)
+    - mirror # предлагает парные функции bytes/strings без лишних преобразований ([]byte(s) → strings-версия)
+    - modernize # предлагает заменить старые конструкции на современные (min/max, slices, maps и т.п.)
+    - musttag # требует теги (json, yaml и т.п.) у полей структур, которые (раз)маршалятся
+    - nakedret # запрещает «голый» return в функциях с именованными результатами (см. max-func-lines)
+    - nestif # находит слишком глубоко вложенные if
+    - nilerr # ловит возврат nil вместо ошибки после проверки err != nil
+    - nilnesserr # ловит возврат другой, заведомо nil, ошибки после проверки err != nil
+    - nilnil # запрещает одновременно возвращать nil-значение и nil-ошибку
+    - noctx # находит HTTP-запросы и SQL-вызовы без context.Context
+    - nolintlint # проверяет оформление //nolint: указан конкретный линтер и есть пояснение
+    - nosprintfhostport # запрещает собирать host:port через Sprintf (ломается на IPv6) — нужен net.JoinHostPort
+    - perfsprint # предлагает более быстрые замены fmt.Sprintf (strconv.Itoa, errors.New и т.п.)
+    - predeclared # запрещает затенять встроенные идентификаторы (len, new, error, string и т.п.)
+    - promlinter # проверяет имена Prometheus-метрик по правилам promlint
+    - protogetter # требует читать поля proto-сообщений через геттеры (GetX()), а не напрямую — геттеры безопасны для nil
+    - reassign # запрещает переприсваивать переменные других пакетов (см. settings.reassign)
+    - recvcheck # требует единообразия ресиверов у методов одного типа (все по указателю или все по значению)
+    - revive # набор правил стиля, преемник golint (именование, комментарии к экспортируемым символам и т.п.)
+    - rowserrcheck # проверяет, что после итерации по sql.Rows вызывается rows.Err()
+    - sloglint # единый стиль логирования через log/slog (в проекте slog не используется — линтер ничего не находит)
+    - spancheck # проверяет работу со span-ами OpenTelemetry: span.End() вызывается, ошибки записываются в span
+    - sqlclosecheck # проверяет, что sql.Rows и sql.Stmt закрываются
+    - staticcheck # большой набор статических проверок: баги, устаревшие API, упрощения кода (см. settings.staticcheck)
+    - testableexamples # требует, чтобы Example-функции в тестах имели комментарий // Output: и реально проверялись
+    - testifylint # проверяет корректность использования testify (assert/require, порядок expected/actual и т.п.)
+    - tparallel # находит неправильное использование t.Parallel() в тестах и подтестах
+    - unconvert # находит лишние преобразования типов (T(x), где x уже типа T)
+    - unparam # находит параметры функций, которые не используются или всегда получают одно и то же значение
+    - unused # находит неиспользуемые константы, переменные, функции и типы
+    - usestdlibvars # предлагает константы stdlib вместо литералов (http.MethodGet вместо "GET", http.StatusOK вместо 200)
+    - usetesting # предлагает функции из testing вместо ручных аналогов (t.TempDir(), t.Context(), t.Setenv())
+    - wastedassign # находит присваивания, которые перезаписываются до того, как значение будет прочитано
+    - whitespace # запрещает пустые строки в начале и в конце блоков (функций, if, for)
+    - wsl_v5 # регулирует пустые строки между блоками кода: требует отделять if, return, циклы и группы присваиваний
+    - decorder # проверяет порядок и количество объявлений type/const/var/func в файле
+    - prealloc # предлагает заранее выделять ёмкость слайсов (make([]T, 0, n)), когда размер известен
+    - tagalign # выравнивает теги полей структур в столбик
+    - zerologlint # ловит zerolog-события без завершающего .Msg()/.Send() — такое событие молча теряется
+    - grouper # требует группировать объявления const/var/import/type в блоки
+    - importas # требует единообразные алиасы для импортов
+    # - tagliatelle # проверяет стиль имён в тегах структур (camelCase/snake_case)
+    - thelper # требует t.Helper() в вспомогательных тестовых функциях
+    - maintidx # считает индекс сопровождаемости функций
+    - misspell # ищет опечатки в английских словах в комментариях — бесполезен для русских комментариев
+    - nlreturn # требует пустую строку перед return и break — слишком строгий
+
+    ## Можно включить при необходимости
+    # - mnd # находит «магические числа» в коде — числа без имени-константы
+    # - nonamedreturns # запрещает именованные возвращаемые значения
+    # - testpackage # требует, чтобы тесты были в отдельном пакете с суффиксом _test (тестируется только публичный API)
+    # - unqueryvet # запрещает SELECT * в SQL-запросах и билдерах — нужно перечислять колонки
+    #- arangolint # правила работы с клиентом ArangoDB (в проекте не используется)
+    # - exhaustruct # требует явно инициализировать все поля структуры в литералах
+    #- ginkgolinter # правила для тестов на ginkgo/gomega (в проекте не используются)
+    #- godox # запрещает комментарии TODO, FIXME и подобные
+    #- goheader # проверяет заголовок файла (лицензия, копирайт) по шаблону
+    #- inamedparam # требует имена параметров в методах интерфейсов (много срабатываний на существующем коде)
+    #- interfacebloat # ограничивает количество методов в интерфейсе
+    #- ireturn # запрещает возвращать интерфейсы из функций (принцип «принимай интерфейсы, возвращай структуры»)
+    #- noinlineerr # запрещает обработку ошибки в одну строку: if err := f(); err != nil {
+    #- varnamelen # проверяет, что длина имени переменной соответствует её области видимости (много ложных срабатываний)
+    #- wrapcheck # требует оборачивать ошибки, полученные из внешних пакетов (fmt.Errorf("...: %w", err))
+
+    ## Отключены
+    # - gochecknoglobals # запрещает глобальные переменные
+    # - gochecknoinits # запрещает функции init()
+    # - gochecksumtype # проверяет полноту switch по sum-типам (интерфейс с маркером //sumtype:decl)
+    #- containedctx # запрещает хранить context.Context в полях структур
+    #- contextcheck # проверяет, что функции передают дальше полученный контекст (много ложных срабатываний)
+    #- dogsled # ограничивает число пропущенных значений через _ при присваивании (x, _, _, _ := f())
+    #- dupword # ищет повторяющиеся подряд слова (the the) — бесполезен без настройки
+    #- err113 # запрещает создавать ошибки на лету (errors.New внутри функций) — слишком строгий
+    #- errchkjson # проверяет типы, передаваемые в json.Marshal, и разрешает не проверять ошибку — противоречит errcheck
+    #- forcetypeassert # находит type assertion без проверки ok — уже покрыто errcheck.check-type-assertions
+    #- gomodguard # белый/чёрный список модулей в go.mod — заменён более гибким depguard
+    #- gosmopolitan # ищет проблемы локализации (захардкоженные строки на национальных языках)
+    #- lll # ограничивает длину строк — заменён форматтером golines, который сам переносит строки
+    #- paralleltest # требует t.Parallel() во всех тестах (много ложных срабатываний)
+    #- wsl # старая версия wsl — заменена на wsl_v5
+
+  # Все настройки: https://github.com/golangci/golangci-lint/blob/HEAD/.golangci.reference.yml
+  settings:
+    cyclop:
+      # Максимальная цикломатическая сложность функции (число путей выполнения). По умолчанию: 10.
+      max-complexity: 30
+      # Максимальная средняя сложность функций по пакету. 0.0 — проверка выключена. По умолчанию: 0.0.
+      package-average: 10.0
+
+    decorder:
+      # В файле сначала должны идти блоки констант потом глобальные переменные потом типы, потом методы и функции
+      dec-order:
+        - const
+        - var
+        - type
+        - func
+
+    depguard:
+      # Правила запрета импортов. Каждое правило применяется к файлам из files и запрещает пакеты из deny.
+      #
+      # Переменные для files:
+      #   $all  — все Go-файлы;
+      #   $test — тестовые файлы (*_test.go);
+      #   !     — отрицание (!$test — все файлы, кроме тестов).
+      #
+      # Пакет в deny: префикс пути, точное совпадение, если строка заканчивается на $,
+      # или переменная ($gostd — вся стандартная библиотека).
+      rules:
+        # Устаревшие и неподдерживаемые пакеты — запрещены везде.
+        "deprecated":
+          files:
+            - "$all"
+          deny:
+            - pkg: github.com/golang/protobuf
+              desc: Используйте google.golang.org/protobuf, см. https://developers.google.com/protocol-buffers/docs/reference/go/faq#modules
+            - pkg: github.com/satori/go.uuid
+              desc: Используйте github.com/google/uuid — пакет satori не поддерживается
+            - pkg: github.com/gofrs/uuid$
+              desc: Используйте github.com/gofrs/uuid/v5 или новее — до v5 пакет не был Go-модулем
+        # В рабочем коде — только math/rand/v2 (в тестах старый math/rand разрешён).
+        "non-test files":
+          files:
+            - "!$test"
+          deny:
+            - pkg: math/rand$
+              desc: Используйте math/rand/v2, см. https://go.dev/blog/randv2
+
+    embeddedstructfieldcheck:
+      # Запретить встраивать sync.Mutex и sync.RWMutex в структуры: иначе Lock/Unlock
+      # становятся публичными методами структуры. Мьютекс должен быть именованным полем. По умолчанию: false.
+      forbid-mutex: true
+
+    errcheck:
+      # Считать ошибкой type assertion без проверки ok: `a := b.(MyStruct)` паникует при несовпадении типа.
+      # По умолчанию: false.
+      check-type-assertions:
+        true
+      # Report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
+      # Such cases aren't reported by default.
+      # Default: false
+      check-blank: true
+      # To disable the errcheck built-in exclude list.
+      # See `-excludeonly` option in https://github.com/kisielk//rrcheck#excluding-functions for details.
+      # Default: false
+      disable-default-exclusions: true
+      # List of functions to exclude from checking, where each entry is a single function to exclude.
+      # See https://github.com/kisielk/errcheck#excluding-functions for details.
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - io.Copy(os.Stdout)
+        # Write* у буферов в памяти всегда возвращают nil.
+        - (*strings.Builder).Write
+        - (*strings.Builder).WriteByte
+        - (*strings.Builder).WriteRune
+        - (*strings.Builder).WriteString
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteByte
+        - (*bytes.Buffer).WriteRune
+        - (*bytes.Buffer).WriteString
+      # Display function signature instead of selector.
+      # Default: false
+      verbose: true
+
+    exhaustive:
+      # Где проверять полноту перечисления значений enum. По умолчанию: [switch].
+      check:
+        - switch # в switch должны быть перечислены все значения enum
+        - mapliteral # в map-литерале с ключами-enum должны быть все значения
+
+      # Если в switch есть вариант default то считать, что все ветки покрыты
+      # Default: false
+      default-signifies-exhaustive: true
+      # Оператор switch требует наличия варианта по умолчанию, даже если он исчерпывающий.
+      # Default: false
+      default-case-required: true
+
+    forbidigo:
+      # Forbid the following identifiers (list of regexp).
+      # Default: ["^(fmt\\.Print(|f|ln)|print|println)$"]
+      forbid:
+        # Built-in bootstrapping functions.
+        - pattern: ^print(ln)?$
+        # Optional message that gets included in error reports.
+        - pattern: ^fmt\.Print.*$
+          msg: Do not commit print statements.
+        # Alternatively, put messages at the end of the regex, surrounded by `(# )?`.
+        # Escape any special characters. Those messages get included in error reports.
+        - pattern: 'fmt\.Print.*(# Do not commit print statements\.)?'
+        # Forbid spew Dump, whether it is called as function or method.
+        # Depends on analyze-types below.
+        - pattern: ^spew\.(ConfigState\.)?Dump$
+        # The package name might be ambiguous.
+        # The full import path can be used as additional criteria.
+        # Depends on analyze-types below.
+        - pattern: ^v1.Dump$
+          pkg: ^example.com/pkg/api/v1$
+      # Exclude godoc examples from forbidigo checks.
+      # Default: true
+      exclude-godoc-examples: false
+      # Instead of matching the literal source code,
+      # use type information to replace expressions with strings that contain the package name
+      # and (for methods and fields) the type name.
+      # This makes it possible to handle import renaming and forbid struct fields and methods.
+      # Default: false
+      analyze-types: true
+
+    funcorder:
+      # Требовать, чтобы экспортируемые методы шли раньше неэкспортируемых.
+      # Выключено: порядок методов не навязывается. По умолчанию: true.
+      struct-method: false
+      # Чтобы конструктор типа шел сразу после его объявления
+      constructor: true
+
+    funlen:
+      # Максимальное число строк в функции. Значение меньше 0 выключает проверку. По умолчанию: 60.
+      lines: 100
+      # Максимальное число инструкций в функции. Значение меньше 0 выключает проверку. По умолчанию: 40.
+      statements: 80
+
+    gochecksumtype:
+      # Считать ли ветку default достаточной для полноты switch по sum-типу.
+      # false — все варианты должны быть перечислены явно, даже если есть default. По умолчанию: true.
+      default-signifies-exhaustive: false
+
+    gocognit:
+      # Когнитивная сложность функции, начиная с которой выдаётся замечание. По умолчанию: 30.
+      min-complexity: 50
+
+    goconst:
+      # Предлагает вынести повторяющиеся числа в константу
+      # Default: false
+      numbers: true
+      # Минимальная длина строковой константы
+      # Default: 3
+      min-len: 2
+      # Минимальное кол-во появлений значения, для вынесения в константу
+      # Default: 3
+      min-occurrences: 3
+      # Проверка существуют ли уже константы с таким значением
+      # Default: true
+      match-constant: true
+
+    gocritic:
+      enable-all: true
+      # Проверки которые нужно выключить
+      disabled-checks:
+        - hugeParam # требует передавать структуры по указателю — меняет сигнатуры ради микрооптимизации
+        - rangeValCopy # то же для range по структурам
+        - unnamedResult # именованные результаты не обязательны
+
+      # Настройки отдельных проверок gocritic. Список проверок: https://go-critic.com/overview.
+      settings:
+        captLocal:
+          # Проверять имена с заглавной буквы не только у параметров, но и у всех локальных переменных.
+          # По умолчанию: true (только параметры).
+          paramsOnly: false
+        underef:
+          # Сообщать о лишнем разыменовании (*x).method() и для ресиверов-указателей тоже.
+          # По умолчанию: true (ресиверы пропускаются).
+          skipRecvDeref: false
+          # TODO: Добавить сюда проверку на Cannot - Unable to))
+
+    godoclint:
+      # Дополнительные правила к стандартному набору.
+      enable:
+        # Запрещает объявленные, но не использованные в тексте doc-комментария ссылки.
+        # https://github.com/godoc-lint/godoc-lint?tab=readme-ov-file#no-unused-link
+        - no-unused-link
+
+    govet:
+      # Включить все анализаторы go vet. По умолчанию: false (только стандартный набор).
+      enable-all: true
+      # Выключенные анализаторы. Полный список: `GL_DEBUG=govet golangci-lint run --enable=govet`.
+      disable:
+        - fieldalignment # требует переупорядочить поля структур для экономии памяти — слишком строгий
+#        - shadow # затенение err и т.п. — идиоматично для Go, много шума
+
+    inamedparam:
+      # Не требовать имя параметра, если у метода интерфейса только один параметр. По умолчанию: false.
+      # Действует, только если линтер inamedparam включён.
+      skip-single-param: true
+
+    mnd:
+      # Функции, в аргументах которых числа не считаются «магическими».
+      # Всегда игнорируются: time.Date, strconv.FormatInt/FormatUint/FormatFloat,
+      # strconv.ParseInt/ParseUint/ParseFloat.
+      ignored-functions:
+        - args.Error
+        - flag.Arg
+        - flag.Duration.*
+        - flag.Float.*
+        - flag.Int.*
+        - flag.Uint.*
+        - os.Chmod # права доступа к файлам (0o644 и т.п.)
+        - os.Mkdir.*
+        - os.OpenFile
+        - os.WriteFile
+        - prometheus.ExponentialBuckets.*
+        - prometheus.LinearBuckets
+
+    nakedret:
+      # Максимальная длина функции (в строках), в которой разрешён «голый» return.
+      # 0 — запрещён в функциях любой длины. По умолчанию: 30.
+      max-func-lines: 0
+
+    nolintlint:
+      # Линтеры, для которых в //nolint можно не писать пояснение.
+      allow-no-explanation: [funlen, gocognit, golines]
+      # Требовать пояснение после каждого //nolint: `//nolint:gosec // путь берётся из конфига`. По умолчанию: false.
+      require-explanation: true
+      # Требовать указывать конкретный линтер: `//nolint:errcheck`, а не просто `//nolint`. По умолчанию: false.
+      require-specific: true
+
+    perfsprint:
+      # Предлагать заменять fmt.Sprintf("%s%s", a, b) на конкатенацию a + b.
+      # Выключено: Sprintf часто читается лучше. По умолчанию: true.
+      strconcat: false
+
+    reassign:
+      # Шаблоны имён переменных других пакетов, переприсваивание которых запрещено.
+      # ".*" — запрещено переприсваивать любые. По умолчанию: ["EOF", "Err.*"].
+      # https://github.com/curioswitch/go-reassign#usage
+      patterns:
+        - ".*"
+
+    staticcheck:
+      # Набор проверок: "all" — все, "-XXX" — исключить проверку.
+      # Список: https://staticcheck.dev/docs/checks/
+      # По умолчанию: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"].
+      checks:
+        - all
+        # Отсутствующий или неправильно оформленный комментарий к пакету.
+        # https://staticcheck.dev/docs/checks/#ST1000
+        - -ST1000
+        # Разные имена ресивера у методов одного типа.
+        # https://staticcheck.dev/docs/checks/#ST1016
+        - -ST1016
+        - -ST1003
+        # Предложение убрать имя встроенного поля из селектора (a.Embedded.Field → a.Field).
+        # https://staticcheck.dev/docs/checks/#QF1008
+        - -QF1008
+
+    usetesting:
+      # Предлагать t.TempDir() вместо os.TempDir() в тестах. По умолчанию: false.
+      os-temp-dir: true
+
+    gosec:
+      includes:
+        # ── G1xx: общие проблемы безопасности ──
+        - G101 # Захардкоженные секреты: пароли, токены, ключи API прямо в коде
+        - G102 # Сервер слушает все интерфейсы (0.0.0.0 или ":8080"), а не только нужный
+        - G104 # Ошибка, возвращённая функцией, не проверяется и молча теряется
+        - G109 # Результат strconv.Atoi (int) приводится к int32/int16, возможно переполнение
+        - G110 # io.Copy при распаковке без ограничения размера (уязвимость к zip-бомбе)
+        - G111 # http.Dir("/") раздаёт по HTTP всю файловую систему
+        - G112 # У http.Server не задан ReadHeaderTimeout (уязвимость к атаке Slowloris)
+        - G113 # HTTP request smuggling: конфликтующие заголовки или голый LF при разборе тела
+        - G114 # http.ListenAndServe и подобные функции без возможности задать таймауты
+        - G115 # Преобразование целых типов с возможным переполнением (например, int64 → int32, int → uint)
+        - G116 # Trojan Source: невидимые двунаправленные Unicode-символы, меняющие смысл кода
+        - G117 # Секреты могут утечь при сериализации структуры в JSON/YAML/XML/TOML
+        - G118 # Контекст не передаётся дальше, из-за чего горутины и ресурсы утекают
+        - G119 # Политика редиректов HTTP-клиента может переслать чувствительные заголовки (Authorization, Cookie) на чужой хост
+        - G120 # Разбор формы в HTTP-обработчике без ограничения размера (риск исчерпания памяти)
+        - G121 # Небезопасные шаблоны обхода CrossOriginProtection (защиты от CSRF)
+        - G122 # Гонка TOCTOU: файл проверяется и используется в разные моменты внутри колбэка filepath.Walk/WalkDir
+        - G123 # Возобновление TLS-сессии может обойти VerifyPeerCertificate, если не задан VerifyConnection
+        - G124 # Cookie без атрибутов Secure, HttpOnly или SameSite
+
+        # ── G2xx: инъекции ──
+        - G201 # SQL-запрос собирается через fmt.Sprintf (риск SQL-инъекции)
+        - G202 # SQL-запрос собирается конкатенацией строк (риск SQL-инъекции)
+        - G203 # Неэкранированные данные в HTML-шаблоне (template.HTML и т.п., риск XSS)
+        - G204 # Запуск внешней команды (exec.Command) с аргументами из переменных (риск инъекции команд)
+
+        # ── G3xx: работа с файлами ──
+        - G301 # Слишком широкие права при создании директории (os.Mkdir/MkdirAll)
+        - G302 # Слишком широкие права при открытии файла (os.OpenFile) или в os.Chmod
+        - G303 # Временный файл создаётся по предсказуемому пути вместо os.CreateTemp
+        - G304 # Путь к файлу берётся из переменной (риск чтения произвольных файлов)
+        - G305 # Path traversal при распаковке zip/tar: имя вида "../../etc/passwd" выходит за пределы целевой папки
+        - G306 # Слишком широкие права при записи файла (os.WriteFile)
+        - G307 # Слишком широкие права при создании файла через os.Create (по умолчанию 0666)
+
+        # ── G4xx: криптография ──
+        - G401 # Использование устаревших хешей MD5 или SHA1
+        - G402 # Небезопасные настройки TLS: InsecureSkipVerify, старые версии протокола, слабые шифры
+        - G403 # RSA-ключ короче 2048 бит
+        - G404 # math/rand вместо crypto/rand там, где нужна криптостойкая случайность
+        - G405 # Использование устаревших шифров DES или RC4
+        - G406 # Использование устаревших хешей MD4 или RIPEMD160
+        # - G407 # Захардкоженный IV/nonce при шифровании (должен быть случайным для каждой операции)
+        - G408 # Состояние сохраняется внутри ssh.PublicKeyCallback, что может привести к обходу аутентификации
+
+        # ── G6xx: работа с памятью ──
+        - G602 # Возможный выход за границы слайса
+
+        # ── G7xx: taint-анализ (отслеживание данных от пользователя до опасной функции) ──
+        - G701 # SQL-инъекция: пользовательские данные попадают в SQL-запрос
+        - G702 # Инъекция команд: пользовательские данные попадают в exec.Command
+        - G703 # Path traversal: пользовательские данные попадают в путь к файлу
+        - G704 # SSRF: пользовательские данные попадают в URL исходящего запроса
+        - G705 # XSS: пользовательские данные попадают в HTML-ответ без экранирования
+        - G706 # Инъекция в логи: пользовательские данные пишутся в лог (можно подделать записи через \n)
+        - G707 # Инъекция в SMTP: пользовательские данные попадают в команды или заголовки письма
+        - G708 # Server-side template injection: пользовательские данные используются как текст шаблона
+        - G709 # Небезопасная десериализация недоверенных данных
+        - G710 # Open redirect: пользовательские данные определяют адрес редиректа
+      # Filter out the issues with a lower severity than the given value.
+      # Valid options are: low, medium, high.
+      # Default: low
+      severity: low
+      # Filter out the issues with a lower confidence than the given value.
+      # Valid options are: low, medium, high.
+      # Default: low
+      confidence: medium
+      # Concurrency value.
+      # Default: the number of logical CPUs usable by the current process.
+      concurrency: 12
+      # To specify the configuration of rules.
+      config:
+        # Globals are applicable to all rules.
+        global:
+          # If true, ignore #nosec in comments (and an alternative as well).
+          # Default: false
+          nosec: true
+          # Add an alternative comment prefix to #nosec (both will work at the same time).
+          # Default: ""
+          "#nosec": "#my-custom-nosec"
+          # Define whether nosec issues are counted as finding or not.
+          # Default: false
+          show-ignored: true
+          # Audit mode enables addition checks that for normal code analysis might be too nosy.
+          # Default: false
+          audit: true
+    grouper:
+      # Require the use of a single global 'const' declaration only.
+      # Default: false
+      const-require-single-const: false
+      # Require the use of grouped global 'const' declarations.
+      # Default: false
+      const-require-grouping: true
+      # Require the use of a single 'import' declaration only.
+      # Default: false
+      import-require-single-import: false
+      # Require the use of grouped 'import' declarations.
+      # Default: false
+      import-require-grouping: false
+      # Require the use of a single global 'type' declaration only.
+      # Default: false
+      type-require-single-type: false
+      # Require the use of grouped global 'type' declarations.
+      # Default: false
+      type-require-grouping: false
+      # Require the use of a single global 'var' declaration only.
+      # Default: false
+      # var-require-single-var: false
+      # # Require the use of grouped global 'var' declarations.
+      # # Default: false
+      # var-require-grouping: true
+    iface:
+      enable:
+        - identical # Определяет интерфейсы в одном пакете с идентичными наборами методов.
+        # - unused #  Определяет интерфейсы, которые не используются в том же пакете, где они определены.
+        # - opaque # Определяет функции, которые возвращают интерфейсы, но фактическим возвращаемым значением всегда является одна конкретная реализация.
+        # - unexported # Определяет интерфейсы, которые не экспортируются, но используются в экспортируемых функциях или методах.
+        # - unusedmethod # Определяет методы интерфейса, которые никогда не используются в том же пакете, где они определены.
+    importas:
+      # Если у пакета в конфиге ниже задан алиас, то не позволять использовать его без алиаса.
+      # Выключен так как конфликтует с правилом ниже. Пока алиас не нужен он не используется, как появляется необходимость, то проверяется чтобы он был как в остальном проекте
+      no-unaliased: false
+      # Если алиас не нужен то запрещать его использование
+      no-extra-aliases: false
+      # Настройка алиасов в имортах, чтобы везде было одинаково
+    tagliatelle:
+      # Checks the struct tag name case.
+      case:
+        # Defines the association between tag name and case.
+        # Any struct tag name can be used.
+        # Supported string cases:
+        # - `camel`
+        # - `pascal`
+        # - `kebab`
+        # - `snake`
+        # - `upperSnake`
+        # - `goCamel`
+        # - `goPascal`
+        # - `goKebab`
+        # - `goSnake`
+        # - `upper`
+        # - `lower`
+        # - `header`
+        rules:
+          json: camel
+          yaml: camel
+          xml: camel
+          toml: camel
+          bson: camel
+          avro: snake
+          mapstructure: kebab
+          env: upperSnake
+          envconfig: upperSnake
+          whatever: snake
+          gorm: camel
+        # Defines the association between tag name and case.
+        # Important: the `extended-rules` overrides `rules`.
+        # Default: empty
+        extended-rules:
+          json:
+            # Supported string cases:
+            # - `camel`
+            # - `pascal`
+            # - `kebab`
+            # - `snake`
+            # - `upperSnake`
+            # - `goCamel`
+            # - `goPascal`
+            # - `goKebab`
+            # - `goSnake`
+            # - `header`
+            # - `lower`
+            # - `header`
+            #
+            # Required
+            case: camel
+            # Adds 'AMQP', 'DB', 'GID', 'RTP', 'SIP', 'TS' to initialisms,
+            # and removes 'LHS', 'RHS' from initialisms.
+            # Default: false
+            extra-initialisms: true
+            # Defines initialism additions and overrides.
+            # Default: empty
+            initialism-overrides:
+              DB: true # add a new initialism
+              LHS: false # disable a default initialism.
+              # ...
+        # Uses the struct field name to check the name of the struct tag.
+        # Default: false
+        use-field-name: true
+        # The field names to ignore.
+        # Default: []
+        # ignored-fields:
+        # Overrides the default/root configuration.
+        # Default: []
+        # overrides:
+    wsl_v5:
+      # Разрешает «прилепить» (cuddle, без пустой строки) переменную к блоку,
+      # если она используется в ПЕРВОЙ строке этого блока, даже когда условие блока её не использует:
+      #   x := 1
+      #   if cond {
+      #       use(x) // x нужна сразу, поэтому пустая строка перед if не обязательна
+      #   }
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#configuration
+      # По умолчанию: true
+      allow-first-in-block: true
+
+      # То же самое, но мягче: переменная может использоваться в ЛЮБОМ месте блока,
+      # в том числе во вложенных блоках, а не только в первой строке.
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#configuration
+      # По умолчанию: false
+      allow-whole-block: true
+
+      # Если блок длиннее указанного числа строк, перед оператором перехода
+      # (break, continue, fallthrough, goto, return) в его конце нужна пустая строка.
+      # В коротких блоках оператор перехода можно писать вплотную к предыдущей строке.
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#configuration
+      # По умолчанию: 2
+      branch-max-lines: 2
+
+      # Если ветка case длиннее указанного числа строк, после неё
+      # (перед следующим case) должна стоять пустая строка.
+      # 0 отключает проверку.
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#configuration
+      # По умолчанию: 0
+      case-max-lines: 2
+
+      # Сколько операторов можно написать вплотную (без пустой строки) над
+      # блочными операторами (if, for, switch и т.д.), а также над go, defer и отправкой в канал.
+      # Каждый такой оператор должен объявлять переменную, которая используется в блоке.
+      # Учитывает настройки allow-first-in-block и allow-whole-block.
+      # При значении 0 прилеплять нельзя ничего: перед каждым проверяемым оператором нужна пустая строка.
+      # По умолчанию: 1
+      cuddle-max-statements: 1
+
+      # Базовый набор проверок, к которому применяются enable и disable:
+      #   all     — включить все проверки, включая опциональные
+      #   default — только проверки по умолчанию
+      #   none    — ничего не включать, всё задаётся через enable
+      #   ""      — то же, что default
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#checks-and-configuration
+      # По умолчанию: ""
+      default: all
+
+      # Проверки, которые нужно включить. Добавляются к набору из default.
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#checks-and-configuration
+      # По умолчанию: []
+      enable:
+        # ── Проверки «прилипания» к оператору (что можно писать вплотную над ним) ──
+        - append # x = append(x, y) можно прилепить, только если y используется в строке выше
+        - assign # присваивание можно прилепить только к другим присваиваниям или к ++/--
+        - branch # break/continue/fallthrough/goto в блоке длиннее branch-max-lines отделяются пустой строкой
+        - decl # объявление через var никогда не прилепляется к другим операторам
+        - defer # defer можно прилепить к другому defer, к проверке ошибки или к строке с переменной, которую он использует
+        - err # проверка `if err != nil` должна идти сразу после строки, где получена ошибка, без пустой строки
+        - expr # выражение (например, вызов функции) можно прилепить, только если оно использует переменную из строки выше
+        - for # над for можно прилепить только присваивание переменной, используемой в цикле
+        - go # над go можно прилепить только строку с переменной, которую использует горутина
+        - if # над if можно прилепить только присваивание переменной, используемой в условии или блоке
+        - inc-dec # x++ / x-- можно прилепить только к присваиваниям и другим ++/--
+        - label # метки (labels) никогда не прилепляются к предыдущему коду
+        - range # над range-циклом можно прилепить только переменную, используемую в цикле
+        - return # return в блоке длиннее branch-max-lines отделяется пустой строкой
+        - select # над select можно прилепить только переменную, используемую в нём
+        - send # отправку в канал (ch <- v) можно прилепить, только если она использует переменную из строки выше
+        - switch # над switch можно прилепить только переменную, используемую в нём
+        - type-switch # то же для type switch: switch v := x.(type)
+
+        # ── Пустые строки внутри блоков ──
+        - leading-whitespace # запрещает пустые строки сразу после открывающей скобки {
+        - trailing-whitespace # запрещает пустые строки перед закрывающей скобкой }
+
+        # ── Обязательные пустые строки ПОСЛЕ операторов ──
+        - after-block # после закрывающей скобки блока } нужна пустая строка, если дальше идёт код
+        - after-decl # после объявления var нужна пустая строка
+        - after-defer # после defer нужна пустая строка (кроме нескольких defer подряд)
+        - after-expr # после выражения (вызова функции) нужна пустая строка перед кодом другого типа
+        - after-go # после запуска горутины (go ...) нужна пустая строка
+
+        # ── Дополнительные правила для присваиваний ──
+        - assign-exclusive # нельзя смешивать в одной группе объявление новых переменных (:=) и переприсваивание (=)
+        - assign-expr # присваивание нельзя прилеплять к выражению (например, к вызову функции без результата)
+        - cuddle-group # операторы, прилепленные к блоку, рассматриваются как единая группа и проверяются вместе
+
+      # Проверки, которые нужно выключить. Вычитаются из набора default и enable.
+      # Документация: https://github.com/bombsimon/wsl/tree/main?tab=readme-ov-file#checks-and-configuration
+      # По умолчанию: []
+      # disable:
+
   exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+    # Предупреждать о правилах исключения, которые ни разу не сработали (устаревшие правила). По умолчанию: false.
+    warn-unused: true
+    # Готовые наборы исключений.
+    presets:
+      - std-error-handling # не требовать проверку ошибок у Close, fmt.Print* и т.п.
+      - common-false-positives # известные ложные срабатывания (например, gosec G103 на unsafe)
+    # Собственные исключения: по пути файла, линтеру, тексту замечания или строке исходника.
+    rules:
+      # Не требовать комментарий к пакету.
+      - text: "should have a package comment"
+        linters: [revive]
+      # Не требовать комментарии к экспортируемым символам.
+      - text: 'exported \S+ \S+ should have comment( \(or a comment on this block\))? or be unexported'
+        linters: [revive]
+      # В тестах отключены проверки, неуместные для тестового кода:
+      # закрытие тела ответа, копипаста, необработанные ошибки, длина функций,
+      # повторяющиеся строки, безопасность, контекст в запросах, оборачивание ошибок.
+      - path: '_test\.go'
+        linters:
+          - bodyclose
+          - dupl
+          - errcheck
+          - funlen
+          - goconst
+          - gocyclo
+          - gosec
+          - maintidx
+          - noctx
+          - wrapcheck

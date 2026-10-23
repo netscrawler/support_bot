@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"time"
+
 	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/secret"
-	"time"
 )
 
 const (
@@ -20,8 +21,14 @@ const (
 
 type Store interface {
 	Insert(ctx context.Context, run models.Run) error
-	LastStatus(ctx context.Context, reportName string) (models.RunStatus, bool, error)
-	LastSuccessHash(ctx context.Context, reportName string) (string, bool, error)
+	LastStatus(
+		ctx context.Context,
+		reportName string,
+	) (models.RunStatus, bool, error)
+	LastSuccessHash(
+		ctx context.Context,
+		reportName string,
+	) (string, bool, error)
 	DeleteOlderThan(ctx context.Context, before time.Time) (int64, error)
 }
 
@@ -36,6 +43,7 @@ func New(store Store, alerter Alerter, cfg Config, log *slog.Logger) *Recorder {
 	if cfg.Retention <= 0 {
 		cfg.Retention = defaultRetain
 	}
+
 	return &Recorder{store: store, alerter: alerter, cfg: cfg, log: log}
 }
 
@@ -48,13 +56,18 @@ func bad(s models.RunStatus) bool {
 func (r *Recorder) Record(ctx context.Context, run models.Run) {
 	track := run.Kind == models.RunKindCron || run.Kind == models.RunKindManual
 
-	var prev models.RunStatus
-	var hasPrev, prevErr bool
+	var (
+		prev             models.RunStatus
+		hasPrev, prevErr bool
+	)
+
 	if track {
 		var err error
+
 		prev, hasPrev, err = r.store.LastStatus(ctx, run.ReportName)
 		if err != nil {
 			prevErr = true
+
 			r.log.ErrorContext(
 				ctx,
 				"runlog: чтение прошлого статуса",
@@ -68,19 +81,30 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 
 	run.Error = secret.Redact(run.Error)
 
-	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status)).Inc()
+	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status)).
+		Inc()
 	metrics.ReportRunDuration.WithLabelValues(string(run.Kind)).
 		Observe(run.FinishedAt.Sub(run.StartedAt).Seconds())
 
 	if err := r.store.Insert(ctx, run); err != nil {
-		r.log.ErrorContext(ctx, "runlog: запись запуска", "report", run.ReportName, "error", err)
+		r.log.ErrorContext(
+			ctx,
+			"runlog: запись запуска",
+			"report",
+			run.ReportName,
+			"error",
+			err,
+		)
 	}
+
 	if !track {
 		return
 	}
 
 	prevBad := hasPrev && bad(prev)
+
 	var text string
+
 	switch {
 	case bad(run.Status) && !prevBad:
 		text = fmt.Sprintf(
@@ -90,15 +114,18 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 			run.Status,
 			html.EscapeString(truncate(run.Error)),
 		)
+
 	case !bad(run.Status) && prevBad && !prevErr:
 		text = fmt.Sprintf(
 			"✅ Отчёт <b>%s</b> снова работает (%s)",
 			html.EscapeString(run.ReportName),
 			run.Kind,
 		)
+
 	default:
 		return
 	}
+
 	if err := r.alerter.Alert(ctx, text); err != nil {
 		r.log.ErrorContext(
 			ctx,
@@ -113,7 +140,10 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 
 // LastSuccessHash — хэш данных последнего успешного запуска. Ошибка store → ("", false):
 // лучше дубль, чем потеря отправки.
-func (r *Recorder) LastSuccessHash(ctx context.Context, report string) (string, bool) {
+func (r *Recorder) LastSuccessHash(
+	ctx context.Context,
+	report string,
+) (string, bool) {
 	h, ok, err := r.store.LastSuccessHash(ctx, report)
 	if err != nil {
 		r.log.WarnContext(
@@ -137,6 +167,7 @@ func truncate(s string) string {
 	if len(rs) <= maxErrRunes {
 		return s
 	}
+
 	return string(rs[:maxErrRunes]) + "…"
 }
 
@@ -145,13 +176,18 @@ func (r *Recorder) Start(ctx context.Context) {
 	go func() {
 		t := time.NewTicker(cleanupInterval)
 		defer t.Stop()
+
 		for {
-			n, err := r.store.DeleteOlderThan(ctx, time.Now().Add(-r.cfg.Retention))
+			n, err := r.store.DeleteOlderThan(
+				ctx,
+				time.Now().Add(-r.cfg.Retention),
+			)
 			if err != nil {
 				r.log.ErrorContext(ctx, "runlog: очистка журнала", "error", err)
 			} else {
 				r.log.InfoContext(ctx, "runlog: очистка журнала", "deleted", n)
 			}
+
 			select {
 			case <-ctx.Done():
 				return

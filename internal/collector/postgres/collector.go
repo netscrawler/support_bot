@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -26,7 +27,11 @@ type Collector struct {
 	pools []*pgxpool.Pool
 }
 
-func New(ctx context.Context, cfgs map[string]Config, log *slog.Logger) (*Collector, error) {
+func New(
+	ctx context.Context,
+	cfgs map[string]Config,
+	log *slog.Logger,
+) (*Collector, error) {
 	c := &Collector{dbs: make(map[string]target, len(cfgs))}
 
 	for name, cfg := range cfgs {
@@ -45,7 +50,10 @@ func New(ctx context.Context, cfgs map[string]Config, log *slog.Logger) (*Collec
 		}
 
 		c.pools = append(c.pools, pool)
-		c.dbs[name] = target{pool: pool, timeout: cfg.withDefaults().StatementTimeout}
+		c.dbs[name] = target{
+			pool:    pool,
+			timeout: cfg.withDefaults().StatementTimeout,
+		}
 
 		// Бот должен стартовать, даже если база недоступна.
 		if err := pool.Ping(ctx); err != nil {
@@ -79,12 +87,26 @@ func (c *Collector) Fetch(
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		if rollbackErr := tx.Rollback(
+			ctx,
+		); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			slog.ErrorContext(
+				ctx,
+				"postgres collector rollback failed",
+				slog.Any("error", rollbackErr),
+			)
+		}
+	}()
 
 	// SET не принимает bind-параметры, поэтому число подставляем сами.
-	if _, err := tx.Exec(
+	if _, err = tx.Exec(
 		ctx,
-		fmt.Sprintf("SET LOCAL statement_timeout = %d", t.timeout.Milliseconds()),
+		fmt.Sprintf(
+			"SET LOCAL statement_timeout = %d",
+			t.timeout.Milliseconds(),
+		),
 	); err != nil {
 		return nil, fmt.Errorf("set statement_timeout: %w", err)
 	}

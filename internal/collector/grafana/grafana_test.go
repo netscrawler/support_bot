@@ -5,15 +5,18 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"support_bot/internal/collector/prometheus"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"support_bot/internal/collector/prometheus"
+
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const rulesBody = `{"status":"success","data":{"groups":[
+const (
+	rulesBody = `{"status":"success","data":{"groups":[
 {"name":"g1","file":"folderA","rules":[
  {"name":"HighCPU","state":"firing","health":"ok","lastEvaluation":"2026-10-23T10:00:00Z","labels":{"team":"ops"},
   "alerts":[
@@ -24,6 +27,7 @@ const rulesBody = `{"status":"success","data":{"groups":[
 {"name":"g2","file":"folderB","rules":[
  {"name":"Disk","state":"pending","health":"ok","lastEvaluation":"2026-10-23T10:00:00Z","labels":{},
   "alerts":[{"labels":{"host":"c"},"annotations":{},"state":"Pending","activeAt":"0001-01-01T00:00:00Z","value":"v3"}]}]}]}}`
+)
 
 func newTestCollector(
 	t *testing.T,
@@ -33,10 +37,12 @@ func newTestCollector(
 
 	var calls atomic.Int32
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		h(w, r)
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			h(w, r)
+		}),
+	)
 	t.Cleanup(srv.Close)
 
 	c := New(map[string]prometheus.GrafanaConfig{
@@ -46,13 +52,18 @@ func newTestCollector(
 	return c, &calls
 }
 
-func rulesHandler(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(rulesBody)) }
+func rulesHandler(
+	w http.ResponseWriter,
+	_ *http.Request,
+) {
+	_, _ = w.Write([]byte(rulesBody))
+}
 
 func TestPathAndBearer(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/prometheus/grafana/api/v1/rules", r.URL.Path)
-		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
-		require.Equal(t, "application/json", r.Header.Get("Accept"))
+		assert.Equal(t, "/api/prometheus/grafana/api/v1/rules", r.URL.Path)
+		assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Accept"))
 		rulesHandler(w, r)
 	})
 
@@ -67,9 +78,14 @@ func TestRules(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 3)
 	require.Equal(t, map[string]any{
-		"folder": "folderA", "group": "g1", "rule": "HighCPU", "state": "firing",
-		"health": "ok", "last_evaluation": "2026-10-23T10:00:00Z",
-		"active_instances": 2, "team": "ops",
+		"folder":           "folderA",
+		"group":            "g1",
+		"rule":             "HighCPU",
+		"state":            "firing",
+		"health":           "ok",
+		"last_evaluation":  "2026-10-23T10:00:00Z",
+		"active_instances": 2,
+		"team":             "ops",
 	}, rows[0])
 	require.Equal(t, 0, rows[1]["active_instances"])
 	require.Nil(t, rows[1]["last_evaluation"])
@@ -82,9 +98,14 @@ func TestActive(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 3)
 	require.Equal(t, map[string]any{
-		"alertname": "HighCPU", "state": "Alerting", "active_at": "2026-10-23T09:00:00Z",
-		"value": "[ var='B' value=1 ]", "folder": "folderA", "group": "g1",
-		"host": "a", "annotation_summary": "hot",
+		"alertname":          "HighCPU",
+		"state":              "Alerting",
+		"active_at":          "2026-10-23T09:00:00Z",
+		"value":              "[ var='B' value=1 ]",
+		"folder":             "folderA",
+		"group":              "g1",
+		"host":               "a",
+		"annotation_summary": "hot",
 	}, rows[0])
 	// служебная колонка state перезаписывает одноимённый label
 	require.Equal(t, "Pending", rows[1]["state"])
@@ -105,7 +126,12 @@ func TestFilters(t *testing.T) {
 	require.Len(t, rows, 1)
 	require.Equal(t, "Disk", rows[0]["alertname"])
 
-	rows, err = c.Fetch(ctx, "g", "rules", map[string]string{"alertname": "Idle"})
+	rows, err = c.Fetch(
+		ctx,
+		"g",
+		"rules",
+		map[string]string{"alertname": "Idle"},
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, "Idle", rows[0]["rule"])
@@ -133,30 +159,51 @@ func TestValidationBeforeRequest(t *testing.T) {
 
 func TestHistory(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/annotations", r.URL.Path)
+		assert.Equal(t, "/api/annotations", r.URL.Path)
+
 		q := r.URL.Query()
-		require.Equal(t, "alert", q.Get("type"))
-		require.Equal(t, "1792749600000", q.Get("from"))
-		require.Equal(t, "1792753200000", q.Get("to"))
-		require.Equal(t, "10000", q.Get("limit"))
+		assert.Equal(t, "alert", q.Get("type"))
+		assert.Equal(t, "1792749600000", q.Get("from"))
+		assert.Equal(t, "1792753200000", q.Get("to"))
+		assert.Equal(t, "10000", q.Get("limit"))
+
 		_, _ = w.Write([]byte(`[
 {"time":1792749600000,"timeEnd":0,"alertName":"A","prevState":"Normal","newState":"Alerting","text":"t1"},
 {"time":1792749700000,"timeEnd":1792749800000,"alertName":"","prevState":"Alerting","newState":"Normal","text":"B {alertname=B, team=x} - "}]`))
 	})
 
-	rows, err := c.Fetch(context.Background(), "g", "history",
-		map[string]string{"from": "2026-10-23T10:00:00Z", "to": "1792753200000"})
+	rows, err := c.Fetch(
+		context.Background(),
+		"g",
+		"history",
+		map[string]string{
+			"from": "2026-10-23T10:00:00Z",
+			"to":   "1792753200000",
+		},
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
-	require.Equal(t, "2026-10-23T10:00:00Z", rows[0]["time"])
+	assert.Equal(t, "2026-10-23T10:00:00Z", rows[0]["time"])
 	require.Nil(t, rows[0]["time_end"])
-	require.Equal(t, "2026-10-23T10:03:20Z", rows[1]["time_end"])
-	require.Equal(t, "Alerting", rows[0]["new_state"])
-	require.Equal(t, "A", rows[0]["alertname"])
-	require.Equal(t, "B", rows[1]["alertname"]) // unified alerting: имя только в text
+	assert.Equal(t, "2026-10-23T10:03:20Z", rows[1]["time_end"])
+	assert.Equal(t, "Alerting", rows[0]["new_state"])
+	assert.Equal(t, "A", rows[0]["alertname"])
+	require.Equal(
+		t,
+		"B",
+		rows[1]["alertname"],
+	) // unified alerting: имя только в text
 
-	rows, err = c.Fetch(context.Background(), "g", "history",
-		map[string]string{"from": "2026-10-23T10:00:00Z", "to": "1792753200000", "alertname": "B"})
+	rows, err = c.Fetch(
+		context.Background(),
+		"g",
+		"history",
+		map[string]string{
+			"from":      "2026-10-23T10:00:00Z",
+			"to":        "1792753200000",
+			"alertname": "B",
+		},
+	)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 }
@@ -164,10 +211,20 @@ func TestHistory(t *testing.T) {
 func TestHistoryBadParams(t *testing.T) {
 	c, calls := newTestCollector(t, rulesHandler)
 
-	_, err := c.Fetch(context.Background(), "g", "history", map[string]string{"from": "вчера"})
+	_, err := c.Fetch(
+		context.Background(),
+		"g",
+		"history",
+		map[string]string{"from": "вчера"},
+	)
 	require.ErrorContains(t, err, "from")
 
-	_, err = c.Fetch(context.Background(), "g", "history", map[string]string{"limit": "0"})
+	_, err = c.Fetch(
+		context.Background(),
+		"g",
+		"history",
+		map[string]string{"limit": "0"},
+	)
 	require.ErrorContains(t, err, "limit")
 
 	require.Zero(t, calls.Load())
@@ -176,6 +233,7 @@ func TestHistoryBadParams(t *testing.T) {
 func TestHTTPError(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
+
 		_, _ = w.Write([]byte(`{"message":"access denied"}`))
 	})
 
@@ -189,7 +247,9 @@ func TestHTTPError(t *testing.T) {
 
 func TestStatusError(t *testing.T) {
 	c, _ := newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"boom"}`))
+		_, _ = w.Write(
+			[]byte(`{"status":"error","errorType":"bad_data","error":"boom"}`),
+		)
 	})
 
 	_, err := c.Fetch(context.Background(), "g", "rules", nil)

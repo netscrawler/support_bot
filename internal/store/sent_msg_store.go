@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
@@ -54,9 +55,19 @@ func (s *SentMsgStore) SaveTgMsg(
 	var saveErr error
 
 	for _, msg := range msgs {
-		err := s.q.InsertSentMessage(ctx, sqlcgen.InsertSentMessageParams{
+		threadID, err := checkedInt32(msg.ThreadID)
+		if err != nil {
+			saveErr = errors.Join(
+				saveErr,
+				fmt.Errorf("sent message thread ID: %w", err),
+			)
+
+			continue
+		}
+
+		err = s.q.InsertSentMessage(ctx, sqlcgen.InsertSentMessageParams{
 			ChatID:       msg.ChatID,
-			ThreadID:     int32(msg.ThreadID), //nolint:gosec // telegram/max thread ids fit int32
+			ThreadID:     threadID,
 			MessageID:    int64(msg.MessageID),
 			MessageIDStr: msg.MessageIDStr,
 			Title:        msg.Title,
@@ -91,7 +102,9 @@ func (s *SentMsgStore) WithLockedMsgsToDelete(
 // deleted = true, и возвращает количество удалённых строк. ReadCommitted —
 // как и в старой реализации: между чтением и записью здесь нет решения,
 // зависящего от промежуточного состояния БД, более строгая изоляция не нужна.
-func (s *SentMsgStore) RemoveDeletedMessages(ctx context.Context) (int64, error) {
+func (s *SentMsgStore) RemoveDeletedMessages(
+	ctx context.Context,
+) (int64, error) {
 	return s.removeDeletedMessagesWithPool(ctx, s.pool)
 }
 
@@ -149,7 +162,19 @@ func (s *SentMsgStore) removeDeletedMessagesWithPool(
 	if err != nil {
 		return 0, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+
+	defer func() {
+		if rollbackErr := tx.Rollback(
+			ctx,
+		); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			s.log.ErrorContext(
+				ctx,
+				"rollback failed",
+				slog.Any("error", rollbackErr),
+			)
+		}
+	}()
 
 	removed, err := sqlcgen.New(tx).DeleteAllMarkedSentMessages(ctx)
 	if err != nil {
@@ -169,11 +194,27 @@ func (s *SentMsgStore) markEndOfDayMsgDeletedWithPool(
 ) error {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
-		s.log.ErrorContext(ctx, "begin tx failed, continue without tx", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"begin tx failed, continue without tx",
+			slog.Any("error", err),
+		)
 
 		return s.q.MarkEndOfDayMsgDeleted(ctx)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+
+	defer func() {
+		if rollbackErr := tx.Rollback(
+			ctx,
+		); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			s.log.ErrorContext(
+				ctx,
+				"rollback failed",
+				slog.Any("error", rollbackErr),
+			)
+		}
+	}()
 
 	if err := sqlcgen.New(tx).MarkEndOfDayMsgDeleted(ctx); err != nil {
 		return err
@@ -182,7 +223,9 @@ func (s *SentMsgStore) markEndOfDayMsgDeletedWithPool(
 	return tx.Commit(ctx)
 }
 
-func mapSentMsgToDeleteRow(row sqlcgen.LoadSentMsgsToDeleteForUpdateRow) models.SentMessage {
+func mapSentMsgToDeleteRow(
+	row sqlcgen.LoadSentMsgsToDeleteForUpdateRow,
+) models.SentMessage {
 	return models.SentMessage{
 		ID:           int64(row.ID),
 		ChatID:       row.ChatID,

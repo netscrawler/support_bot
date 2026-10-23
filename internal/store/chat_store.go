@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
@@ -56,6 +57,7 @@ func (s *ChatStore) Exists(ctx context.Context, chatID int64) (bool, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
+
 	if err != nil {
 		return false, fmt.Errorf("find chat by id: %w", err)
 	}
@@ -63,14 +65,23 @@ func (s *ChatStore) Exists(ctx context.Context, chatID int64) (bool, error) {
 	return true, nil
 }
 
-func (s *ChatStore) GetByTitle(ctx context.Context, title string) (*models.TgChatDTO, error) {
+func (s *ChatStore) GetByTitle(
+	ctx context.Context,
+	title string,
+) (*models.TgChatDTO, error) {
 	row, err := s.q.GetChatByTitle(ctx, &title)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
 	chat := mapChatRow(
-		row.ID, row.ChatID, row.Title, row.Type, row.Description, row.IsActive, row.ChType,
+		row.ID,
+		row.ChatID,
+		row.Title,
+		row.Type,
+		row.Description,
+		row.IsActive,
+		row.ChType,
 	)
 
 	return &chat, nil
@@ -89,7 +100,13 @@ func (s *ChatStore) GetAll(ctx context.Context) ([]models.TgChatDTO, error) {
 	chats := make([]models.TgChatDTO, 0, len(rows))
 	for _, row := range rows {
 		chats = append(chats, mapChatRow(
-			row.ID, row.ChatID, row.Title, row.Type, row.Description, row.IsActive, row.ChType,
+			row.ID,
+			row.ChatID,
+			row.Title,
+			row.Type,
+			row.Description,
+			row.IsActive,
+			row.ChType,
 		))
 	}
 

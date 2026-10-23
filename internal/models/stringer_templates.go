@@ -1,6 +1,7 @@
 package models
 
-const recipientStringTemplate = `
+const (
+	recipientStringTemplate = `
 <b>{{.Name}}</b>
 
 {{if .Chat}}
@@ -46,7 +47,7 @@ const recipientStringTemplate = `
 {{end}}
 `
 
-const exportStringTemplate = `
+	exportStringTemplate = `
 <ul>
     <li><b>Формат:</b> <code>{{.Format}}</code></li>
 
@@ -61,7 +62,7 @@ const exportStringTemplate = `
 </ul>
 `
 
-const reportInfoStringTemplate = `
+	reportInfoStringTemplate = `
 <h2>{{.Name}}</h2>
 
 {{.Title}}
@@ -116,3 +117,4 @@ const reportInfoStringTemplate = `
 Пусто
 {{end}}
 `
+)

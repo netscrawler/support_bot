@@ -3,9 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -13,7 +14,9 @@ import (
 )
 
 // maxRunErrorRunes — предел длины текста ошибки в журнале запусков.
-const maxRunErrorRunes = 4000
+const (
+	maxRunErrorRunes = 4000
+)
 
 // RunStore — журнал запусков отчётов поверх sqlc-запросов report_run.sql.
 type RunStore struct {
@@ -82,7 +85,11 @@ func (s *RunStore) LastSuccessHash(
 	return *h, true, nil
 }
 
-func (s *RunStore) List(ctx context.Context, reportName string, limit int) ([]models.Run, error) {
+func (s *RunStore) List(
+	ctx context.Context,
+	reportName string,
+	limit int,
+) ([]models.Run, error) {
 	rows, err := s.q.ListReportRuns(ctx, sqlcgen.ListReportRunsParams{
 		ReportName: reportName,
 		Limit:      int32(limit), //nolint:gosec // limit мал
@@ -108,8 +115,14 @@ func (s *RunStore) List(ctx context.Context, reportName string, limit int) ([]mo
 	return runs, nil
 }
 
-func (s *RunStore) DeleteOlderThan(ctx context.Context, before time.Time) (int64, error) {
-	return s.q.DeleteReportRunsBefore(ctx, pgtype.Timestamptz{Time: before, Valid: true})
+func (s *RunStore) DeleteOlderThan(
+	ctx context.Context,
+	before time.Time,
+) (int64, error) {
+	return s.q.DeleteReportRunsBefore(
+		ctx,
+		pgtype.Timestamptz{Time: before, Valid: true},
+	)
 }
 
 func nilIfEmpty(s string) *string {

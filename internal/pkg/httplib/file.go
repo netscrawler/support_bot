@@ -2,6 +2,7 @@ package httplib
 
 import (
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -23,23 +24,35 @@ func WithContentType(ct string) FileOption {
 // File writes r to w as a downloadable file response, deriving Content-Type
 // from filename's extension (falling back to application/octet-stream)
 // unless overridden via WithContentType.
-func File(w http.ResponseWriter, filename string, r io.Reader, opts ...FileOption) {
+func File(
+	w http.ResponseWriter,
+	filename string,
+	r io.Reader,
+	opts ...FileOption,
+) {
 	cfg := fileConfig{contentType: mime.TypeByExtension(filepath.Ext(filename))}
 	if cfg.contentType == "" {
 		cfg.contentType = "application/octet-stream"
 	}
+
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	disposition := mime.FormatMediaType(
+		"attachment",
+		map[string]string{"filename": filename},
+	)
 	if disposition == "" {
 		disposition = "attachment"
 	}
 
 	w.Header().Set("Content-Type", cfg.contentType)
 	w.Header().Set("Content-Disposition", disposition)
-	io.Copy(w, r)
+
+	if _, err := io.Copy(w, r); err != nil {
+		slog.Error("write download", slog.Any("error", err))
+	}
 }
 
 // CSV writes r as a UTF-8 CSV file, prefixed with a byte-order mark so

@@ -2,12 +2,12 @@ package postgres
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"os"
-	"support_bot/internal/pkg/secret"
 	"testing"
 	"time"
+
+	"support_bot/internal/pkg/secret"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
@@ -37,8 +37,10 @@ func TestIntegrationReadOnly(t *testing.T) {
 
 	c, err := New(
 		ctx,
-		map[string]Config{"db": {DSN: secret.String(dsn), StatementTimeout: time.Second}},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		map[string]Config{
+			"db": {DSN: secret.String(dsn), StatementTimeout: time.Second},
+		},
+		slog.New(slog.DiscardHandler),
 	)
 	require.NoError(t, err)
 	t.Cleanup(c.Close)
@@ -53,19 +55,33 @@ func TestIntegrationReadOnly(t *testing.T) {
 	require.Error(t, err)
 
 	var n int
-	require.NoError(t, admin.QueryRow(ctx, "select count(*) from pgcoll_tmp").Scan(&n))
+
+	require.NoError(
+		t,
+		admin.QueryRow(ctx, "select count(*) from pgcoll_tmp").Scan(&n),
+	)
 	require.Equal(t, 1, n)
 
 	start := time.Now()
+
 	_, err = c.Fetch(ctx, "db", "select pg_sleep(5)", nil)
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 4*time.Second)
 
 	got, err := c.Fetch(ctx, "db", "show default_transaction_read_only", nil)
 	require.NoError(t, err)
-	require.Equal(t, []map[string]any{{"default_transaction_read_only": "on"}}, got)
+	require.Equal(
+		t,
+		[]map[string]any{{"default_transaction_read_only": "on"}},
+		got,
+	)
 
-	got, err = c.Fetch(ctx, "db", "select @v::text as v", map[string]string{"v": "1; drop table x"})
+	got, err = c.Fetch(
+		ctx,
+		"db",
+		"select @v::text as v",
+		map[string]string{"v": "1; drop table x"},
+	)
 	require.NoError(t, err)
 	require.Equal(t, []map[string]any{{"v": "1; drop table x"}}, got)
 }

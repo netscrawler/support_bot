@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	apihttp "support_bot/internal/api/http"
 	apihandlers "support_bot/internal/api/http/handlers"
 	"support_bot/internal/config"
@@ -13,9 +14,15 @@ import (
 	"go.uber.org/fx"
 )
 
-var httpModule = fx.Module("http", fx.Provide(newReportHandler, newHTTPServer, newMetricsServer))
+var httpModule = fx.Module(
+	"http",
+	fx.Provide(newReportHandler, newHTTPServer, newMetricsServer),
+)
 
-func newReportHandler(reportGenSvc *reportsvc.Report, log *slog.Logger) *apihandlers.Handler {
+func newReportHandler(
+	reportGenSvc *reportsvc.Report,
+	log *slog.Logger,
+) *apihandlers.Handler {
 	return apihandlers.NewHandler(reportGenSvc, log)
 }
 
@@ -30,6 +37,7 @@ func newHTTPServer(
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			httpSrv.Start()
+
 			return nil
 		},
 		OnStop: httpSrv.Shutdown,
@@ -53,6 +61,7 @@ func newMetricsServer(
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			srv.Start()
+
 			return nil
 		},
 		OnStop: srv.Shutdown,

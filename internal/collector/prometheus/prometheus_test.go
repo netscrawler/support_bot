@@ -15,7 +15,11 @@ import (
 
 func TestBuildSources(t *testing.T) {
 	gr := map[string]GrafanaConfig{
-		"ops":  {URL: "https://g.example/", Token: "gt", Timeout: 5 * time.Second},
+		"ops": {
+			URL:     "https://g.example/",
+			Token:   "gt",
+			Timeout: 5 * time.Second,
+		},
 		"ops0": {URL: "https://g0.example", Token: "gt"},
 	}
 
@@ -24,11 +28,27 @@ func TestBuildSources(t *testing.T) {
 		cfg  Config
 		want string
 	}{
-		{"оба варианта", Config{URL: "http://p", Grafana: "ops", DatasourceUID: "u"}, "либо url"},
+		{
+			"оба варианта",
+			Config{URL: "http://p", Grafana: "ops", DatasourceUID: "u"},
+			"либо url",
+		},
 		{"ни одного", Config{}, "ни url"},
-		{"grafana без uid", Config{Grafana: "ops"}, "и grafana, и datasource_uid"},
-		{"uid без grafana", Config{DatasourceUID: "u"}, "и grafana, и datasource_uid"},
-		{"нет grafana", Config{Grafana: "nope", DatasourceUID: "u"}, `grafana "nope"`},
+		{
+			"grafana без uid",
+			Config{Grafana: "ops"},
+			"и grafana, и datasource_uid",
+		},
+		{
+			"uid без grafana",
+			Config{DatasourceUID: "u"},
+			"и grafana, и datasource_uid",
+		},
+		{
+			"нет grafana",
+			Config{Grafana: "nope", DatasourceUID: "u"},
+			`grafana "nope"`,
+		},
 		{
 			"bearer и basic",
 			Config{URL: "http://p", BearerToken: "t", BasicAuth: &BasicAuth{}},
@@ -45,7 +65,10 @@ func TestBuildSources(t *testing.T) {
 	srcs, err := buildSources(map[string]Config{
 		"plain":  {URL: "http://p/"},
 		"bearer": {URL: "http://p", BearerToken: "bt", Timeout: time.Second},
-		"basic":  {URL: "http://p", BasicAuth: &BasicAuth{User: "u", Password: "pw"}},
+		"basic": {
+			URL:       "http://p",
+			BasicAuth: &BasicAuth{User: "u", Password: "pw"},
+		},
 		"proxy":  {Grafana: "ops", DatasourceUID: "abc"},
 		"proxy2": {Grafana: "ops", DatasourceUID: "abc", Timeout: time.Minute},
 		"proxy0": {Grafana: "ops0", DatasourceUID: "abc"},
@@ -72,7 +95,11 @@ func TestBuildSources(t *testing.T) {
 	require.Equal(t, "u", u)
 	require.Equal(t, "pw", p)
 
-	require.Equal(t, "https://g.example/api/datasources/proxy/uid/abc", srcs["proxy"].baseURL)
+	require.Equal(
+		t,
+		"https://g.example/api/datasources/proxy/uid/abc",
+		srcs["proxy"].baseURL,
+	)
 	require.Equal(t, "Bearer gt", req("proxy").Header.Get("Authorization"))
 	require.Equal(t, 5*time.Second, srcs["proxy"].timeout)
 	require.Equal(t, time.Minute, srcs["proxy2"].timeout)
@@ -95,11 +122,26 @@ func TestBuildRequest(t *testing.T) {
 
 	path, v, err = buildRequest(
 		"up",
-		map[string]string{"start": "1", "end": "2", "step": "1h", "time": "9", "x": "y"},
+		map[string]string{
+			"start": "1",
+			"end":   "2",
+			"step":  "1h",
+			"time":  "9",
+			"x":     "y",
+		},
 	)
 	require.NoError(t, err)
 	require.Equal(t, "/api/v1/query_range", path)
-	require.Equal(t, url.Values{"query": {"up"}, "start": {"1"}, "end": {"2"}, "step": {"1h"}}, v)
+	require.Equal(
+		t,
+		url.Values{
+			"query": {"up"},
+			"start": {"1"},
+			"end":   {"2"},
+			"step":  {"1h"},
+		},
+		v,
+	)
 
 	_, _, err = buildRequest("up", map[string]string{"start": "1"})
 	require.ErrorContains(t, err, "end, step")
@@ -128,7 +170,7 @@ func newTestCollector(
 	c, err := New(
 		map[string]Config{"main": cfg},
 		gr,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 	)
 	require.NoError(t, err)
 
@@ -138,6 +180,7 @@ func newTestCollector(
 func respond(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
 		_, _ = io.WriteString(w, body)
 	}
 }
@@ -147,13 +190,23 @@ func TestFetchVector(t *testing.T) {
 
 	c := newTestCollector(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r
-		respond(`{"status":"success","warnings":["w"],"data":{"resultType":"vector","result":[
+		respond(
+			`{"status":"success","warnings":["w"],"data":{"resultType":"vector","result":[
 			{"metric":{"__name__":"up","job":"api"},"value":[1700000000,"1"]},
 			{"metric":{"job":"nan"},"value":[1700000000,"NaN"]},
-			{"metric":{"job":"hist"},"histogram":[1700000000,{}]}]}}`)(w, r)
+			{"metric":{"job":"hist"},"histogram":[1700000000,{}]}]}}`,
+		)(
+			w,
+			r,
+		)
 	}, Config{}, nil)
 
-	rows, err := c.Fetch(context.Background(), "main", "up", map[string]string{"time": "42"})
+	rows, err := c.Fetch(
+		context.Background(),
+		"main",
+		"up",
+		map[string]string{"time": "42"},
+	)
 	require.NoError(t, err)
 	require.Equal(t, "/api/v1/query", got.URL.Path)
 	require.Equal(t, "up", got.URL.Query().Get("query"))
@@ -180,7 +233,11 @@ func TestFetchMatrix(t *testing.T) {
 	require.Equal(t, "/api/v1/query_range", got.URL.Path)
 	require.Equal(t, "1h", got.URL.Query().Get("step"))
 	require.Equal(t, []map[string]any{
-		{"metric": "up", "timestamp": "2023-11-14T22:13:20Z", "value": float64(1)},
+		{
+			"metric":    "up",
+			"timestamp": "2023-11-14T22:13:20Z",
+			"value":     float64(1),
+		},
 		{"metric": "up", "timestamp": "2023-11-14T23:13:20Z", "value": nil},
 	}, rows)
 }
@@ -188,7 +245,9 @@ func TestFetchMatrix(t *testing.T) {
 func TestFetchErrors(t *testing.T) {
 	c := newTestCollector(
 		t,
-		respond(`{"status":"error","errorType":"bad_data","error":"parse error"}`),
+		respond(
+			`{"status":"error","errorType":"bad_data","error":"parse error"}`,
+		),
 		Config{},
 		nil,
 	)
@@ -200,7 +259,9 @@ func TestFetchErrors(t *testing.T) {
 
 	c = newTestCollector(
 		t,
-		respond(`{"status":"success","data":{"resultType":"scalar","result":[1,"2"]}}`),
+		respond(
+			`{"status":"success","data":{"resultType":"scalar","result":[1,"2"]}}`,
+		),
 		Config{},
 		nil,
 	)
@@ -209,6 +270,7 @@ func TestFetchErrors(t *testing.T) {
 
 	c = newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
+
 		_, _ = io.WriteString(w, "<html>bad gateway</html>")
 	}, Config{}, nil)
 	_, err = c.Fetch(context.Background(), "main", "up", nil)
@@ -216,6 +278,7 @@ func TestFetchErrors(t *testing.T) {
 
 	c = newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
+
 		_, _ = io.WriteString(w, `{"message":"invalid API key"}`)
 	}, Config{}, nil)
 	_, err = c.Fetch(context.Background(), "main", "up", nil)
@@ -228,17 +291,31 @@ func TestFetchAuth(t *testing.T) {
 
 	h := func(w http.ResponseWriter, r *http.Request) {
 		got = r
-		respond(`{"status":"success","data":{"resultType":"vector","result":[]}}`)(w, r)
+		respond(
+			`{"status":"success","data":{"resultType":"vector","result":[]}}`,
+		)(
+			w,
+			r,
+		)
 	}
 
 	c := newTestCollector(t, h, Config{Grafana: "ops", DatasourceUID: "abc"},
 		map[string]GrafanaConfig{"ops": {Token: "gt"}})
 	_, err := c.Fetch(context.Background(), "main", "up", nil)
 	require.NoError(t, err)
-	require.Equal(t, "/api/datasources/proxy/uid/abc/api/v1/query", got.URL.Path)
+	require.Equal(
+		t,
+		"/api/datasources/proxy/uid/abc/api/v1/query",
+		got.URL.Path,
+	)
 	require.Equal(t, "Bearer gt", got.Header.Get("Authorization"))
 
-	c = newTestCollector(t, h, Config{BasicAuth: &BasicAuth{User: "u", Password: "p"}}, nil)
+	c = newTestCollector(
+		t,
+		h,
+		Config{BasicAuth: &BasicAuth{User: "u", Password: "p"}},
+		nil,
+	)
 	_, err = c.Fetch(context.Background(), "main", "up", nil)
 	require.NoError(t, err)
 

@@ -2,6 +2,7 @@ package models
 
 import (
 	"bytes"
+
 	"support_bot/internal/pkg/text"
 )
 
@@ -21,24 +22,16 @@ type Data struct {
 	Type sendKind
 }
 
-func (d Data) Read(p []byte) (n int, err error) {
-	return d.Data.Read(p)
-}
-
-func (d Data) Name() string {
-	return d.FileName
-}
-
-func NewTextData(text *bytes.Buffer, eType string) Data {
+func NewTextData(buf *bytes.Buffer, eType string) Data {
 	if eType == "rich_text" {
 		return Data{
-			Data: text,
+			Data: buf,
 			Type: SendRichTextKind,
 		}
 	}
 
 	return Data{
-		Data: text,
+		Data: buf,
 		Type: SendTextKind,
 	}
 }
@@ -69,4 +62,10 @@ func NewFileData(file *bytes.Buffer, name string) (Data, error) {
 	}, nil
 }
 
-func (d Data) kind() sendKind { return d.Type }
+func (d Data) Read(p []byte) (n int, err error) {
+	return d.Data.Read(p)
+}
+
+func (d Data) Name() string {
+	return d.FileName
+}

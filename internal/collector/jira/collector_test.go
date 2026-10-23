@@ -11,13 +11,17 @@ import (
 func TestFetchSendsRealToken(t *testing.T) {
 	var got string
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get("Authorization")
-		_, _ = w.Write([]byte(`{}`))
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = r.Header.Get("Authorization")
+			_, _ = w.Write([]byte(`{}`))
+		}),
+	)
 	defer srv.Close()
 
-	_, err := New(Config{AuthToken: "jira-secret", JiraHost: srv.URL}).Fetch(t.Context(), "x", nil)
+	_, err := New(
+		Config{AuthToken: "jira-secret", JiraHost: srv.URL},
+	).Fetch(t.Context(), "x", nil)
 	require.NoError(t, err)
 	require.Equal(t, "Bearer jira-secret", got)
 }

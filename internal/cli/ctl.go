@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+
 	"support_bot/internal/config"
 	"support_bot/internal/models"
 	"support_bot/internal/postgres"
@@ -20,18 +22,27 @@ import (
 	"support_bot/internal/store"
 )
 
+const (
+	cmdCreate = "create"
+)
+
 func Ctl() {
 	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "Usage: %s ctl <command> [args]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Commands: export, create, apply, validate, script, link\n")
+		fmt.Fprintf(
+			os.Stderr,
+			"Commands: export, create, apply, validate, script, link\n",
+		)
+
 		return
 	}
 
 	var err error
+
 	switch os.Args[2] {
 	case "export":
 		err = exportReportsDslFromDB(os.Args[3:])
-	case "create":
+	case cmdCreate:
 		err = createReportDSLTemplate(os.Args[3:])
 	case "apply":
 		err = applyDSLs(os.Args[3:])
@@ -52,18 +63,33 @@ func Ctl() {
 	}
 }
 
-func setupDB(ctx context.Context, cfgPath string) (*postgres.DB, *config.Config, error) {
+func setupDB(
+	ctx context.Context,
+	cfgPath string,
+) (*postgres.DB, error) {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load config: %w", err)
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 
 	db, err := postgres.New(ctx, cfg.Database, slog.Default())
 	if err != nil {
-		return nil, nil, fmt.Errorf("create db connection: %w", err)
+		return nil, fmt.Errorf("create db connection: %w", err)
 	}
 
-	return db, cfg, nil
+	return db, nil
+}
+
+func closeDB(ctx context.Context, db *postgres.DB) {
+	if err := db.Stop(ctx); err != nil {
+		slog.Error("Unable to stop db", "error", err)
+	}
+}
+
+func closeFile(f *os.File) {
+	if err := f.Close(); err != nil {
+		slog.Error("Unable to close file", "path", f.Name(), "error", err)
+	}
 }
 
 func exportReportsDslFromDB(args []string) error {
@@ -71,6 +97,7 @@ func exportReportsDslFromDB(args []string) error {
 
 	cfgPath := fs.String("config", "", "Путь к конфигурационному файлу")
 	out := fs.String("out", "", "Путь к папке для сохранения отчетов")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -78,11 +105,11 @@ func exportReportsDslFromDB(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	db, _, err := setupDB(ctx, *cfgPath)
+	db, err := setupDB(ctx, *cfgPath)
 	if err != nil {
 		return err
 	}
-	defer db.Stop(ctx)
+	defer closeDB(ctx, db)
 
 	mng := service.NewReportManager(
 		store.NewReportStore(db.GetConn(), slog.Default()),
@@ -100,21 +127,30 @@ func exportReportsDslFromDB(args []string) error {
 	for _, r := range reports {
 		data, err := json.MarshalIndent(r, "", "  ")
 		if err != nil {
-			slog.Error("Unable to marshal report", "report", r.Name, "error", err)
+			slog.Error(
+				"Unable to marshal report",
+				"report",
+				r.Name,
+				"error",
+				err,
+			)
+
 			continue
 		}
 
 		fName := strings.ToLower(r.Name)
 		rP := filepath.Join(*out, fName+".json")
 
-		if err := os.MkdirAll(filepath.Dir(rP), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(rP), 0o750); err != nil {
 			return fmt.Errorf("create directory: %w", err)
 		}
 
-		if err := os.WriteFile(rP, data, 0o644); err != nil {
+		if err := os.WriteFile(rP, data, 0o600); err != nil {
 			slog.Error("Unable to save report", "path", rP, "error", err)
+
 			continue
 		}
+
 		fmt.Fprintf(os.Stdout, "Saved report %s to %s\n", r.Name, rP)
 	}
 
@@ -132,11 +168,16 @@ func createReportDSLTemplate(args []string) error {
 	var wr io.Writer
 
 	if *out != "" {
-		file, err := os.OpenFile(*out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		file, err := os.OpenFile(
+			*out,
+			os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+			0o600,
+		)
 		if err != nil {
 			return fmt.Errorf("create file: %w", err)
 		}
-		defer file.Close()
+		defer closeFile(file)
+
 		wr = file
 	} else {
 		wr = os.Stdout
@@ -146,10 +187,12 @@ func createReportDSLTemplate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("marshal report example: %w", err)
 	}
+
 	_, err = wr.Write(b)
 	if err != nil {
 		return fmt.Errorf("write report example: %w", err)
 	}
+
 	return nil
 }
 
@@ -158,6 +201,7 @@ func applyDSLs(args []string) error {
 
 	cfgPath := fs.String("config", "", "Путь к конфигурационному файлу")
 	dslsPath := fs.String("report", "", "Путь к файлу с отчетами")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -168,7 +212,7 @@ func applyDSLs(args []string) error {
 	}
 
 	if len(patterns) == 0 {
-		return fmt.Errorf("no report path provided")
+		return errors.New("no report path provided")
 	}
 
 	files, err := ResolveFiles(patterns...)
@@ -181,11 +225,11 @@ func applyDSLs(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	db, _, err := setupDB(ctx, *cfgPath)
+	db, err := setupDB(ctx, *cfgPath)
 	if err != nil {
 		return err
 	}
-	defer db.Stop(ctx)
+	defer closeDB(ctx, db)
 
 	mng := service.NewReportManager(
 		store.NewReportStore(db.GetConn(), slog.Default()),
@@ -196,20 +240,26 @@ func applyDSLs(args []string) error {
 	for _, f := range files {
 		if filepath.Ext(f) != ".json" {
 			fmt.Fprintf(os.Stderr, "Skipping file %s: not a JSON file\n", f)
+
 			continue
 		}
+
 		file, err := os.ReadFile(f)
 		if err != nil {
 			slog.Error("Unable to read file", "path", f, "error", err)
+
 			continue
 		}
 
 		fmt.Fprintf(os.Stdout, "Saving report %s\n", f)
+
 		err = mng.Create(ctx, bytes.NewReader(file))
 		if err != nil {
 			slog.Error("Unable to save report to db", "path", f, "error", err)
+
 			continue
 		}
+
 		fmt.Fprintf(os.Stdout, "Saved report %s\n", f)
 	}
 
@@ -225,7 +275,9 @@ func ResolveFiles(patterns ...string) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			files = append(files, matched...)
+
 			continue
 		}
 
@@ -238,6 +290,7 @@ func ResolveFiles(patterns ...string) ([]string, error) {
 func validateDSLs(args []string) error {
 	fs := flag.NewFlagSet("ctl validate", flag.ContinueOnError)
 	dslsPath := fs.String("report", "", "Путь к файлу с отчетами")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -248,7 +301,7 @@ func validateDSLs(args []string) error {
 	}
 
 	if len(patterns) == 0 {
-		return fmt.Errorf("no report path provided")
+		return errors.New("no report path provided")
 	}
 
 	files, err := ResolveFiles(patterns...)
@@ -265,13 +318,16 @@ func validateDSLs(args []string) error {
 		if filepath.Ext(f) != ".json" {
 			continue
 		}
+
 		file, err := os.ReadFile(f)
 		if err != nil {
 			slog.Error("Unable to read file", "path", f, "error", err)
+
 			continue
 		}
 
 		var report models.Report
+
 		if err := json.Unmarshal(file, &report); err != nil {
 			return fmt.Errorf("unmarshal report %s: %w", f, err)
 		}
@@ -279,6 +335,7 @@ func validateDSLs(args []string) error {
 		if err := validator.Validate(ctx, report); err != nil {
 			return fmt.Errorf("validate report %s: %w", f, err)
 		}
+
 		fmt.Fprintf(os.Stdout, "Report %s is valid\n", f)
 	}
 
@@ -289,11 +346,12 @@ func scriptCtl(args []string) error {
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: ctl script <command> [args]\n")
 		fmt.Fprintf(os.Stderr, "Commands: create, save\n")
+
 		return nil
 	}
 
 	switch args[0] {
-	case "create":
+	case cmdCreate:
 		return createExampleScript(args[1:])
 	case "save":
 		return saveScript(args[1:])
@@ -307,6 +365,7 @@ func saveScript(args []string) error {
 
 	cfgPath := fs.String("config", "", "Путь к конфигурационному файлу")
 	scriptPath := fs.String("script", "", "Путь к файлу скрипта")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -317,17 +376,17 @@ func saveScript(args []string) error {
 	}
 
 	if len(patterns) == 0 {
-		return fmt.Errorf("no script path provided")
+		return errors.New("no script path provided")
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	db, _, err := setupDB(ctx, *cfgPath)
+	db, err := setupDB(ctx, *cfgPath)
 	if err != nil {
 		return err
 	}
-	defer db.Stop(ctx)
+	defer closeDB(ctx, db)
 
 	files, err := ResolveFiles(patterns...)
 	if err != nil {
@@ -341,17 +400,26 @@ func saveScript(args []string) error {
 
 		script, err := os.ReadFile(f)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to read script file %s: %v\n", f, err)
+			fmt.Fprintf(
+				os.Stderr,
+				"Unable to read script file %s: %v\n",
+				f,
+				err,
+			)
+
 			continue
 		}
 
 		err = mng.Save(ctx, scriptName, string(script))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "read script file: %v\n", err)
+
 			continue
 		}
+
 		fmt.Fprintf(os.Stdout, "Script %s saved successfully\n", scriptName)
 	}
+
 	return nil
 }
 
@@ -366,11 +434,16 @@ func createExampleScript(args []string) error {
 	var wr io.Writer
 
 	if *out != "" {
-		file, err := os.OpenFile(*out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		file, err := os.OpenFile(
+			*out,
+			os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+			0o600,
+		)
 		if err != nil {
 			return fmt.Errorf("create file: %w", err)
 		}
-		defer file.Close()
+		defer closeFile(file)
+
 		wr = file
 	} else {
 		wr = os.Stdout
@@ -379,5 +452,6 @@ func createExampleScript(args []string) error {
 	if _, err := wr.Write([]byte(lua.ExampleLuaPlugin)); err != nil {
 		return fmt.Errorf("write script: %w", err)
 	}
+
 	return nil
 }

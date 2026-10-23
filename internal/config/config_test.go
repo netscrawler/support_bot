@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"testing"
+	"time"
+
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
@@ -15,25 +18,22 @@ import (
 	"support_bot/internal/config"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/pkg/secret"
 	"support_bot/internal/postgres"
-	"testing"
-	"time"
-
-	maxbot "support_bot/internal/max_bot"
-
 	tgbot "support_bot/internal/tg_bot"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-//nolint:gosec // фиктивные секреты для теста
 func fullSecretsConfig() config.Config {
 	return config.Config{
-		Database:   postgres.Config{Password: "db-pass-1", DSN: "postgres://u:dsn-pass-2@h/db"},
+		Database: postgres.Config{
+			Password: "db-pass-1",
+			DSN:      "postgres://u:dsn-pass-2@h/db",
+		},
 		TgBot:      tgbot.Config{TelegramToken: "tg-token-3"},
 		MaxBot:     maxbot.Config{Token: "max-token-4"},
 		SMTP:       smtp.Config{Password: "smtp-pass-5"},
@@ -43,18 +43,35 @@ func fullSecretsConfig() config.Config {
 		Databases: map[string]pgcollector.Config{
 			"analytics": {DSN: "postgres://ro:map-dsn-9@host:5432/db"},
 		},
-		Grafana: map[string]prometheus.GrafanaConfig{"ops": {Token: "graf-token-10"}},
+		Grafana: map[string]prometheus.GrafanaConfig{
+			"ops": {Token: "graf-token-10"},
+		},
 		Prometheus: map[string]prometheus.Config{
 			"a": {BearerToken: "bearer-11"},
-			"b": {BasicAuth: &prometheus.BasicAuth{User: "u", Password: "basic-pass-12"}},
+			"b": {
+				BasicAuth: &prometheus.BasicAuth{
+					User:     "u",
+					Password: "basic-pass-12",
+				},
+			},
 		},
 		Zabbix: map[string]zabbix.Config{"z": {Token: "zbx-token-13"}},
 	}
 }
 
 var allSecrets = []string{
-	"db-pass-1", "dsn-pass-2", "tg-token-3", "max-token-4", "smtp-pass-5", "smb-pass-6",
-	"jira-token-7", "appm-token-8", "map-dsn-9", "graf-token-10", "bearer-11", "basic-pass-12",
+	"db-pass-1",
+	"dsn-pass-2",
+	"tg-token-3",
+	"max-token-4",
+	"smtp-pass-5",
+	"smb-pass-6",
+	"jira-token-7",
+	"appm-token-8",
+	"map-dsn-9",
+	"graf-token-10",
+	"bearer-11",
+	"basic-pass-12",
 	"zbx-token-13",
 }
 
@@ -103,7 +120,8 @@ func TestSecretFieldsAreSecretString(t *testing.T) {
 
 		for f := range rt.Fields() {
 			p := path + "." + f.Name
-			if f.Type.Kind() == reflect.String && f.Type != reflect.TypeFor[secret.String]() &&
+			if f.Type.Kind() == reflect.String &&
+				f.Type != reflect.TypeFor[secret.String]() &&
 				re.MatchString(f.Name) {
 				_, ok := allowed[p]
 				assert.True(t, ok, "%s должно быть secret.String", p)
@@ -130,7 +148,11 @@ func loadYAML(t *testing.T, body string) *config.Config {
 
 func TestLoadDeliveryDelays(t *testing.T) {
 	cfg := loadYAML(t, "delivery:\n  retry:\n    delays: [2s, 3s]\n")
-	assert.Equal(t, retry.Delays{2 * time.Second, 3 * time.Second}, cfg.Delivery.Retry.Delays)
+	assert.Equal(
+		t,
+		retry.Delays{2 * time.Second, 3 * time.Second},
+		cfg.Delivery.Retry.Delays,
+	)
 
 	cfg = loadYAML(t, "metabase_domain: x\n")
 	assert.Equal(
@@ -153,7 +175,7 @@ func TestLoadMetricsAddrDefault(t *testing.T) {
 }
 
 func TestLoadRegistersDSNSecrets(t *testing.T) {
-	dsn := "postgres://u:cfgpw-8842@h:5432/db" //nolint:gosec // тестовое значение
+	dsn := "postgres://u:cfgpw-8842@h:5432/db"
 	loadYAML(t, "databases:\n  main:\n    dsn: "+dsn+"\n")
 
 	assert.Equal(t, "x ***", secret.Redact("x cfgpw-8842"))
@@ -163,6 +185,7 @@ func TestLoadRegistersDSNSecrets(t *testing.T) {
 // validMinimal — дефолтный конфиг без необязательных секций.
 func validMinimal() config.Config {
 	c := *config.Default()
+
 	c.SMTP, c.SMB, c.Jira, c.MaxBot = smtp.Config{}, smb.Config{}, jira.Config{}, maxbot.Config{}
 
 	return c
@@ -183,9 +206,13 @@ func TestValidate(t *testing.T) {
 			wantErr: []string{"telegram.telegram_token: не задано"},
 		},
 		{
-			name:    "нет полей database",
-			mutate:  func(c *config.Config) { c.Database = postgres.Config{} },
-			wantErr: []string{"database.host", "database.user", "database.name"},
+			name:   "нет полей database",
+			mutate: func(c *config.Config) { c.Database = postgres.Config{} },
+			wantErr: []string{
+				"database.host",
+				"database.user",
+				"database.name",
+			},
 		},
 		{
 			name:    "smtp.host без остальных полей",
@@ -193,9 +220,14 @@ func TestValidate(t *testing.T) {
 			wantErr: []string{"smtp.email", "smtp.password", "smtp.port"},
 		},
 		{
-			name:    "smb включён без полей",
-			mutate:  func(c *config.Config) { c.SMB.Active = true },
-			wantErr: []string{"smb.address", "smb.user", "smb.password", "smb.share"},
+			name:   "smb включён без полей",
+			mutate: func(c *config.Config) { c.SMB.Active = true },
+			wantErr: []string{
+				"smb.address",
+				"smb.user",
+				"smb.password",
+				"smb.share",
+			},
 		},
 		{
 			name:   "smb выключен с мусором",

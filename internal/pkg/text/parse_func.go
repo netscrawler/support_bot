@@ -20,6 +20,7 @@ func ExecuteTemplate(templ string, data ...any) (string, error) {
 	}
 
 	var buf bytes.Buffer
+
 	if err := t.Execute(&buf, data); err != nil {
 		return "", err
 	}

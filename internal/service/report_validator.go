@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
 	"support_bot/internal/models"
 )
 
@@ -12,17 +14,20 @@ func NewReportValidation() *ReportValidation {
 	return &ReportValidation{}
 }
 
-func (r *ReportValidation) Validate(ctx context.Context, report models.Report) error {
+func (r *ReportValidation) Validate(
+	ctx context.Context,
+	report models.Report,
+) error {
 	if report.Name == "" {
-		return fmt.Errorf("report name is empty")
+		return errors.New("report name is empty")
 	}
 
 	if report.Title == "" {
-		return fmt.Errorf("report title is empty")
+		return errors.New("report title is empty")
 	}
 
 	if report.Evaluation == "" {
-		return fmt.Errorf("report evaluation is empty")
+		return errors.New("report evaluation is empty")
 	}
 
 	if _, err := models.ParsePeriod(string(report.DefaultPeriod)); err != nil {
@@ -37,7 +42,11 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		}
 
 		if seenQueries[q.Title] {
-			return fmt.Errorf("duplicate query title %q in report %s", q.Title, report.Name)
+			return fmt.Errorf(
+				"duplicate query title %q in report %s",
+				q.Title,
+				report.Name,
+			)
 		}
 
 		seenQueries[q.Title] = true
@@ -50,11 +59,18 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 
 	for _, rec := range report.Recipients {
 		if rec.Name == "" {
-			return fmt.Errorf("recipient name is empty in report %s", report.Name)
+			return fmt.Errorf(
+				"recipient name is empty in report %s",
+				report.Name,
+			)
 		}
 
 		if seenRecipients[rec.Name] {
-			return fmt.Errorf("duplicate recipient name %q in report %s", rec.Name, report.Name)
+			return fmt.Errorf(
+				"duplicate recipient name %q in report %s",
+				rec.Name,
+				report.Name,
+			)
 		}
 
 		seenRecipients[rec.Name] = true
@@ -69,11 +85,19 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 
 	for _, exp := range report.Exports {
 		if exp.Format == "" {
-			return fmt.Errorf("export format is empty in report %s", report.Name)
+			return fmt.Errorf(
+				"export format is empty in report %s",
+				report.Name,
+			)
 		}
 
 		if err := r.validateExport(ctx, exp); err != nil {
-			return fmt.Errorf("export %q in report %s: %w", exp.Format, report.Name, err)
+			return fmt.Errorf(
+				"export %q in report %s: %w",
+				exp.Format,
+				report.Name,
+				err,
+			)
 		}
 	}
 
@@ -85,7 +109,11 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		}
 
 		if c.Cron == "" {
-			return fmt.Errorf("cron expression is empty for %q in report %s", c.Name, report.Name)
+			return fmt.Errorf(
+				"cron expression is empty for %q in report %s",
+				c.Name,
+				report.Name,
+			)
 		}
 
 		key := fmt.Sprintf("%s:%s", c.Name, c.Cron)
@@ -132,18 +160,18 @@ func (r *ReportValidation) validateRecipient(
 }
 
 func (r *ReportValidation) validateRecipientRemotePath(
-	ctx context.Context,
+	_ context.Context,
 	remotePath *string,
 ) error {
 	if remotePath == nil || *remotePath == "" {
-		return fmt.Errorf("remote_path is required for smb recipients")
+		return errors.New("remote_path is required for smb recipients")
 	}
 
 	return nil
 }
 
 func (r *ReportValidation) validateRecipientChat(
-	ctx context.Context,
+	_ context.Context,
 	ch *models.Chat,
 	wantChatType string,
 ) error {
@@ -152,22 +180,26 @@ func (r *ReportValidation) validateRecipientChat(
 	}
 
 	if ch.ChType != wantChatType {
-		return fmt.Errorf("chat type %q does not match recipient type %q", ch.ChType, wantChatType)
+		return fmt.Errorf(
+			"chat type %q does not match recipient type %q",
+			ch.ChType,
+			wantChatType,
+		)
 	}
 
 	return nil
 }
 
 func (r *ReportValidation) validateRecipientEmailTemplate(
-	ctx context.Context,
+	_ context.Context,
 	tmpl *models.EmailTemplate,
 ) error {
 	if tmpl == nil {
-		return fmt.Errorf("email is required for email recipients")
+		return errors.New("email is required for email recipients")
 	}
 
 	if len(tmpl.Dest) == 0 {
-		return fmt.Errorf("email recipient has no destination addresses")
+		return errors.New("email recipient has no destination addresses")
 	}
 
 	return nil
@@ -176,20 +208,32 @@ func (r *ReportValidation) validateRecipientEmailTemplate(
 // validateExport checks fields that internal/exporter.Export dereferences
 // unconditionally per format, so a bad report fails validation instead of
 // panicking at export time.
-func (r *ReportValidation) validateExport(ctx context.Context, export models.Export) error {
+func (r *ReportValidation) validateExport(
+	ctx context.Context,
+	export models.Export,
+) error {
 	switch export.Format {
-	case models.ReportFormatCsv, models.ReportFormatXlsx, models.ReportFormatPng,
-		models.ReportFormatHTML, models.ReportFormatPdf:
+	case models.ReportFormatCsv,
+		models.ReportFormatXlsx,
+		models.ReportFormatPng,
+		models.ReportFormatHTML,
+		models.ReportFormatPdf:
 		if export.FileName == nil || *export.FileName == "" {
-			return fmt.Errorf("file_name is required for format %q", export.Format)
+			return fmt.Errorf(
+				"file_name is required for format %q",
+				export.Format,
+			)
 		}
+
 	case models.ReportFormatText:
 	default:
 		return fmt.Errorf("unsupported export format %q", export.Format)
 	}
 
 	switch export.Format {
-	case models.ReportFormatHTML, models.ReportFormatPdf, models.ReportFormatText:
+	case models.ReportFormatHTML,
+		models.ReportFormatPdf,
+		models.ReportFormatText:
 		return r.validateExportTemplate(ctx, export.Template)
 	default:
 		return nil
@@ -197,11 +241,11 @@ func (r *ReportValidation) validateExport(ctx context.Context, export models.Exp
 }
 
 func (r *ReportValidation) validateExportTemplate(
-	ctx context.Context,
+	_ context.Context,
 	tmpl *models.Template,
 ) error {
 	if tmpl == nil {
-		return fmt.Errorf("template is required for this export format")
+		return errors.New("template is required for this export format")
 	}
 
 	if tmpl.TemplateText == "" {

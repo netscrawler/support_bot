@@ -38,7 +38,7 @@ func AppendCtx(parent context.Context, attr ...slog.Attr) context.Context {
 		return context.WithValue(parent, slogFields, v)
 	}
 
-	var v []slog.Attr
+	v := make([]slog.Attr, 0, len(attr))
 
 	v = append(v, attr...)
 

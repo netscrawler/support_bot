@@ -4,18 +4,23 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
 	"support_bot/internal/api/http/common"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/httplib"
 )
 
-// /api/v1/public/report/{report_id}
-func (h *Handler) GetGeneratedReportByID(w http.ResponseWriter, r *http.Request) {
+// GetGeneratedReportByID обслуживает /api/v1/public/report/{report_id}.
+func (h *Handler) GetGeneratedReportByID(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	reportID := r.PathValue(common.ReportIDPV)
 
 	err := common.ValidateReportIDPV(reportID)
 	if err != nil {
 		httplib.NewHTTPError(http.StatusBadRequest, err.Error()).Write(w)
+
 		return
 	}
 
@@ -23,16 +28,23 @@ func (h *Handler) GetGeneratedReportByID(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			httplib.ErrNotFound.Write(w)
+
 			return
 		}
 
 		if errors.Is(err, models.ErrLinkExpired) {
 			httplib.ErrGone.Write(w)
+
 			return
 		}
 
-		h.log.ErrorContext(r.Context(), "generate report failed", slog.Any("error", err))
+		h.log.ErrorContext(
+			r.Context(),
+			"generate report failed",
+			slog.Any("error", err),
+		)
 		httplib.ErrInternal.Write(w)
+
 		return
 	}
 

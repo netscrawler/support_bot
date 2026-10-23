@@ -1,8 +1,9 @@
 package duck_test
 
 import (
-	"support_bot/internal/processor/duck"
 	"testing"
+
+	"support_bot/internal/processor/duck"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,8 +18,8 @@ func TestDataFromMapSlice(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() {
-			err := duckDB.Close()
-			require.NoError(t, err)
+			closeErr := duckDB.Close()
+			require.NoError(t, closeErr)
 		}()
 
 		data := map[string][]map[string]any{
@@ -53,8 +54,8 @@ func TestDataFromMapSlice(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() {
-			err := duckDB.Close()
-			require.NoError(t, err)
+			closeErr := duckDB.Close()
+			require.NoError(t, closeErr)
 		}()
 
 		data := map[string][]map[string]any{
@@ -126,8 +127,8 @@ left join other_table on some_table.id = other_table.id`,
 		require.NoError(t, err)
 
 		defer func() {
-			err := duckDB.Close()
-			require.NoError(t, err)
+			closeErr := duckDB.Close()
+			require.NoError(t, closeErr)
 		}()
 
 		data := map[string][]map[string]any{
@@ -152,7 +153,10 @@ left join other_table on some_table.id = other_table.id`,
 		err = duckDB.LoadDataFromMapSlice(t.Context(), data)
 		require.NoError(t, err)
 
-		res, err := duckDB.ExecuteQuery(t.Context(), "SELECT * FROM some_table where id = 12")
+		res, err := duckDB.ExecuteQuery(
+			t.Context(),
+			"SELECT * FROM some_table where id = 12",
+		)
 		require.NoError(t, err)
 
 		expected := []map[string]any{
@@ -173,8 +177,8 @@ left join other_table on some_table.id = other_table.id`,
 		require.NoError(t, err)
 
 		defer func() {
-			err := duckDB.Close()
-			require.NoError(t, err)
+			closeErr := duckDB.Close()
+			require.NoError(t, closeErr)
 		}()
 
 		data := map[string][]map[string]any{
@@ -199,7 +203,10 @@ left join other_table on some_table.id = other_table.id`,
 		err = duckDB.LoadDataFromMapSlice(t.Context(), data)
 		require.NoError(t, err)
 
-		res, err := duckDB.ExecuteQuery(t.Context(), "SELECT count()as count FROM some_table")
+		res, err := duckDB.ExecuteQuery(
+			t.Context(),
+			"SELECT count()as count FROM some_table",
+		)
 		require.NoError(t, err)
 		assert.Equal(t, []map[string]any{{"count": int64(3)}}, res)
 	})
@@ -214,8 +221,8 @@ func TestSqlOperations(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() {
-			err := duckDB.Close()
-			require.NoError(t, err)
+			closeErr := duckDB.Close()
+			require.NoError(t, closeErr)
 		}()
 
 		data := map[string][]map[string]any{
@@ -261,6 +268,7 @@ func TestSqlOperations(t *testing.T) {
 			"SELECT users.name, vacations.name as vacation_name FROM users JOIN vacations ON users.vacation = vacations.id",
 		)
 		require.NoError(t, err)
+
 		expected := []map[string]any{
 			{
 				"name":          "john",
@@ -279,15 +287,15 @@ func TestSqlOperations(t *testing.T) {
 	})
 }
 
-func TestNoRowsInResult(t *testing.T) {
+func TestEmptyDataRejected(t *testing.T) {
 	t.Parallel()
 
 	duckDB, err := duck.New()
 	require.NoError(t, err)
 
 	defer func() {
-		err := duckDB.Close()
-		require.NoError(t, err)
+		closeErr := duckDB.Close()
+		require.NoError(t, closeErr)
 	}()
 
 	data := map[string][]map[string]any{
@@ -296,12 +304,25 @@ func TestNoRowsInResult(t *testing.T) {
 	}
 
 	err = duckDB.LoadDataFromMapSlice(t.Context(), data)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, duck.ErrCreateTableNoColumnInData)
+}
 
-	res, err := duckDB.ExecuteQuery(
+func TestLoadDataQuotesIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	db, err := duck.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	data := map[string][]map[string]any{
+		`odd" table`: {{`odd" column`: int32(7)}},
+	}
+	require.NoError(t, db.LoadDataFromMapSlice(t.Context(), data))
+
+	rows, err := db.ExecuteQuery(
 		t.Context(),
-		"SELECT users.name, vacations.name as vacation_name FROM users JOIN vacations ON users.vacation = vacations.id",
+		`SELECT "odd"" column" FROM "odd"" table"`,
 	)
 	require.NoError(t, err)
-	t.Log(res)
+	require.Equal(t, []map[string]any{{`odd" column`: int32(7)}}, rows)
 }

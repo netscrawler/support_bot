@@ -2,8 +2,9 @@ package models_test
 
 import (
 	"math"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 func TestDatasetHash(t *testing.T) {
@@ -30,8 +31,16 @@ func TestDatasetHash(t *testing.T) {
 			"s":     {{"a": 1, "b": "x"}, {"a": 2, "b": "y"}},
 			"_meta": {{"generated": "2026-10-24"}},
 		}, true},
-		{"порядок строк", models.Dataset{"s": {{"a": 2, "b": "y"}, {"a": 1, "b": "x"}}}, false},
-		{"значения", models.Dataset{"s": {{"a": 1, "b": "x"}, {"a": 3, "b": "y"}}}, false},
+		{
+			"порядок строк",
+			models.Dataset{"s": {{"a": 2, "b": "y"}, {"a": 1, "b": "x"}}},
+			false,
+		},
+		{
+			"значения",
+			models.Dataset{"s": {{"a": 1, "b": "x"}, {"a": 3, "b": "y"}}},
+			false,
+		},
 	}
 	for _, c := range cases {
 		if got := c.ds.Hash(); (got == h) != c.same {

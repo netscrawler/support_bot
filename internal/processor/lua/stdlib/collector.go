@@ -10,7 +10,11 @@ import (
 )
 
 type DirectCollector interface {
-	Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
+	Fetch(
+		ctx context.Context,
+		target string,
+		params map[string]string,
+	) ([]map[string]any, error)
 }
 
 // QueryCollector выполняет запрос в именованном источнике.
@@ -27,7 +31,7 @@ type CollectPlugin struct {
 	queries map[string]QueryCollector
 }
 
-// Источник без настройки в queries не кладём: значение — настоящий интерфейс, не типизированный nil.
+// NewCollector создаёт коллектор; источник без настройки в queries не кладём.
 func NewCollector(
 	directs map[string]DirectCollector,
 	queries map[string]QueryCollector,
@@ -35,16 +39,17 @@ func NewCollector(
 	if directs == nil {
 		directs = make(map[string]DirectCollector)
 	}
+
 	return &CollectPlugin{directs: directs, queries: queries}
 }
 
-func (c *CollectPlugin) Register(L *lua.LState) {
-	root := L.NewTable()
+func (c *CollectPlugin) Register(l *lua.LState) {
+	root := l.NewTable()
 
 	for name := range c.directs {
-		mod := L.NewTable()
+		mod := l.NewTable()
 
-		L.SetFuncs(mod, map[string]lua.LGFunction{
+		l.SetFuncs(mod, map[string]lua.LGFunction{
 			"collect": c.luaCollect(name),
 		})
 
@@ -56,12 +61,15 @@ func (c *CollectPlugin) Register(L *lua.LState) {
 			continue
 		}
 
-		mod := L.NewTable()
-		L.SetFuncs(mod, map[string]lua.LGFunction{"collect": c.luaQueryCollect(name)})
+		mod := l.NewTable()
+		l.SetFuncs(
+			mod,
+			map[string]lua.LGFunction{"collect": c.luaQueryCollect(name)},
+		)
 		root.RawSetString(name, mod)
 	}
 
-	L.SetGlobal("collector", root)
+	l.SetGlobal("collector", root)
 }
 
 func (c *CollectPlugin) luaCollect(name string) lua.LGFunction {
@@ -126,16 +134,16 @@ func pushRows(l *lua.LState, rows []map[string]any, err error) int {
 }
 
 func rowsToLua(
-	L *lua.LState,
+	l *lua.LState,
 	rows []map[string]any,
 ) *lua.LTable {
-	arr := L.NewTable()
+	arr := l.NewTable()
 
 	for _, row := range rows {
-		rowTbl := L.NewTable()
+		rowTbl := l.NewTable()
 
 		for k, v := range row {
-			rowTbl.RawSetString(k, luapkg.GoValueToLua(L, v))
+			rowTbl.RawSetString(k, luapkg.GoValueToLua(l, v))
 		}
 
 		arr.Append(rowTbl)

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/models"
 )
@@ -45,7 +46,11 @@ func (n *Notify) SendAdminNotify(ctx context.Context, msg string) {
 	}
 
 	for _, admin := range admins {
-		_, err := n.tg.SendText(ctx, models.TgChat{ChatID: admin.TelegramID}, msg)
+		_, err := n.tg.SendText(
+			ctx,
+			models.TgChat{ChatID: admin.TelegramID},
+			msg,
+		)
 		if err != nil {
 			n.log.ErrorContext(
 				ctx,

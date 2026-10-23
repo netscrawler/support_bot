@@ -3,18 +3,24 @@ package collector
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"support_bot/internal/metrics"
-	"support_bot/internal/models"
 	"sync"
 	"time"
+
+	"support_bot/internal/metrics"
+	"support_bot/internal/models"
 )
 
-const defaultParallelCollectors = 32
+const (
+	defaultParallelCollectors = 32
+)
 
 type DataFetcher interface {
-	Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
+	Fetch(
+		ctx context.Context,
+		target string,
+		params map[string]string,
+	) ([]map[string]any, error)
 }
 
 // QueryFetcher выполняет запрос query в именованном источнике target.
@@ -56,6 +62,7 @@ func NewCollector(
 	}
 
 	l.Info("create collector", slog.Any("parallel_query", parallel))
+
 	semaphore := make(chan struct{}, parallel)
 
 	return &Collector{
@@ -104,14 +111,24 @@ func (c *Collector) Collect(
 	close(errChan)
 
 	for r := range resChan {
-		c.log.DebugContext(ctx, "collecting data from card", slog.Any("card_name", r.Name))
+		c.log.DebugContext(
+			ctx,
+			"collecting data from card",
+			slog.Any("card_name", r.Name),
+		)
+
 		collected[r.Name] = r.Data
 	}
 
 	var collectError error
 
 	for err := range errChan {
-		c.log.DebugContext(ctx, "error while collecting data from card", slog.Any("error", err))
+		c.log.DebugContext(
+			ctx,
+			"error while collecting data from card",
+			slog.Any("error", err),
+		)
+
 		collectError = errors.Join(collectError, err)
 	}
 
@@ -153,29 +170,33 @@ func (c *Collector) collect(
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.pg.Fetch(ctx, target, crd.Query, params)
 				}
+
 			case models.CollectTypePrometheus:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.prom.Fetch(ctx, target, crd.Query, params)
 				}
+
 			case models.CollectTypeGrafanaAlerts:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.alerts.Fetch(ctx, target, crd.Query, params)
 				}
+
 			case models.CollectTypeZabbix:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.zabbix.Fetch(ctx, target, crd.Query, params)
 				}
-			default:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return nil, fmt.Errorf("unknown fetcher type")
-				}
 
+			default:
+				fetchFn = func(_ context.Context, _ string, _ map[string]string) ([]map[string]any, error) {
+					return nil, errors.New("unknown fetcher type")
+				}
 			}
 
 			fetchStart := time.Now()
 			data, err := fetchFn(ctx, crd.CardUUID, crd.Params)
 			metrics.CollectorDuration.WithLabelValues(crd.Type).
 				Observe(time.Since(fetchStart).Seconds())
+
 			if err != nil {
 				metrics.CollectorErrors.WithLabelValues(crd.Type).Inc()
 				c.log.ErrorContext(

@@ -2,33 +2,37 @@ package prometheus
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"support_bot/internal/pkg/secret"
 	"time"
+
+	"support_bot/internal/pkg/secret"
 )
 
-const defaultTimeout = 30 * time.Second
+const (
+	defaultTimeout = 30 * time.Second
+)
 
 type BasicAuth struct {
-	User     string        `yaml:"user"     json:"user"     comment:"Пользователь"`
-	Password secret.String `yaml:"password" json:"password" comment:"Пароль"`
+	User     string        `comment:"Пользователь"             json:"user"     yaml:"user"`
+	Password secret.String `comment:"Пароль"                   json:"password" yaml:"password"`
 }
 
 type Config struct {
-	URL           string        `yaml:"url"            json:"url"            comment:"URL Prometheus (прямой доступ)"`
-	BearerToken   secret.String `yaml:"bearer_token"   json:"bearer_token"   comment:"Bearer-токен (необязательно, не вместе с basic_auth)"`
-	BasicAuth     *BasicAuth    `yaml:"basic_auth"     json:"basic_auth"     comment:"Basic-авторизация (необязательно, не вместе с bearer_token)"`
-	Grafana       string        `yaml:"grafana"        json:"grafana"        comment:"Имя записи из секции grafana (доступ через datasource proxy)"`
-	DatasourceUID string        `yaml:"datasource_uid" json:"datasource_uid" comment:"UID datasource Prometheus в Grafana"`
-	Timeout       time.Duration `yaml:"timeout"        json:"timeout"        comment:"Таймаут запроса (по умолчанию 30s, для grafana-записи — таймаут Grafana)"`
+	URL           string        `comment:"URL Prometheus (прямой доступ)"                                                                                      json:"url"            yaml:"url"`
+	BearerToken   secret.String `comment:"Bearer-токен (необязательно, не вместе с basic_auth)"                                                                json:"bearer_token"   yaml:"bearer_token"`
+	BasicAuth     *BasicAuth    `comment:"Basic-авторизация (необязательно, не вместе с bearer_token)"                                                         json:"basic_auth"     yaml:"basic_auth"`
+	Grafana       string        `comment:"Имя записи из секции grafana (доступ через datasource proxy)"                                                        json:"grafana"        yaml:"grafana"`
+	DatasourceUID string        `comment:"UID datasource Prometheus в Grafana"                                                                                 json:"datasource_uid" yaml:"datasource_uid"`
+	Timeout       time.Duration `comment:"Таймаут запроса (по умолчанию 30s, для grafana-записи — таймаут Grafana)"                                            json:"timeout"        yaml:"timeout"`
 }
 
 type GrafanaConfig struct {
-	URL     string        `yaml:"url"     json:"url"     comment:"URL Grafana"`
-	Token   secret.String `yaml:"token"   json:"token"   comment:"Токен service account (роль Viewer)"`
-	Timeout time.Duration `yaml:"timeout" json:"timeout" comment:"Таймаут запроса (по умолчанию 30s)"`
+	URL     string        `comment:"URL Grafana"                                                 json:"url"     yaml:"url"`
+	Token   secret.String `comment:"Токен service account (роль Viewer)"                         json:"token"   yaml:"token"`
+	Timeout time.Duration `comment:"Таймаут запроса (по умолчанию 30s)"                          json:"timeout" yaml:"timeout"`
 }
 
 type source struct {
@@ -61,11 +65,19 @@ func buildSource(c Config, grafanas map[string]GrafanaConfig) (source, error) {
 
 	switch {
 	case c.URL != "" && viaGrafana:
-		return source{}, fmt.Errorf("задайте либо url, либо grafana + datasource_uid")
+		return source{}, errors.New(
+			"задайте либо url, либо grafana + datasource_uid",
+		)
+
 	case c.URL == "" && !viaGrafana:
-		return source{}, fmt.Errorf("не задан ни url, ни grafana + datasource_uid")
+		return source{}, errors.New(
+			"не задан ни url, ни grafana + datasource_uid",
+		)
+
 	case c.BearerToken != "" && c.BasicAuth != nil:
-		return source{}, fmt.Errorf("bearer_token и basic_auth взаимоисключающие")
+		return source{}, errors.New(
+			"bearer_token и basic_auth взаимоисключающие",
+		)
 	}
 
 	if !viaGrafana {
@@ -85,16 +97,24 @@ func buildSource(c Config, grafanas map[string]GrafanaConfig) (source, error) {
 	}
 
 	if c.Grafana == "" || c.DatasourceUID == "" {
-		return source{}, fmt.Errorf("для доступа через Grafana нужны и grafana, и datasource_uid")
+		return source{}, errors.New(
+			"для доступа через Grafana нужны и grafana, и datasource_uid",
+		)
 	}
 
 	g, ok := grafanas[c.Grafana]
 	if !ok {
-		return source{}, fmt.Errorf("grafana %q не найдена в секции grafana", c.Grafana)
+		return source{}, fmt.Errorf(
+			"grafana %q не найдена в секции grafana",
+			c.Grafana,
+		)
 	}
 
 	return source{
-		baseURL: strings.TrimRight(g.URL, "/") + "/api/datasources/proxy/uid/" + c.DatasourceUID,
+		baseURL: strings.TrimRight(
+			g.URL,
+			"/",
+		) + "/api/datasources/proxy/uid/" + c.DatasourceUID,
 		auth:    func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+g.Token.Value()) },
 		timeout: cmp.Or(c.Timeout, g.Timeout, defaultTimeout),
 	}, nil

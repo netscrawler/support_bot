@@ -2,9 +2,10 @@ package text_test
 
 import (
 	"fmt"
-	"support_bot/internal/pkg/text"
 	"testing"
 	"time"
+
+	"support_bot/internal/pkg/text"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,10 @@ func TestExecuteTemplate(t *testing.T) {
 
 		tmpl := `Отчёт за {{ now | yesterday | formatDateShort }}`
 
-		want := fmt.Sprintf("Отчёт за %s", time.Now().AddDate(0, 0, -1).Format("02.01.2006"))
+		want := fmt.Sprintf(
+			"Отчёт за %s",
+			time.Now().AddDate(0, 0, -1).Format("02.01.2006"),
+		)
 
 		got, err := text.ExecuteTemplate(tmpl, nil)
 
@@ -32,7 +36,10 @@ func TestExecuteTemplate(t *testing.T) {
 
 		tmpl := `Отчёт за {{ now | lastMonth | formatRuMonthYear}}`
 
-		want := fmt.Sprintf("Отчёт за %s", time.Now().AddDate(0, 0, -1).Format("02.01.2006"))
+		want := fmt.Sprintf(
+			"Отчёт за %s",
+			time.Now().AddDate(0, 0, -1).Format("02.01.2006"),
+		)
 
 		got, err := text.ExecuteTemplate(tmpl, nil)
 

@@ -10,16 +10,16 @@ import (
 )
 
 type Config struct {
-	Host              string        `env:"HTTP_HOST"                yaml:"host"                env-default:"0.0.0.0" comment:"HTTP server host"`
-	Port              int           `env:"HTTP_PORT"                yaml:"port"                env-default:"8080"    comment:"HTTP server port"`
-	ReadTimeout       time.Duration `env:"HTTP_READ_TIMEOUT"        yaml:"read_timeout"        env-default:"5s"      comment:"HTTP server read timeout"`
-	ReadHeaderTimeout time.Duration `env:"HTTP_READ_HEADER_TIMEOUT" yaml:"read_header_timeout" env-default:"5s"      comment:"HTTP server read header timeout"`
-	WriteTimeout      time.Duration `env:"HTTP_WRITE_TIMEOUT"       yaml:"write_timeout"       env-default:"6m"      comment:"HTTP server write timeout"`
-	IdleTimeout       time.Duration `env:"HTTP_IDLE_TIMEOUT"        yaml:"idle_timeout"        env-default:"120s"    comment:"HTTP server idle timeout"`
+	Host              string        `comment:"HTTP server host"                env:"HTTP_HOST"                env-default:"0.0.0.0" yaml:"host"`
+	Port              int           `comment:"HTTP server port"                env:"HTTP_PORT"                env-default:"8080"    yaml:"port"`
+	ReadTimeout       time.Duration `comment:"HTTP server read timeout"        env:"HTTP_READ_TIMEOUT"        env-default:"5s"      yaml:"read_timeout"`
+	ReadHeaderTimeout time.Duration `comment:"HTTP server read header timeout" env:"HTTP_READ_HEADER_TIMEOUT" env-default:"5s"      yaml:"read_header_timeout"`
+	WriteTimeout      time.Duration `comment:"HTTP server write timeout"       env:"HTTP_WRITE_TIMEOUT"       env-default:"6m"      yaml:"write_timeout"`
+	IdleTimeout       time.Duration `comment:"HTTP server idle timeout"        env:"HTTP_IDLE_TIMEOUT"        env-default:"120s"    yaml:"idle_timeout"`
 
-	MaxHeaderBytes      int   `env:"HTTP_MAX_HEADER_BYTES"  yaml:"max_header_bytes"       env-default:"1048576"  comment:"HTTP server max header bytes"`
-	MaxHeaderValueCount int   `env:"HTTP_MAX_HEADER_VALUES" yaml:"max_header_value_count" env-default:"40"       comment:"HTTP server max header value count"`
-	MaxBodyBytes        int64 `env:"HTTP_MAX_BODY_BYTES"    yaml:"max_body_bytes"         env-default:"10485760" comment:"HTTP server max body bytes"`
+	MaxHeaderBytes      int   `comment:"HTTP server max header bytes"       env:"HTTP_MAX_HEADER_BYTES"  env-default:"1048576"  yaml:"max_header_bytes"`
+	MaxHeaderValueCount int   `comment:"HTTP server max header value count" env:"HTTP_MAX_HEADER_VALUES" env-default:"40"       yaml:"max_header_value_count"`
+	MaxBodyBytes        int64 `comment:"HTTP server max body bytes"         env:"HTTP_MAX_BODY_BYTES"    env-default:"10485760" yaml:"max_body_bytes"`
 }
 
 func (cfg *Config) Addr() string {

@@ -1,7 +1,7 @@
 package pkg
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 
 	"gopkg.in/yaml.v3"
@@ -14,7 +14,7 @@ func StructToYAMLNode(v any) (*yaml.Node, error) {
 	}
 
 	if rv.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct")
+		return nil, errors.New("expected struct")
 	}
 
 	node := &yaml.Node{
@@ -23,7 +23,7 @@ func StructToYAMLNode(v any) (*yaml.Node, error) {
 
 	rt := rv.Type()
 
-	for i := 0; i < rv.NumField(); i++ {
+	for i := range rv.NumField() {
 		field := rt.Field(i)
 		value := rv.Field(i)
 

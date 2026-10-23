@@ -3,6 +3,7 @@ package config
 import (
 	"time"
 
+	apihttp "support_bot/internal/api/http"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
@@ -10,18 +11,22 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
+	maxbot "support_bot/internal/max_bot"
 	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/pkg/retry"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
-
-	apihttp "support_bot/internal/api/http"
-
-	maxbot "support_bot/internal/max_bot"
-
 	tgbot "support_bot/internal/tg_bot"
+)
+
+// Значения-заглушки для примера конфига.
+const (
+	exampleName     = "example"
+	exampleName2    = "example-2"
+	examplePassword = "password"
+	exampleToken    = "token"
 )
 
 func Default() *Config {
@@ -77,7 +82,7 @@ func Default() *Config {
 			Token:       "max_bot_token",
 			CleanUpTime: 0,
 			BotPoll:     0,
-			ApiProxy:    "",
+			APIProxy:    "",
 			Enabled:     false,
 		},
 		Timeout: timeout{
@@ -86,7 +91,7 @@ func Default() *Config {
 		SMB: smb.Config{
 			Address:  "localhost:542",
 			User:     "user",
-			Password: "password",
+			Password: examplePassword,
 			Domain:   "WORKGROUP",
 			Share:    "public",
 			Active:   true,
@@ -95,7 +100,7 @@ func Default() *Config {
 			Host:     "smtp.example.com",
 			Port:     "465",
 			Email:    "example@example.com",
-			Password: "password",
+			Password: examplePassword,
 		},
 		HTTP: apihttp.Config{
 			Host:              "127.0.0.1",
@@ -108,18 +113,22 @@ func Default() *Config {
 			MaxBodyBytes:      10 << 20,
 		},
 		Delivery: delivery{Retry: deliveryRetry{
-			Delays: retry.Delays{time.Second, 5 * time.Second, 15 * time.Second},
+			Delays: retry.Delays{
+				time.Second,
+				5 * time.Second,
+				15 * time.Second,
+			},
 		}},
 		Runs:    runlog.Config{Retention: 720 * time.Hour},
 		Metrics: metrics.Config{Enabled: true, Addr: "127.0.0.1:9090"},
 		Databases: map[string]pgcollector.Config{
-			"example": {
+			exampleName: {
 				DSN:              "dsn://",
 				ReadOnly:         new(true),
 				StatementTimeout: 5 * time.Second,
 				MaxConns:         5,
 			},
-			"example-2": {
+			exampleName2: {
 				DSN:              "dsn://",
 				ReadOnly:         new(true),
 				StatementTimeout: 5 * time.Second,
@@ -127,31 +136,31 @@ func Default() *Config {
 			},
 		},
 		Grafana: map[string]prometheus.GrafanaConfig{
-			"example": {
+			exampleName: {
 				URL:     "https://grafana.example",
-				Token:   "token",
+				Token:   exampleToken,
 				Timeout: 15 * time.Second,
 			},
-			"example-2": {
+			exampleName2: {
 				URL:     "https://grafana.example",
-				Token:   "token",
+				Token:   exampleToken,
 				Timeout: 15 * time.Second,
 			},
 		},
 		Prometheus: map[string]prometheus.Config{
-			"example": {
+			exampleName: {
 				URL:           "https://prometheus.org",
-				BearerToken:   "token",
+				BearerToken:   exampleToken,
 				Grafana:       "",
 				DatasourceUID: "",
 				Timeout:       0,
 			},
-			"example-2": {
+			exampleName2: {
 				URL:         "https://prometheus.org",
 				BearerToken: "",
 				BasicAuth: &prometheus.BasicAuth{
 					User:     "user",
-					Password: "password",
+					Password: examplePassword,
 				},
 				Grafana:       "",
 				DatasourceUID: "",
@@ -159,9 +168,9 @@ func Default() *Config {
 			},
 		},
 		Zabbix: map[string]zabbix.Config{
-			"example": {
+			exampleName: {
 				URL:     "https://zabbix.org",
-				Token:   "token",
+				Token:   exampleToken,
 				Timeout: 15 * time.Second,
 			},
 		},

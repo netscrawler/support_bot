@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/retry"
 
@@ -28,7 +29,12 @@ type Adaptor struct {
 	log *slog.Logger
 }
 
-func New(api *maxcli.Api, delays retry.Delays, active bool, log *slog.Logger) *Adaptor {
+func New(
+	api *maxcli.Api,
+	delays retry.Delays,
+	active bool,
+	log *slog.Logger,
+) *Adaptor {
 	l := log.With(slog.Any("module", "max_sender"))
 	adp := &Adaptor{
 		log:    l,
@@ -56,9 +62,13 @@ func (ca *Adaptor) SendText(
 	}
 
 	maxMsg := &maxcli.Message{}
-	maxMsg = maxMsg.SetText(msg).SetChat(chat.ChatID).SetFormat(maxModel.FormatHTML)
+
+	maxMsg = maxMsg.SetText(msg).
+		SetChat(chat.ChatID).
+		SetFormat(maxModel.FormatHTML)
 
 	var repl maxModel.SendMessageResult
+
 	err := ca.do(ctx, "max.Send", func(ctx context.Context) (err error) {
 		repl, err = ca.api.Messages.Send(ctx, maxMsg)
 
@@ -78,48 +88,22 @@ func (ca *Adaptor) SendMedia(
 	chat models.MaxChat,
 	imgs []models.Data,
 ) (*models.SentMessage, error) {
-	if !ca.active {
-		return nil, ErrMaxAdaptorInactive
-	}
-
-	maxMsg := &maxcli.Message{}
-	maxMsg.SetChat(chat.ChatID)
-
-	for _, i := range imgs {
-		token, err := ca.upload(ctx, maxModel.UploadImage, i)
-		if err != nil {
-			ca.log.ErrorContext(
-				ctx,
-				"max upload failed",
-				slog.String("file", i.FileName),
-				slog.Any("error", err),
-			)
-
-			continue
-		}
-
-		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
-	}
-
-	var repl maxModel.SendMessageResult
-	err := ca.do(ctx, "max.Send", func(ctx context.Context) (err error) {
-		repl, err = ca.api.Messages.Send(ctx, maxMsg)
-
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("max send to chat %d: %w", chat.ChatID, err)
-	}
-
-	replMsg := models.NewMsgFromMax(repl.Message)
-
-	return replMsg, nil
+	return ca.sendUploads(ctx, chat, maxModel.UploadImage, imgs)
 }
 
 func (ca *Adaptor) SendDocument(
 	ctx context.Context,
 	chat models.MaxChat,
 	doc []models.Data,
+) (*models.SentMessage, error) {
+	return ca.sendUploads(ctx, chat, maxModel.UploadFile, doc)
+}
+
+func (ca *Adaptor) sendUploads(
+	ctx context.Context,
+	chat models.MaxChat,
+	kind maxModel.UploadType,
+	files []models.Data,
 ) (*models.SentMessage, error) {
 	if !ca.active {
 		return nil, ErrMaxAdaptorInactive
@@ -128,8 +112,8 @@ func (ca *Adaptor) SendDocument(
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
-	for _, i := range doc {
-		token, err := ca.upload(ctx, maxModel.UploadFile, i)
+	for _, i := range files {
+		token, err := ca.upload(ctx, kind, i)
 		if err != nil {
 			ca.log.ErrorContext(
 				ctx,
@@ -145,6 +129,7 @@ func (ca *Adaptor) SendDocument(
 	}
 
 	var repl maxModel.SendMessageResult
+
 	err := ca.do(ctx, "max.Send", func(ctx context.Context) (err error) {
 		repl, err = ca.api.Messages.Send(ctx, maxMsg)
 
@@ -154,12 +139,13 @@ func (ca *Adaptor) SendDocument(
 		return nil, fmt.Errorf("max send to chat %d: %w", chat.ChatID, err)
 	}
 
-	replMsg := models.NewMsgFromMax(repl.Message)
-
-	return replMsg, nil
+	return models.NewMsgFromMax(repl.Message), nil
 }
 
-func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) error {
+func (ca *Adaptor) DeleteMsg(
+	ctx context.Context,
+	message models.SentMessage,
+) error {
 	if !ca.active {
 		return ErrMaxAdaptorInactive
 	}
@@ -183,14 +169,24 @@ func (ca *Adaptor) DeleteMsg(ctx context.Context, message models.SentMessage) er
 }
 
 // do ждёт лимитер на каждой попытке; ошибка лимитера (отмена ctx) не повторяется.
-func (ca *Adaptor) do(ctx context.Context, op string, call func(context.Context) error) error {
-	return retry.Do(ctx, ca.delays, ca.log, op, func(ctx context.Context) error {
-		if err := ca.rl.Wait(ctx); err != nil {
-			return retry.Permanent(err)
-		}
+func (ca *Adaptor) do(
+	ctx context.Context,
+	op string,
+	call func(context.Context) error,
+) error {
+	return retry.Do(
+		ctx,
+		ca.delays,
+		ca.log,
+		op,
+		func(ctx context.Context) error {
+			if err := ca.rl.Wait(ctx); err != nil {
+				return retry.Permanent(err)
+			}
 
-		return call(ctx)
-	})
+			return call(ctx)
+		},
+	)
 }
 
 // upload грузит файл; bytes.Buffer опустошается при чтении, поэтому на каждую попытку свежий reader.

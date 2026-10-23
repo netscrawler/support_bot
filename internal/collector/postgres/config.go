@@ -2,23 +2,25 @@ package postgres
 
 import (
 	"fmt"
-	"support_bot/internal/pkg/secret"
 	"time"
+
+	"support_bot/internal/pkg/secret"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Config struct {
-	DSN              secret.String `yaml:"dsn"               comment:"DSN подключения к Postgres"`
-	ReadOnly         *bool         `yaml:"read_only"         comment:"Только чтение (по умолчанию true)"`
-	StatementTimeout time.Duration `yaml:"statement_timeout" comment:"Таймаут запроса (по умолчанию 30s)"`
-	MaxConns         int32         `yaml:"max_conns"         comment:"Максимум соединений в пуле (по умолчанию 4)"`
+	DSN              secret.String `comment:"DSN подключения к Postgres"                                                    json:"DSN"              yaml:"dsn"`
+	ReadOnly         *bool         `comment:"Только чтение (по умолчанию true)"                                             json:"ReadOnly"         yaml:"read_only"`
+	StatementTimeout time.Duration `comment:"Таймаут запроса (по умолчанию 30s)"                                            json:"StatementTimeout" yaml:"statement_timeout"`
+	MaxConns         int32         `comment:"Максимум соединений в пуле (по умолчанию 4)"                                   json:"MaxConns"         yaml:"max_conns"`
 }
 
 // withDefaults: теги env-default не работают для значений map, поэтому дефолты тут.
 func (c Config) withDefaults() Config {
 	if c.ReadOnly == nil {
 		t := true
+
 		c.ReadOnly = &t
 	}
 

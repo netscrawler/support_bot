@@ -1,12 +1,13 @@
 package zabbix
 
 import (
-	"support_bot/internal/pkg/secret"
 	"time"
+
+	"support_bot/internal/pkg/secret"
 )
 
 type Config struct {
-	URL     string        `yaml:"url"     json:"url"     comment:"URL фронтенда Zabbix"`
-	Token   secret.String `yaml:"token"   json:"token"   comment:"API-токен (роль с allow list *.get)"`
-	Timeout time.Duration `yaml:"timeout" json:"timeout" comment:"Таймаут запроса (по умолчанию 30s)"`
+	URL     string        `comment:"URL фронтенда Zabbix"                                        json:"url"     yaml:"url"`
+	Token   secret.String `comment:"API-токен (роль с allow list *.get)"                         json:"token"   yaml:"token"`
+	Timeout time.Duration `comment:"Таймаут запроса (по умолчанию 30s)"                          json:"timeout" yaml:"timeout"`
 }

@@ -1,4 +1,4 @@
-// Package postgres
+// Package postgres создаёт пул соединений с PostgreSQL.
 package postgres
 
 import (
@@ -42,14 +42,22 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*DB, error) {
 
 	pgxCfg, err := parsePoolConfig(cfg)
 	if err != nil {
-		l.ErrorContext(ctx, "error building pool config", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"error building pool config",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
-		l.ErrorContext(ctx, "error connecting to database", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"error connecting to database",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}
@@ -105,7 +113,11 @@ func (d *DB) startMonitor(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.InfoContext(ctx, "DB monitor stopped", slog.String("reason", ctx.Err().Error()))
+				log.InfoContext(
+					ctx,
+					"DB monitor stopped",
+					slog.String("reason", ctx.Err().Error()),
+				)
 
 				return
 
@@ -116,7 +128,11 @@ func (d *DB) startMonitor(ctx context.Context) {
 				cancel()
 
 				if err != nil {
-					log.WarnContext(ctx, "DB ping failed", slog.Any("error", err))
+					log.WarnContext(
+						ctx,
+						"DB ping failed",
+						slog.Any("error", err),
+					)
 				}
 			}
 		}

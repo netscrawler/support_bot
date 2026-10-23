@@ -1,9 +1,10 @@
 package models_test
 
 import (
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,12 +29,30 @@ func TestPeriodName_Range(t *testing.T) {
 		from, to time.Time
 	}{
 		{"today", models.PeriodToday, mar, at(2026, 3, 10), at(2026, 3, 11)},
-		{"yesterday", models.PeriodYesterday, mar, at(2026, 3, 9), at(2026, 3, 10)},
+		{
+			"yesterday",
+			models.PeriodYesterday,
+			mar,
+			at(2026, 3, 9),
+			at(2026, 3, 10),
+		},
 		{"week", models.PeriodWeek, mar, at(2026, 3, 3), at(2026, 3, 10)},
 		{"month", models.PeriodMonth, mar, at(2026, 2, 1), at(2026, 3, 1)},
-		{"month january", models.PeriodMonth, jan, at(2025, 12, 1), at(2026, 1, 1)},
+		{
+			"month january",
+			models.PeriodMonth,
+			jan,
+			at(2025, 12, 1),
+			at(2026, 1, 1),
+		},
 		{"week leap", models.PeriodWeek, leap, at(2028, 2, 23), at(2028, 3, 1)},
-		{"yesterday leap", models.PeriodYesterday, leap, at(2028, 2, 29), at(2028, 3, 1)},
+		{
+			"yesterday leap",
+			models.PeriodYesterday,
+			leap,
+			at(2028, 2, 29),
+			at(2028, 3, 1),
+		},
 	}
 
 	for _, tt := range tests {
@@ -70,7 +89,10 @@ func TestPeriodCodes(t *testing.T) {
 	t.Parallel()
 
 	all := []models.PeriodName{
-		models.PeriodToday, models.PeriodYesterday, models.PeriodWeek, models.PeriodMonth,
+		models.PeriodToday,
+		models.PeriodYesterday,
+		models.PeriodWeek,
+		models.PeriodMonth,
 	}
 
 	for _, p := range all {

@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 )
@@ -41,7 +42,12 @@ func (e *Exporter) Export() ([]models.Data, error) {
 
 		cBuf := pkg.ConvertSortedRows(v, ordering)
 
-		buf := writeCsv(cBuf)
+		buf, wErr := writeCsv(cBuf)
+		if wErr != nil {
+			err = errors.Join(err, wErr)
+
+			continue
+		}
 
 		dt, eErr := models.NewFileData(buf, e.name+"_"+k+".csv")
 		if eErr != nil {
@@ -56,9 +62,9 @@ func (e *Exporter) Export() ([]models.Data, error) {
 	return fd, nil
 }
 
-func writeCsv(data [][]any) *bytes.Buffer {
+func writeCsv(data [][]any) (*bytes.Buffer, error) {
 	if len(data) == 0 {
-		return nil
+		return nil, nil //nolint:nilnil // nil buffer means no data
 	}
 
 	var buf bytes.Buffer
@@ -66,9 +72,11 @@ func writeCsv(data [][]any) *bytes.Buffer {
 	r := csv.NewWriter(&buf)
 
 	if dt, ok := any(data).([][]string); ok {
-		r.WriteAll(dt)
+		if err := r.WriteAll(dt); err != nil {
+			return nil, fmt.Errorf("write csv: %w", err)
+		}
 
-		return &buf
+		return &buf, nil
 	}
 
 	var rd [][]string
@@ -83,7 +91,9 @@ func writeCsv(data [][]any) *bytes.Buffer {
 		rd = append(rd, outRow)
 	}
 
-	r.WriteAll(rd)
+	if err := r.WriteAll(rd); err != nil {
+		return nil, fmt.Errorf("write csv: %w", err)
+	}
 
-	return &buf
+	return &buf, nil
 }

@@ -12,11 +12,14 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"support_bot/internal/pkg/funcs"
 	"time"
+
+	"support_bot/internal/pkg/funcs"
 )
 
-const defaultTimeout = 30 * time.Second
+const (
+	defaultTimeout = 30 * time.Second
+)
 
 var (
 	placeholder = regexp.MustCompile(`\$\{(\w+)\}`)
@@ -37,7 +40,7 @@ type Collector struct {
 	log    *slog.Logger
 }
 
-// New: валидацию делаем тут, т.к. env-default для значений map не работает.
+// New создаёт коллектор; валидацию делаем тут, т.к. env-default для значений map не работает.
 func New(cfgs map[string]Config, log *slog.Logger) (*Collector, error) {
 	sources := make(map[string]source, len(cfgs))
 
@@ -157,11 +160,13 @@ func substitute(v any, params map[string]string) (any, error) {
 
 			return val
 		})
+
 		if missing != "" {
 			return nil, fmt.Errorf("в params нет значения для ${%s}", missing)
 		}
 
 		return out, nil
+
 	case map[string]any:
 		for k, e := range x {
 			r, err := substitute(e, params)
@@ -171,6 +176,7 @@ func substitute(v any, params map[string]string) (any, error) {
 
 			x[k] = r
 		}
+
 	case []any:
 		for i, e := range x {
 			r, err := substitute(e, params)
@@ -218,7 +224,8 @@ func (c *Collector) call(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+
+	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -230,8 +237,13 @@ func (c *Collector) call(
 	}
 
 	var r response
+
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("HTTP %d, ответ не JSON: %w", resp.StatusCode, err)
+		return nil, fmt.Errorf(
+			"HTTP %d, ответ не JSON: %w",
+			resp.StatusCode,
+			err,
+		)
 	}
 
 	if r.Error != nil {
@@ -240,6 +252,7 @@ func (c *Collector) call(
 
 	// Без UseNumber: Lua-конвертер не знает json.Number.
 	var result any
+
 	if err := json.Unmarshal(r.Result, &result); err != nil {
 		return nil, fmt.Errorf("HTTP %d, нет result: %w", resp.StatusCode, err)
 	}

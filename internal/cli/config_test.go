@@ -1,18 +1,22 @@
 package cli
 
 import (
+	"testing"
+
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/config"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestMarshalConfigKeepsRealSecrets(t *testing.T) {
 	cfg := config.Default()
+
 	cfg.TgBot.TelegramToken = "tg-real-token"
 	cfg.Database.Password = "db-real-pass"
-	cfg.Prometheus = map[string]prometheus.Config{"a": {BearerToken: "prom-real-bearer"}}
+	cfg.Prometheus = map[string]prometheus.Config{
+		"a": {BearerToken: "prom-real-bearer"},
+	}
 
 	for _, format := range []string{"yaml", "env"} {
 		out, err := marshalConfig(cfg, format)

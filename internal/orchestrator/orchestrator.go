@@ -2,31 +2,42 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"html"
 	"log/slog"
 	"maps"
+	"time"
+
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
-	"time"
 )
 
 // ponytail: семафор фиксированного размера, не связан с реальным числом
 // воркеров генератора (захардкожено 4 в app.go, само по себе должно
 // переехать под fx) — синхронизируйте значения или прокиньте это через
 // New(), если потребуется тонкая настройка пропускной способности.
-const maxInFlightGenerations = 8
+const (
+	maxInFlightGenerations = 8
+)
 
 type ReportLoader interface {
 	LoadActive(ctx context.Context) ([]models.Report, error)
-	LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error)
+	LoadByEvent(
+		ctx context.Context,
+		event string,
+		active bool,
+	) (*models.Report, error)
 }
 
 // SentMsgSaver сохраняет информацию об отправленном сообщении, чтобы deleter
 // мог позже его удалить (например, сообщения в Telegram в конце дня).
 type SentMsgSaver interface {
-	SaveTgMsg(ctx context.Context, reportName string, msgs []models.SentMessage) error
+	SaveTgMsg(
+		ctx context.Context,
+		reportName string,
+		msgs []models.SentMessage,
+	) error
 }
 
 // RunRecorder записывает итог запуска отчёта в журнал (internal/runlog).
@@ -95,7 +106,10 @@ func (o *Orchestrator) Start(ctx context.Context) {
 // осознанное упрощение. Отрицательный результат оценки или отсутствие
 // экспортов транслируется в models.ErrNotFound — так, как это ожидает
 // HTTP-слой ("не найдено").
-func (o *Orchestrator) Generate(ctx context.Context, report models.Report) (models.Data, error) {
+func (o *Orchestrator) Generate(
+	ctx context.Context,
+	report models.Report,
+) (models.Data, error) {
 	_, data, approve, err := o.generate(ctx, report)
 	if err != nil {
 		return models.Data{}, err
@@ -115,6 +129,7 @@ func (o *Orchestrator) run(ctx context.Context) {
 			o.log.InfoContext(ctx, "context cancelled. stopping")
 
 			return
+
 		case event, ok := <-o.EventC:
 			if !ok {
 				o.log.WarnContext(ctx, "event chan closed")
@@ -127,8 +142,16 @@ func (o *Orchestrator) run(ctx context.Context) {
 				o.processDelReportEvent(ctx, event.Name)
 
 			default:
-				o.processGenReportEvent(ctx, event.Name, true, nil, models.RunKindCron, "")
+				o.processGenReportEvent(
+					ctx,
+					event.Name,
+					true,
+					nil,
+					models.RunKindCron,
+					"",
+				)
 			}
+
 		case event, ok := <-o.SpecialEventC:
 			if !ok {
 				o.log.WarnContext(ctx, "event chan closed")
@@ -144,10 +167,24 @@ func (o *Orchestrator) run(ctx context.Context) {
 				}
 
 				o.processGenReportEvent(
-					ctx, event.Event.Name, false, &event.Recipient, kind, event.Period,
+					ctx,
+					event.Event.Name,
+					false,
+					&event.Recipient,
+					kind,
+					event.Period,
 				)
+
 			case models.EventTypeGenReport:
-				o.processGenReportEvent(ctx, event.Event.Name, false, nil, models.RunKindManual, "")
+				o.processGenReportEvent(
+					ctx,
+					event.Event.Name,
+					false,
+					nil,
+					models.RunKindManual,
+					"",
+				)
+
 			default:
 			}
 		}
@@ -190,7 +227,11 @@ func (o *Orchestrator) processGenReportEvent(
 			}
 		}
 
-		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
+		o.log.DebugContext(
+			ctx,
+			"sending report to generator",
+			slog.Any("report", report.Name),
+		)
 
 		select {
 		case o.genSem <- struct{}{}:
@@ -199,6 +240,7 @@ func (o *Orchestrator) processGenReportEvent(
 
 				o.generateAndDeliver(ctx, report, kind, chatID)
 			}(report)
+
 		case <-ctx.Done():
 			return
 		}
@@ -266,17 +308,28 @@ func (o *Orchestrator) generateAndDeliver(
 
 	if kind != models.RunKindTest && kind != models.RunKindLK {
 		hash := dataset.Hash()
+
 		run.DataHash = hash
 
 		if hash == "" {
-			o.log.WarnContext(ctx, "dataset не маршалится, дедупликация не применяется",
-				slog.String("report", report.Name))
+			o.log.WarnContext(
+				ctx,
+				"dataset не маршалится, дедупликация не применяется",
+				slog.String("report", report.Name),
+			)
 		}
 
 		if report.Dedup && kind == models.RunKindCron && hash != "" {
-			if prev, ok := o.runs.LastSuccessHash(ctx, report.Name); ok && prev == hash {
-				o.log.InfoContext(ctx, "данные не изменились, отправка пропущена",
-					slog.String("report", report.Name))
+			if prev, ok := o.runs.LastSuccessHash(
+				ctx,
+				report.Name,
+			); ok &&
+				prev == hash {
+				o.log.InfoContext(
+					ctx,
+					"данные не изменились, отправка пропущена",
+					slog.String("report", report.Name),
+				)
 
 				run.Status, run.Reason = models.RunStatusSkipped, "duplicate"
 
@@ -287,7 +340,11 @@ func (o *Orchestrator) generateAndDeliver(
 
 	delivered, err := o.deliver(ctx, report, dataset, data)
 	if err != nil {
-		o.log.ErrorContext(ctx, "error delivering report", slog.Any("error", err))
+		o.log.ErrorContext(
+			ctx,
+			"error delivering report",
+			slog.Any("error", err),
+		)
 
 		run.Status, run.Error = models.RunStatusFailed, err.Error()
 		if delivered > 0 {
@@ -328,8 +385,13 @@ func (o *Orchestrator) notifyTest(
 		return
 	}
 
-	if _, err := o.snd.Tg().SendText(ctx, models.TgChat{ChatID: *chatID}, text); err != nil {
-		o.log.WarnContext(ctx, "test run note send failed", slog.Any("error", err))
+	if _, err := o.snd.Tg().
+		SendText(ctx, models.TgChat{ChatID: *chatID}, text); err != nil {
+		o.log.WarnContext(
+			ctx,
+			"test run note send failed",
+			slog.Any("error", err),
+		)
 	}
 }
 
@@ -347,23 +409,35 @@ func (o *Orchestrator) deliver(
 	if len(report.Recipients) == 0 {
 		l.ErrorContext(ctx, "empty targets list")
 
-		return 0, fmt.Errorf("empty targets list")
+		return 0, errors.New("empty targets list")
 	}
 
 	// Достаем "_meta" лист из данных, для использования в шаблоне email
 	addMeta := make(map[string]any)
 	meta, ok := data["_meta"]
+
 	if ok {
 		for _, d := range meta {
 			maps.Insert(addMeta, maps.All(d))
 		}
 	}
-	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
+
+	l.InfoContext(
+		ctx,
+		"meta",
+		slog.Any("meta", addMeta),
+		slog.Any("_meta", data["_meta"]),
+	)
+
 	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
 
 	resMsg, delivered, sendErr := msg.Send(ctx, o.snd)
 	if sendErr != nil {
-		l.ErrorContext(ctx, "error while send message", slog.Any("error", sendErr))
+		l.ErrorContext(
+			ctx,
+			"error while send message",
+			slog.Any("error", sendErr),
+		)
 	}
 
 	if len(resMsg) == 0 {
@@ -386,12 +460,16 @@ func (o *Orchestrator) deliver(
 	return delivered, sendErr
 }
 
-func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) {
+func (o *Orchestrator) processDelReportEvent(
+	ctx context.Context,
+	event string,
+) {
 	select {
 	case <-ctx.Done():
 		o.log.InfoContext(ctx, "context cancelled. stopping")
 
 		return
+
 	case o.DeleteC <- models.Event{Name: event, Type: models.EventTypeDeleteSentReport}:
 		o.log.InfoContext(ctx, "sending delete event to deleter")
 	}
@@ -409,7 +487,11 @@ func (o *Orchestrator) getReportByEvent(
 
 	reports, err := o.rL.LoadByEvent(ctx, event, active)
 	if err != nil {
-		l.ErrorContext(ctx, "error while loading report", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"error while loading report",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}

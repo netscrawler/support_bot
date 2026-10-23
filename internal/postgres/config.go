@@ -4,8 +4,9 @@ import (
 	"net"
 	"net/url"
 	"strconv"
-	"support_bot/internal/pkg/secret"
 	"time"
+
+	"support_bot/internal/pkg/secret"
 )
 
 const (
@@ -18,19 +19,19 @@ const (
 )
 
 type Config struct {
-	Port     int           `env:"DATABASE_PORT"     env-default:"5432"      yaml:"port"     comment:"Порт для подключения к базе"`
-	Host     string        `env:"DATABASE_HOST"     env-default:"localhost" yaml:"host"     comment:"Адрес базы данных"`
-	User     string        `env:"DATABASE_USER"     env-default:"user"      yaml:"user"                                                                               Comment:"Пользователь"`
-	Password secret.String `env:"DATABASE_PASSWORD" env-default:"password"  yaml:"password" comment:"Пароль для подключения"`
-	Name     string        `env:"DATABASE_NAME"     env-default:"postgres"  yaml:"name"     comment:"Имя базы данных"`
-	SSL      string        `env:"DATABASE_SSL_MODE" env-default:"false"     yaml:"sslmode"  comment:"SSL режим: (disable|require|verify-ca|verify-full|allow|prefer)"`
+	Port     int           `comment:"Порт для подключения к базе"                                          env:"DATABASE_PORT"     env-default:"5432"      yaml:"port"`
+	Host     string        `comment:"Адрес базы данных"                                                    env:"DATABASE_HOST"     env-default:"localhost" yaml:"host"`
+	User     string        `Comment:"Пользователь"                                                         env:"DATABASE_USER"     env-default:"user"      yaml:"user"`
+	Password secret.String `comment:"Пароль для подключения"                                               env:"DATABASE_PASSWORD" env-default:"password"  yaml:"password"`
+	Name     string        `comment:"Имя базы данных"                                                      env:"DATABASE_NAME"     env-default:"postgres"  yaml:"name"`
+	SSL      string        `comment:"SSL режим: (disable|require|verify-ca|verify-full|allow|prefer)"      env:"DATABASE_SSL_MODE" env-default:"false"     yaml:"sslmode"`
 
-	MaxConns        int           `env:"DATABASE_MAX_CONNS"          env-default:"10"  yaml:"max_conns"          comment:"Максимально количество соединений"`
-	MaxIdleConns    int           `env:"DATABASE_MAX_IDLE_CONNS"     env-default:"2"   yaml:"max_idle_conns"     comment:"Максимальное количество ожидающий соединений"`
-	MaxConnLifeTime time.Duration `env:"DATABASE_MAX_CONN_LIFE_TIME" env-default:"30m" yaml:"max_conn_life_time" comment:"Максимальное время жизни одного соединения"`
-	MaxConnIdleTime time.Duration `env:"DATABASE_MAX_CONN_IDLE_TIME" env-default:"5m"  yaml:"max_conn_idle_time" comment:"Максимальное время ожидания соединения"`
+	MaxConns        int           `comment:"Максимально количество соединений"                                                     env:"DATABASE_MAX_CONNS"          env-default:"10"  yaml:"max_conns"`
+	MaxIdleConns    int           `comment:"Максимальное количество ожидающий соединений"                                          env:"DATABASE_MAX_IDLE_CONNS"     env-default:"2"   yaml:"max_idle_conns"`
+	MaxConnLifeTime time.Duration `comment:"Максимальное время жизни одного соединения"                                            env:"DATABASE_MAX_CONN_LIFE_TIME" env-default:"30m" yaml:"max_conn_life_time"`
+	MaxConnIdleTime time.Duration `comment:"Максимальное время ожидания соединения"                                                env:"DATABASE_MAX_CONN_IDLE_TIME" env-default:"5m"  yaml:"max_conn_idle_time"`
 
-	DatabaseConnect time.Duration `env:"DATABASE_CONNECT_TIMEOUT" env-default:"30s" yaml:"database_connect" comment:"Таймаут на подключения к базе данных"`
+	DatabaseConnect time.Duration `comment:"Таймаут на подключения к базе данных" env:"DATABASE_CONNECT_TIMEOUT" env-default:"30s" yaml:"database_connect"`
 
 	DSN secret.String `yaml:"-"`
 }
@@ -60,6 +61,7 @@ func (pc *Config) getDSN() secret.String {
 	q := dsn.Query()
 	q.Set("sslmode", mode)
 	q.Set("connect_timeout", strconv.Itoa(int(pc.DatabaseConnect.Seconds())))
+
 	dsn.RawQuery = q.Encode()
 
 	pc.DSN = secret.String(dsn.String())

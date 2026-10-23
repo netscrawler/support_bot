@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/pkg"
 
 	"github.com/mymmrac/telego"
@@ -31,12 +32,13 @@ func NewTelegramBot(
 		opts = append(opts, telego.WithHTTPClient(client))
 	}
 
-	if cfg.ApiProxy != "" {
+	if cfg.APIProxy != "" {
 		log.Info(
 			"api proxy not empty, creating bot with custom api server",
-			slog.Any("api server", cfg.ApiProxy),
+			slog.Any("api server", cfg.APIProxy),
 		)
-		opts = append(opts, telego.WithAPIServer(cfg.ApiProxy))
+
+		opts = append(opts, telego.WithAPIServer(cfg.APIProxy))
 	}
 
 	tgBot, err := telego.NewBot(cfg.TelegramToken.Value(), opts...)
@@ -49,7 +51,11 @@ func NewTelegramBot(
 		return tgBot, nil, fmt.Errorf("get bot user: %w", err)
 	}
 
-	log.InfoContext(ctx, "telegram bot authorized as", slog.Any("user", botUser))
+	log.InfoContext(
+		ctx,
+		"telegram bot authorized as",
+		slog.Any("user", botUser),
+	)
 
 	updates, err := tgBot.UpdatesViaLongPolling(ctx, nil)
 	if err != nil {

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
@@ -33,7 +34,9 @@ import (
 	"go.uber.org/fx"
 )
 
-const reportBufferSize uint8 = 15
+const (
+	reportBufferSize uint8 = 15
+)
 
 var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newScheduleEventsChan, fx.ResultTags(`name:"scheduleEvents"`)),
@@ -42,7 +45,10 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newSpecialEventChan,
 	newShdAPIChan,
 	newCronStore,
-	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
+	fx.Annotate(
+		newSheduler,
+		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``),
+	),
 	fx.Annotate(
 		newEventCreator,
 		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`),
@@ -63,7 +69,17 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newReportStore,
 	fx.Annotate(
 		newOrchestrator,
-		fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``),
+		fx.ParamTags(
+			``,
+			`name:"eventChan"`,
+			``,
+			`name:"delChan"`,
+			``,
+			``,
+			``,
+			``,
+			``,
+		),
 	),
 	newReportGenService,
 ))
@@ -123,7 +139,11 @@ func newEventCreator(
 	// No OnStop here — mirrors the original app.go asymmetry: the scheduler
 	// and other lifecycle-managed components stop, but the event creator's
 	// goroutine was never wired to a Stop hook in the pre-fx code either.
-	lc.Append(fx.Hook{OnStart: func(context.Context) error { return evC.Start(appCtx) }})
+	lc.Append(
+		fx.Hook{
+			OnStart: func(context.Context) error { return evC.Start(appCtx) },
+		},
+	)
 
 	return evC
 }
@@ -199,16 +219,22 @@ func newProcessorReg(luaManager *lua.Manager) *processor.RunnerRegistry {
 	reg := processor.NewReg()
 	luaRunner := pipeline.NewLuaRunner(luaManager)
 	reg.Register("lua", luaRunner)
-	reg.Register("sql", &pipeline.SqlRunner{})
+	reg.Register("sql", &pipeline.SQLRunner{})
 
 	return reg
 }
 
-func newProcessor(runnerReg *processor.RunnerRegistry, log *slog.Logger) *processor.Processor {
+func newProcessor(
+	runnerReg *processor.RunnerRegistry,
+	log *slog.Logger,
+) *processor.Processor {
 	return processor.NewProcessor(runnerReg, log)
 }
 
-func newSentMsgStore(rdb *postgres.DB, log *slog.Logger) *reportstore.SentMsgStore {
+func newSentMsgStore(
+	rdb *postgres.DB,
+	log *slog.Logger,
+) *reportstore.SentMsgStore {
 	return reportstore.NewSentMsgStore(rdb.GetConn(), log)
 }
 
@@ -282,7 +308,10 @@ func newGenerator(
 	return gen
 }
 
-func newReportStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ReportStore {
+func newReportStore(
+	rdb *postgres.DB,
+	log *slog.Logger,
+) *reportstore.ReportStore {
 	return reportstore.NewReportStore(rdb.GetConn(), log)
 }
 

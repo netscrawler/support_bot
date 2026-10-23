@@ -3,7 +3,7 @@ package stdlib
 import luaEngine "github.com/yuin/gopher-lua"
 
 type Plug interface {
-	Register(L *luaEngine.LState)
+	Register(l *luaEngine.LState)
 }
 
 type STD struct {
@@ -16,8 +16,8 @@ func NewSTD(plugs ...Plug) *STD {
 	}
 }
 
-func (s *STD) Register(L *luaEngine.LState) {
+func (s *STD) Register(l *luaEngine.LState) {
 	for _, plug := range s.plugs {
-		plug.Register(L)
+		plug.Register(l)
 	}
 }

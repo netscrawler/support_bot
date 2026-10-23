@@ -3,17 +3,20 @@ package store
 import (
 	"context"
 	"errors"
-	"support_bot/internal/db/sqlcgen"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/db/sqlcgen"
+	"support_bot/internal/models"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pashagolub/pgxmock/v4"
 )
 
-const testPublicID = "11111111-1111-1111-1111-111111111111"
+const (
+	testPublicID = "11111111-1111-1111-1111-111111111111"
+)
 
 func tstz(t *time.Time) pgtype.Timestamptz {
 	if t == nil {
@@ -85,7 +88,11 @@ func TestReportStore_CreatePublicLink_UnknownReport(t *testing.T) {
 
 	s := NewReportStoreForTest(sqlcgen.New(pool))
 
-	if _, err := s.CreatePublicLink(context.Background(), "nope", time.Hour); !errors.Is(
+	if _, err := s.CreatePublicLink(
+		context.Background(),
+		"nope",
+		time.Hour,
+	); !errors.Is(
 		err,
 		models.ErrNotFound,
 	) {
@@ -123,15 +130,20 @@ func TestReportStore_ExpirePublicLink(t *testing.T) {
 			get := pool.ExpectQuery("select report_id, expires_at from public_reports").
 				WithArgs(pgxmock.AnyArg())
 			if tt.exists {
-				get.WillReturnRows(pgxmock.NewRows([]string{"report_id", "expires_at"}).
-					AddRow(int64(1), tstz(nil)))
+				get.WillReturnRows(
+					pgxmock.NewRows([]string{"report_id", "expires_at"}).
+						AddRow(int64(1), tstz(nil)),
+				)
 			} else {
 				get.WillReturnError(pgx.ErrNoRows)
 			}
 
 			s := NewReportStoreForTest(sqlcgen.New(pool))
 
-			expired, err := s.ExpirePublicLink(context.Background(), testPublicID)
+			expired, err := s.ExpirePublicLink(
+				context.Background(),
+				testPublicID,
+			)
 			if !errors.Is(err, tt.wantErr) || expired != tt.wantExpired {
 				t.Fatalf("ExpirePublicLink() = %v, %v; want %v, %v",
 					expired, err, tt.wantExpired, tt.wantErr)

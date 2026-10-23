@@ -3,12 +3,17 @@ package models
 type SenderProvider struct {
 	tg   TgSender
 	smb  SmbSender
-	smtp SmtpSender
+	smtp SMTPSender
 	max  MaxSender
 }
 
-func NewSenderProvider(tg TgSender, smb SmbSender, smtp SmtpSender, max MaxSender) *SenderProvider {
-	return &SenderProvider{tg, smb, smtp, max}
+func NewSenderProvider(
+	tg TgSender,
+	smb SmbSender,
+	smtp SMTPSender,
+	maxSender MaxSender,
+) *SenderProvider {
+	return &SenderProvider{tg, smb, smtp, maxSender}
 }
 
 func (s SenderProvider) Tg() TgSender {
@@ -19,7 +24,7 @@ func (s SenderProvider) SMB() SmbSender {
 	return s.smb
 }
 
-func (s SenderProvider) SMTP() SmtpSender {
+func (s SenderProvider) SMTP() SMTPSender {
 	return s.smtp
 }
 

@@ -6,9 +6,14 @@ import (
 	htmltmpl "html/template"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
+)
+
+const (
+	nullStr = "null"
 )
 
 var ruMonths = map[time.Month]string{
@@ -173,7 +178,7 @@ var FuncMap = template.FuncMap{
 			return "0"
 		}
 
-		s := fmt.Sprintf("%d", n)
+		s := strconv.FormatInt(n, 10)
 
 		var result strings.Builder
 
@@ -198,15 +203,19 @@ var FuncMap = template.FuncMap{
 		switch v := part.(type) {
 		case float64:
 			p = v
-		case int, int64:
-			p = float64(v.(int))
+		case int:
+			p = float64(v)
+		case int64:
+			p = float64(v)
 		}
 
 		switch v := total.(type) {
 		case float64:
 			t = v
-		case int, int64:
-			t = float64(v.(int))
+		case int:
+			t = float64(v)
+		case int64:
+			t = float64(v)
 		}
 
 		if t == 0 {
@@ -312,7 +321,8 @@ var FuncMap = template.FuncMap{
 	"endOfMonth": func(t time.Time) time.Time {
 		y, m, _ := t.Date()
 
-		return time.Date(y, m+1, 1, 0, 0, 0, 0, t.Location()).Add(-time.Nanosecond)
+		return time.Date(y, m+1, 1, 0, 0, 0, 0, t.Location()).
+			Add(-time.Nanosecond)
 	},
 
 	// startOfYear - Возвращает первый день года
@@ -367,7 +377,14 @@ var FuncMap = template.FuncMap{
 		year := t.Year()
 		hour, minT := t.Hour(), t.Minute()
 
-		return fmt.Sprintf("%02d %s %d, %02d:%02d", day, month, year, hour, minT)
+		return fmt.Sprintf(
+			"%02d %s %d, %02d:%02d",
+			day,
+			month,
+			year,
+			hour,
+			minT,
+		)
 	},
 
 	// formatDateShort - Форматирует дату в кратком формате
@@ -541,6 +558,7 @@ var FuncMap = template.FuncMap{
 			if len(v) > 0 {
 				return v[0]
 			}
+
 		case []map[string]any:
 			if len(v) > 0 {
 				return v[0]
@@ -560,6 +578,7 @@ var FuncMap = template.FuncMap{
 			if len(v) > 0 {
 				return v[len(v)-1]
 			}
+
 		case []map[string]any:
 			if len(v) > 0 {
 				return v[len(v)-1]
@@ -601,7 +620,7 @@ var FuncMap = template.FuncMap{
 		case map[string]any:
 			return len(v) == 0
 		case string:
-			return v == "" || v == "null"
+			return v == "" || v == nullStr
 		case nil:
 			return true
 		default:
@@ -641,8 +660,8 @@ var FuncMap = template.FuncMap{
 	"parseJsonMap": func(s string) (map[string]any, error) {
 		var result map[string]any
 
-		if s == "" || s == "null" {
-			return nil, nil
+		if s == "" || s == nullStr {
+			return map[string]any{}, nil
 		}
 
 		err := json.Unmarshal([]byte(s), &result)
@@ -668,7 +687,7 @@ var FuncMap = template.FuncMap{
 	// Результат: "first"
 	"coalesce": func(values ...any) any {
 		for _, v := range values {
-			if v != nil && v != "" && v != "null" {
+			if v != nil && v != "" && v != nullStr {
 				return v
 			}
 		}
@@ -681,7 +700,6 @@ var FuncMap = template.FuncMap{
 	// Шаблон: {{ safe .html }}
 	// Результат: <b>Bold</b> (отрендерится как HTML)
 	"safe": func(s string) htmltmpl.HTML {
-		//nolint: gosec
 		return htmltmpl.HTML(s)
 	},
 	// isZero - Проверяет, является ли значение нулевым
@@ -701,12 +719,12 @@ var FuncMap = template.FuncMap{
 		}
 	},
 
-	// notEmpty - Проверяет, что строка не пустая и не "null"
+	// notEmpty - Проверяет, что строка не пустая и не nullStr
 	// Вход: "hello"
 	// Шаблон: {{ if notEmpty .text }}Есть текст{{ end }}
 	// Результат: "Есть текст"
 	"notEmpty": func(s string) bool {
-		return s != "" && s != "null"
+		return s != "" && s != nullStr
 	},
 
 	// default - Возвращает значение по умолчанию, если значение пустое
@@ -714,7 +732,7 @@ var FuncMap = template.FuncMap{
 	// Шаблон: {{ default "No data" .text }}
 	// Результат: "No data"
 	"default": func(def, val any) any {
-		if val == nil || val == "" || val == "null" {
+		if val == nil || val == "" || val == nullStr {
 			return def
 		}
 
@@ -840,7 +858,10 @@ type TimeSeriesResult struct {
 	Total map[string]any
 }
 
-func PrepareTimeSeries(rows []map[string]any, opts TimeSeriesOptions) (TimeSeriesResult, error) {
+func PrepareTimeSeries(
+	rows []map[string]any,
+	opts TimeSeriesOptions,
+) (TimeSeriesResult, error) {
 	result := TimeSeriesResult{}
 
 	if len(rows) == 0 {
@@ -862,8 +883,8 @@ func PrepareTimeSeries(rows []map[string]any, opts TimeSeriesOptions) (TimeSerie
 
 	var (
 		items []item
-		min   time.Time
-		max   time.Time
+		first time.Time
+		last  time.Time
 	)
 
 	for _, row := range rows {
@@ -890,12 +911,12 @@ func PrepareTimeSeries(rows []map[string]any, opts TimeSeriesOptions) (TimeSerie
 			row:  row,
 		})
 
-		if min.IsZero() || t.Before(min) {
-			min = t
+		if first.IsZero() || t.Before(first) {
+			first = t
 		}
 
-		if max.IsZero() || t.After(max) {
-			max = t
+		if last.IsZero() || t.After(last) {
+			last = t
 		}
 	}
 
@@ -909,7 +930,7 @@ func PrepareTimeSeries(rows []map[string]any, opts TimeSeriesOptions) (TimeSerie
 		index[it.date.Format(opts.DateLayout)] = it.row
 	}
 
-	for d := min; !d.After(max); d = nextDate(d, opts.Step) {
+	for d := first; !d.After(last); d = nextDate(d, opts.Step) {
 		key := d.Format(opts.DateLayout)
 
 		if row, ok := index[key]; ok {

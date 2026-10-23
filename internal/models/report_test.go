@@ -3,25 +3,32 @@ package models_test
 import (
 	"encoding/json"
 	"strings"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 func TestReportJSON(t *testing.T) {
 	rep := models.Report{
 		Name:  "TEST",
 		Title: "TestReport",
-		Queries: []models.Card{{
-			CardUUID: "1f2ff9eb-6f58-45e0-9d3f-3b6e3780d670",
-			Title:    "test_query",
-			Params:   map[string]string{"data": "20.07.2026", "data2": "21.07.2026"},
-			Type:     "mb",
-		}, {
-			CardUUID: "a45ad11b-4be8-4531-86a0-3ecf4c386efe",
-			Title:    "test_query2",
-			Params:   map[string]string{},
-			Type:     "jira",
-		}},
+		Queries: []models.Card{
+			{
+				CardUUID: "1f2ff9eb-6f58-45e0-9d3f-3b6e3780d670",
+				Title:    "test_query",
+				Params: map[string]string{
+					"data":  "20.07.2026",
+					"data2": "21.07.2026",
+				},
+				Type: "mb",
+			},
+			{
+				CardUUID: "a45ad11b-4be8-4531-86a0-3ecf4c386efe",
+				Title:    "test_query2",
+				Params:   map[string]string{},
+				Type:     "jira",
+			},
+		},
 		Recipients: []models.Recipient{{
 			Name:       "RCPT1",
 			RemotePath: new(string),
@@ -95,11 +102,20 @@ func TestReportJSON_IgnoreEvaluateNotSerialized(t *testing.T) {
 
 func TestReportJSON_Dedup(t *testing.T) {
 	var rep models.Report
-	if err := json.Unmarshal([]byte(`{"name":"a"}`), &rep); err != nil || rep.Dedup {
+
+	if err := json.Unmarshal(
+		[]byte(`{"name":"a"}`),
+		&rep,
+	); err != nil ||
+		rep.Dedup {
 		t.Fatalf("без dedup: Dedup = %v, err = %v, want false", rep.Dedup, err)
 	}
 
-	if err := json.Unmarshal([]byte(`{"name":"a","dedup":true}`), &rep); err != nil || !rep.Dedup {
+	if err := json.Unmarshal(
+		[]byte(`{"name":"a","dedup":true}`),
+		&rep,
+	); err != nil ||
+		!rep.Dedup {
 		t.Fatalf("dedup:true: Dedup = %v, err = %v, want true", rep.Dedup, err)
 	}
 
@@ -110,10 +126,18 @@ func TestReportJSON_Dedup(t *testing.T) {
 }
 
 func TestReport_UsesPeriod(t *testing.T) {
-	with := models.Report{Queries: []models.Card{{RawParams: []byte(`{"d":"period_from"}`)}}}
-	without := models.Report{Queries: []models.Card{{RawParams: []byte(`{"d":"today"}`)}}}
+	with := models.Report{
+		Queries: []models.Card{{RawParams: []byte(`{"d":"period_from"}`)}},
+	}
+	without := models.Report{
+		Queries: []models.Card{{RawParams: []byte(`{"d":"today"}`)}},
+	}
 
 	if !with.UsesPeriod() || without.UsesPeriod() {
-		t.Errorf("UsesPeriod: with=%v without=%v", with.UsesPeriod(), without.UsesPeriod())
+		t.Errorf(
+			"UsesPeriod: with=%v without=%v",
+			with.UsesPeriod(),
+			without.UsesPeriod(),
+		)
 	}
 }

@@ -9,8 +9,9 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"support_bot/internal/pkg/retry"
 	"time"
+
+	"support_bot/internal/pkg/retry"
 )
 
 type Collector struct {
@@ -31,8 +32,10 @@ func New(
 
 	return &Collector{
 		sources: sources,
-		client:  &http.Client{Transport: retry.NewRoundTripper(http.DefaultTransport)},
-		log:     log,
+		client: &http.Client{
+			Transport: retry.NewRoundTripper(http.DefaultTransport),
+		},
+		log: log,
 	}, nil
 }
 
@@ -87,7 +90,8 @@ func (c *Collector) Fetch(
 	if err != nil {
 		return nil, fmt.Errorf("prometheus %s: %w", target, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -96,7 +100,8 @@ func (c *Collector) Fetch(
 
 	// Декодируем при любом статусе: Prometheus отдаёт JSON-ошибки с 400/422/503.
 	var r apiResponse
-	if err := json.Unmarshal(body, &r); err != nil {
+
+	if err = json.Unmarshal(body, &r); err != nil {
 		return nil, fmt.Errorf(
 			"prometheus %s: HTTP %d, ответ не JSON: %w",
 			target,
@@ -107,11 +112,21 @@ func (c *Collector) Fetch(
 
 	// JSON без status — не Prometheus API (например, 401 от Grafana: {"message": ...}).
 	if r.Status == "" {
-		return nil, fmt.Errorf("prometheus %s: HTTP %d: %.200s", target, resp.StatusCode, body)
+		return nil, fmt.Errorf(
+			"prometheus %s: HTTP %d: %.200s",
+			target,
+			resp.StatusCode,
+			body,
+		)
 	}
 
 	if r.Status != "success" {
-		return nil, fmt.Errorf("prometheus %s: %s: %s", target, r.ErrorType, r.Error)
+		return nil, fmt.Errorf(
+			"prometheus %s: %s: %s",
+			target,
+			r.ErrorType,
+			r.Error,
+		)
 	}
 
 	for _, w := range r.Warnings {
@@ -133,6 +148,7 @@ func toRows(resultType string, raw json.RawMessage) ([]map[string]any, error) {
 	}
 
 	var series []sample
+
 	if err := json.Unmarshal(raw, &series); err != nil {
 		return nil, fmt.Errorf("разбор результата: %w", err)
 	}

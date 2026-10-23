@@ -3,9 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
-	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
@@ -25,13 +26,16 @@ func TestScriptStore_GetByName_ReturnsScript(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows([]string{"script"}).AddRow("return 1"))
 
 	s := &ScriptStore{q: sqlcgen.New(pool)}
+
 	got, err := s.GetByName(context.Background(), "weekly.lua")
 	if err != nil {
 		t.Fatalf("GetByName() error = %v", err)
 	}
+
 	if got != "return 1" {
 		t.Fatalf("GetByName() = %q, want %q", got, "return 1")
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -51,10 +55,16 @@ func TestScriptStore_GetByName_NoRowsReturnsNotFound(t *testing.T) {
 		WillReturnError(pgx.ErrNoRows)
 
 	s := &ScriptStore{q: sqlcgen.New(pool)}
+
 	_, err = s.GetByName(context.Background(), "missing.lua")
+
 	if !errors.Is(err, models.ErrNotFound) {
-		t.Fatalf("GetByName() error = %v, want wrapping models.ErrNotFound", err)
+		t.Fatalf(
+			"GetByName() error = %v, want wrapping models.ErrNotFound",
+			err,
+		)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -75,9 +85,14 @@ func TestScriptStore_Save_InsertsWithoutOverwritingOnConflict(t *testing.T) {
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	s := &ScriptStore{q: sqlcgen.New(pool)}
-	if err := s.Save(context.Background(), "weekly.lua", "return 1"); err != nil {
+	if err := s.Save(
+		context.Background(),
+		"weekly.lua",
+		"return 1",
+	); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}

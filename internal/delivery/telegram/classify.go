@@ -2,13 +2,16 @@ package telegram
 
 import (
 	"errors"
-	"support_bot/internal/pkg/retry"
 	"time"
+
+	"support_bot/internal/pkg/retry"
 
 	"github.com/mymmrac/telego/telegoapi"
 )
 
-const maxRetryAfter = 60
+const (
+	maxRetryAfter = 60
+)
 
 // classify размечает ошибку Telegram API для retry.Do: что не лечится повтором — Permanent,
 // флуд-контроль — After, остальное (сеть, 5xx) повторяется как есть.
@@ -30,7 +33,10 @@ func classify(err error) error {
 			return retry.Permanent(err)
 		}
 
-		return retry.After(err, time.Duration(apiErr.Parameters.RetryAfter)*time.Second)
+		return retry.After(
+			err,
+			time.Duration(apiErr.Parameters.RetryAfter)*time.Second,
+		)
 	}
 
 	return err

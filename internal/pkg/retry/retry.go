@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
+
 	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/secret"
-	"time"
 )
 
 // Delays — паузы между попытками Do; попыток = len+1.
@@ -107,6 +108,7 @@ func Do(
 			timer.Stop()
 
 			return ctx.Err()
+
 		case <-timer.C:
 		}
 	}

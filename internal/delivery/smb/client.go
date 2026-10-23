@@ -2,10 +2,12 @@ package smb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"path/filepath"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/retry"
 
@@ -42,14 +44,19 @@ func New(
 		return r, nil
 	}
 
-	err := r.connect()
+	err := r.connect(ctx)
 	if err != nil {
-		l.ErrorContext(ctx, "Error while connect to share", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"Error while connect to share",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+
 	r.cancel = cancel
 	r.startMonitor(ctx)
 
@@ -98,18 +105,28 @@ func (smb *SMB) Upload(
 	data models.Data,
 ) error {
 	if !smb.cfg.Active {
-		return fmt.Errorf("smb conn inactive from config")
+		return errors.New("smb conn inactive from config")
 	}
 
 	remotePath := filepath.Join(remote, data.FileName)
 	raw := data.Data.Bytes()
 
-	return retry.Do(ctx, smb.delays, smb.log, "smb.Upload", func(ctx context.Context) error {
-		return smb.write(ctx, remotePath, data.Name(), raw)
-	})
+	return retry.Do(
+		ctx,
+		smb.delays,
+		smb.log,
+		"smb.Upload",
+		func(ctx context.Context) error {
+			return smb.write(ctx, remotePath, data.Name(), raw)
+		},
+	)
 }
 
-func (smb *SMB) write(ctx context.Context, remotePath, name string, raw []byte) error {
+func (smb *SMB) write(
+	ctx context.Context,
+	remotePath, name string,
+	raw []byte,
+) error {
 	f, err := smb.fs.Create(remotePath)
 	if err != nil {
 		smb.log.ErrorContext(
@@ -119,13 +136,21 @@ func (smb *SMB) write(ctx context.Context, remotePath, name string, raw []byte) 
 			slog.Any("error", err),
 		)
 
-		return fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
+		return fmt.Errorf(
+			"failed to create remote file %s: %w",
+			remotePath,
+			err,
+		)
 	}
 
 	_, err = f.Write(raw)
 
 	if cerr := f.Close(); cerr != nil {
-		smb.log.ErrorContext(ctx, "unable close file body", slog.Any("error", cerr))
+		smb.log.ErrorContext(
+			ctx,
+			"unable close file body",
+			slog.Any("error", cerr),
+		)
 	}
 
 	if err != nil {
@@ -136,7 +161,11 @@ func (smb *SMB) write(ctx context.Context, remotePath, name string, raw []byte) 
 			slog.Any("error", err),
 		)
 
-		return fmt.Errorf("failed to write to remote file %s: %w", remotePath, err)
+		return fmt.Errorf(
+			"failed to write to remote file %s: %w",
+			remotePath,
+			err,
+		)
 	}
 
 	return nil

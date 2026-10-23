@@ -3,10 +3,10 @@ package runlog
 import "time"
 
 type Config struct {
-	Retention time.Duration `env:"RUNS_RETENTION" yaml:"retention" comment:"Сколько хранить записи журнала запусков отчётов." env-default:"720h"`
+	Retention time.Duration `comment:"Сколько хранить записи журнала запусков отчётов." env:"RUNS_RETENTION" env-default:"720h" yaml:"retention"`
 }
 
 type AlertsConfig struct {
-	ChatID   int64 `env:"ALERTS_CHAT_ID"   yaml:"chat_id"   comment:"Чат для уведомлений о сбоях отчётов. Если 0 — уведомления уходят всем админам в личку."`
-	ThreadID int   `env:"ALERTS_THREAD_ID" yaml:"thread_id" comment:"Тема (thread) в чате уведомлений, необязательно."`
+	ChatID   int64 `comment:"Чат для уведомлений о сбоях отчётов. Если 0 — уведомления уходят всем админам в личку."                                                                       env:"ALERTS_CHAT_ID"   yaml:"chat_id"`
+	ThreadID int   `comment:"Тема (thread) в чате уведомлений, необязательно."                                                                                                             env:"ALERTS_THREAD_ID" yaml:"thread_id"`
 }

@@ -12,12 +12,15 @@ import (
 func TestMW_Gzip_CompressesWhenAccepted(t *testing.T) {
 	mw := NewMiddleware(slog.Default(), 1024)
 
-	handler := mw.Gzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello world"))
-	}))
+	handler := mw.Gzip(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Write([]byte("hello world"))
+		}),
+	)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Accept-Encoding", "gzip")
+
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -36,6 +39,7 @@ func TestMW_Gzip_CompressesWhenAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read gzip body: %v", err)
 	}
+
 	if string(got) != "hello world" {
 		t.Fatalf("got body %q, want %q", got, "hello world")
 	}
@@ -44,11 +48,13 @@ func TestMW_Gzip_CompressesWhenAccepted(t *testing.T) {
 func TestMW_Gzip_PassesThroughWhenNotAccepted(t *testing.T) {
 	mw := NewMiddleware(slog.Default(), 1024)
 
-	handler := mw.Gzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello world"))
-	}))
+	handler := mw.Gzip(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Write([]byte("hello world"))
+		}),
+	)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -56,6 +62,7 @@ func TestMW_Gzip_PassesThroughWhenNotAccepted(t *testing.T) {
 	if ce := rec.Header().Get("Content-Encoding"); ce != "" {
 		t.Fatalf("got Content-Encoding %q, want empty", ce)
 	}
+
 	if rec.Body.String() != "hello world" {
 		t.Fatalf("got body %q, want %q", rec.Body.String(), "hello world")
 	}

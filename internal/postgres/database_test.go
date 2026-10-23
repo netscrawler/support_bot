@@ -25,21 +25,36 @@ func TestNew_PoolConfigMapping(t *testing.T) {
 		t.Fatalf("parsePoolConfig() error = %v", err)
 	}
 
-	if pgxCfg.MaxConns != int32(cfg.MaxConns) { //nolint:gosec // test fixture value
+	if pgxCfg.MaxConns != int32(cfg.MaxConns) {
 		t.Errorf("MaxConns = %d, want %d", pgxCfg.MaxConns, cfg.MaxConns)
 	}
 
 	if pgxCfg.MaxConnLifetime != cfg.MaxConnLifeTime {
-		t.Errorf("MaxConnLifetime = %v, want %v", pgxCfg.MaxConnLifetime, cfg.MaxConnLifeTime)
+		t.Errorf(
+			"MaxConnLifetime = %v, want %v",
+			pgxCfg.MaxConnLifetime,
+			cfg.MaxConnLifeTime,
+		)
 	}
 
 	if pgxCfg.MaxConnIdleTime != cfg.MaxConnIdleTime {
-		t.Errorf("MaxConnIdleTime = %v, want %v", pgxCfg.MaxConnIdleTime, cfg.MaxConnIdleTime)
+		t.Errorf(
+			"MaxConnIdleTime = %v, want %v",
+			pgxCfg.MaxConnIdleTime,
+			cfg.MaxConnIdleTime,
+		)
 	}
 }
 
 func TestGetDSNKeepsRealPassword(t *testing.T) {
-	cfg := Config{Host: "h", Port: 5432, User: "u", Password: "p@ss", Name: "db", SSL: "disable"}
+	cfg := Config{
+		Host:     "h",
+		Port:     5432,
+		User:     "u",
+		Password: "p@ss",
+		Name:     "db",
+		SSL:      "disable",
+	}
 
 	if got := cfg.getDSN().Value(); !strings.Contains(got, "u:p%40ss@h:5432") {
 		t.Errorf("getDSN() = %q, want real password", got)

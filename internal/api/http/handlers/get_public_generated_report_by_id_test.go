@@ -2,17 +2,20 @@ package handlers
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 type fakeProvider struct{ err error }
 
-func (f fakeProvider) GenerateReport(context.Context, string) (models.Data, error) {
+func (f fakeProvider) GenerateReport(
+	context.Context,
+	string,
+) (models.Data, error) {
 	return models.Data{}, f.err
 }
 
@@ -29,10 +32,11 @@ func TestGetGeneratedReportByID_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewHandler(
 				fakeProvider{err: tt.err},
-				slog.New(slog.NewTextHandler(io.Discard, nil)),
+				slog.New(slog.DiscardHandler),
 			)
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			r.SetPathValue("report_id", "123e4567-e89b-42d3-a456-426614174000")
+
 			w := httptest.NewRecorder()
 
 			h.GetGeneratedReportByID(w, r)

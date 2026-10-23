@@ -2,6 +2,7 @@ package httplib
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -24,7 +25,10 @@ func (e *HTTPError) Error() string {
 func (e *HTTPError) Write(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(e.Code)
-	json.NewEncoder(w).Encode(e)
+
+	if err := json.NewEncoder(w).Encode(e); err != nil {
+		slog.Error("write HTTP error", slog.Any("error", err))
+	}
 }
 
 var (
@@ -40,7 +44,10 @@ var (
 		http.StatusForbidden,
 		"you do not have permission to access this resource",
 	)
-	ErrNotFound = NewHTTPError(http.StatusNotFound, "the requested resource could not be found")
+	ErrNotFound = NewHTTPError(
+		http.StatusNotFound,
+		"the requested resource could not be found",
+	)
 	ErrConflict = NewHTTPError(
 		http.StatusConflict,
 		"the request conflicts with the current state of the resource",

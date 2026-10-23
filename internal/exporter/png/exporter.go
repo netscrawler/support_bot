@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"math"
 	"strings"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg"
 
@@ -44,6 +45,7 @@ func (e *Exporter) Export() ([]models.Data, error) {
 		_, pureData := splitMeta(v)
 
 		var order []string
+
 		if o, ok := e.order[k]; ok {
 			order = o
 		} else {
@@ -81,7 +83,13 @@ func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 		return nil, err
 	}
 
-	imageFromMatrix := generateTableImageFromMatrix(data, faceNormal, 18.0, 6, 1)
+	imageFromMatrix := generateTableImageFromMatrix(
+		data,
+		faceNormal,
+		18.0,
+		6,
+		1,
+	)
 
 	titleFont, err := pkg.GetFontFaceBold(24)
 	if err != nil {
@@ -89,10 +97,12 @@ func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 	}
 
 	if title != nil {
-		imageFromMatrix, err = addTitleAboveImage(imageFromMatrix, *title, titleFont, 10)
-		if err != nil {
-			return nil, err
-		}
+		imageFromMatrix = addTitleAboveImage(
+			imageFromMatrix,
+			*title,
+			titleFont,
+			10,
+		)
 	}
 
 	buf := new(bytes.Buffer)
@@ -112,7 +122,7 @@ func createImageFromMatrix(data [][]any, title *string) (*bytes.Buffer, error) {
 // borderWidth — ширина рамок таблицы.
 func generateTableImageFromMatrix(
 	records [][]any,
-	font font.Face,
+	face font.Face,
 	fontSize float64,
 	padding float64,
 	borderWidth float64,
@@ -128,7 +138,7 @@ func generateTableImageFromMatrix(
 
 	// Используем face в gg.Context
 	dc := gg.NewContext(10, 10)
-	dc.SetFontFace(font)
+	dc.SetFontFace(face)
 
 	// Минимальная ширина колонки (если надо, можно задать)
 	minColWidth := 50.0
@@ -140,6 +150,7 @@ func generateTableImageFromMatrix(
 	for col := range colsCount {
 		if len(records[0]) > col {
 			w, _ := dc.MeasureString(fmt.Sprint(records[0][col]))
+
 			colWidths[col] = w
 		} else {
 			colWidths[col] = minColWidth
@@ -193,6 +204,7 @@ func generateTableImageFromMatrix(
 				maxHeight = h
 			}
 		}
+
 		// Минимальная высота строки равна высоте строки шрифта + padding сверху и снизу
 		minHeight := lineHeight + 2*padding
 		if maxHeight < minHeight {
@@ -222,7 +234,7 @@ func generateTableImageFromMatrix(
 	dc = gg.NewContext(imgWidth, imgHeight)
 	dc.SetColor(color.White)
 	dc.Clear()
-	dc.SetFontFace(font)
+	dc.SetFontFace(face)
 
 	// 5. Нарисовать таблицу с рамками и текстом
 	y := borderWidth
@@ -242,7 +254,7 @@ func generateTableImageFromMatrix(
 			case rowIdx%2 != 0:
 				dc.SetColor(color.White)
 			}
-			// dc.SetColor(color.White)
+
 			dc.DrawRectangle(x, y, cellWidth, rowHeight)
 			dc.Fill()
 
@@ -270,7 +282,13 @@ func generateTableImageFromMatrix(
 			for i, line := range lines {
 				// Горизонтальное выравнивание — слева с padding
 				dc.SetColor(color.Black)
-				dc.DrawStringAnchored(line, x+padding, startY+float64(i)*lineHeight, 0, 0)
+				dc.DrawStringAnchored(
+					line,
+					x+padding,
+					startY+float64(i)*lineHeight,
+					0,
+					0,
+				)
 			}
 
 			x += cellWidth + borderWidth
@@ -287,7 +305,7 @@ func addTitleAboveImage(
 	title string,
 	face font.Face,
 	padding float64,
-) (image.Image, error) {
+) image.Image {
 	// Ширина и высота оригинального изображения
 	imgW := img.Bounds().Dx()
 	imgH := img.Bounds().Dy()
@@ -315,7 +333,7 @@ func addTitleAboveImage(
 	// Отрисовываем оригинальное изображение ниже
 	dc.DrawImage(img, 0, titleHeight)
 
-	return dc.Image(), nil
+	return dc.Image()
 }
 
 // wrapText разбивает текст на строки, чтобы каждая строка умещалась в maxWidth.
@@ -372,5 +390,6 @@ func splitMeta(records []map[string]any) (
 		data = append(data, record)
 	}
 
-	return
+	return meta,
+		data
 }

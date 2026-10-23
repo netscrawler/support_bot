@@ -27,7 +27,7 @@ func (x RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		select {
 		case <-time.After(delay):
-			delay = delay * 3
+			delay *= 3
 		case <-ctx.Done():
 			return &http.Response{}, ctx.Err()
 		}

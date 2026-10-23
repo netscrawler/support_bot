@@ -21,7 +21,7 @@ var periodCodes = map[PeriodName]string{
 	PeriodMonth:     "m",
 }
 
-// ParsePeriod: пустая строка означает today.
+// ParsePeriod разбирает имя периода: пустая строка означает today.
 func ParsePeriod(s string) (PeriodName, error) {
 	if s == "" {
 		return PeriodToday, nil
@@ -50,7 +50,16 @@ func PeriodByCode(code string) (PeriodName, bool) {
 
 // Range возвращает полуинтервал [from, to) в часовом поясе now.
 func (p PeriodName) Range(now time.Time) (from, to time.Time, err error) {
-	d := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	d := time.Date(
+		now.Year(),
+		now.Month(),
+		now.Day(),
+		0,
+		0,
+		0,
+		0,
+		now.Location(),
+	)
 
 	switch p {
 	case PeriodToday:
@@ -60,10 +69,23 @@ func (p PeriodName) Range(now time.Time) (from, to time.Time, err error) {
 	case PeriodWeek:
 		return d.AddDate(0, 0, -7), d, nil
 	case PeriodMonth:
-		first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		first := time.Date(
+			now.Year(),
+			now.Month(),
+			1,
+			0,
+			0,
+			0,
+			0,
+			now.Location(),
+		)
 
 		return first.AddDate(0, -1, 0), first, nil
+
 	default:
-		return time.Time{}, time.Time{}, fmt.Errorf("unknown period %q", string(p))
+		return time.Time{}, time.Time{}, fmt.Errorf(
+			"unknown period %q",
+			string(p),
+		)
 	}
 }

@@ -6,10 +6,11 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"support_bot/internal/metrics"
-	"support_bot/internal/pkg/secret"
 	"testing"
 	"time"
+
+	"support_bot/internal/metrics"
+	"support_bot/internal/pkg/secret"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
@@ -32,6 +33,7 @@ func TestDo_SuccessOnSecondAttempt(t *testing.T) {
 			return nil
 		},
 	)
+
 	if err != nil || calls != 2 {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
@@ -40,11 +42,18 @@ func TestDo_SuccessOnSecondAttempt(t *testing.T) {
 func TestDo_AllFail(t *testing.T) {
 	delays := Delays{time.Millisecond, time.Millisecond}
 	calls := 0
-	err := Do(context.Background(), delays, nil, "op", func(context.Context) error {
-		calls++
+	err := Do(
+		context.Background(),
+		delays,
+		nil,
+		"op",
+		func(context.Context) error {
+			calls++
 
-		return errBoom
-	})
+			return errBoom
+		},
+	)
+
 	if !errors.Is(err, errBoom) || calls != len(delays)+1 {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
@@ -63,7 +72,9 @@ func TestDo_Permanent(t *testing.T) {
 			return Permanent(errBoom)
 		},
 	)
-	if err != errBoom || calls != 1 { //nolint:errorlint // проверяем отсутствие обёртки
+
+	if !errors.Is(err, errBoom) ||
+		calls != 1 {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
 }
@@ -71,23 +82,36 @@ func TestDo_Permanent(t *testing.T) {
 func TestDo_AfterOverridesDelay(t *testing.T) {
 	calls := 0
 	start := time.Now()
-	err := Do(context.Background(), Delays{time.Hour}, nil, "op", func(context.Context) error {
-		calls++
-		if calls == 1 {
-			return After(errBoom, time.Millisecond)
-		}
+	err := Do(
+		context.Background(),
+		Delays{time.Hour},
+		nil,
+		"op",
+		func(context.Context) error {
+			calls++
+			if calls == 1 {
+				return After(errBoom, time.Millisecond)
+			}
 
-		return nil
-	})
+			return nil
+		},
+	)
+
 	if err != nil || calls != 2 || time.Since(start) > time.Minute {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
 }
 
 func TestDo_AfterUnwrappedWhenExhausted(t *testing.T) {
-	err := Do(context.Background(), nil, nil, "op", func(context.Context) error {
-		return After(errBoom, time.Hour)
-	})
+	err := Do(
+		context.Background(),
+		nil,
+		nil,
+		"op",
+		func(context.Context) error {
+			return After(errBoom, time.Hour)
+		},
+	)
 	if err != errBoom { //nolint:errorlint // проверяем отсутствие обёртки
 		t.Fatalf("err=%v", err)
 	}
@@ -104,18 +128,27 @@ func TestDo_CancelDuringPause(t *testing.T) {
 
 		return errBoom
 	})
-	if !errors.Is(err, context.Canceled) || calls != 1 || time.Since(start) > time.Minute {
+
+	if !errors.Is(err, context.Canceled) || calls != 1 ||
+		time.Since(start) > time.Minute {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
 }
 
 func TestDo_EmptyDelays(t *testing.T) {
 	calls := 0
-	err := Do(context.Background(), nil, nil, "op", func(context.Context) error {
-		calls++
+	err := Do(
+		context.Background(),
+		nil,
+		nil,
+		"op",
+		func(context.Context) error {
+			calls++
 
-		return errBoom
-	})
+			return errBoom
+		},
+	)
+
 	if !errors.Is(err, errBoom) || calls != 1 {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
@@ -127,6 +160,7 @@ func TestDo_Metrics(t *testing.T) {
 	r0, f0 := testutil.ToFloat64(retries), testutil.ToFloat64(failures)
 
 	calls := 0
+
 	err := Do(context.Background(), Delays{time.Millisecond}, nil, "metrics_op",
 		func(context.Context) error {
 			calls++
@@ -143,6 +177,7 @@ func TestDo_Metrics(t *testing.T) {
 	if d := testutil.ToFloat64(retries) - r0; d != 1 {
 		t.Fatalf("retries delta=%v", d)
 	}
+
 	if d := testutil.ToFloat64(failures) - f0; d != 0 {
 		t.Fatalf("failures delta=%v", d)
 	}
@@ -152,8 +187,10 @@ func TestDo_RedactsSecretInLog(t *testing.T) {
 	secret.Register("retry-tok-777")
 
 	var buf bytes.Buffer
+
 	log := slog.New(slog.NewTextHandler(&buf, nil))
 	calls := 0
+
 	err := Do(
 		context.Background(),
 		Delays{time.Millisecond},

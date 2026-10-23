@@ -71,9 +71,11 @@ var (
 	}
 )
 
-var BackMarkup = &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{
-	{Back},
-}}
+var BackMarkup = &telego.InlineKeyboardMarkup{
+	InlineKeyboard: [][]telego.InlineKeyboardButton{
+		{Back},
+	},
+}
 
 var (
 	StartCommand    = "/admin"

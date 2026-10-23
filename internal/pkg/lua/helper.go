@@ -9,7 +9,9 @@ import (
 	luaEngine "github.com/yuin/gopher-lua"
 )
 
-func LuaTableToGoData(t *luaEngine.LTable) (map[string][]map[string]any, error) {
+func LuaTableToGoData(
+	t *luaEngine.LTable,
+) (map[string][]map[string]any, error) {
 	out := make(map[string][]map[string]any)
 
 	t.ForEach(func(k, v luaEngine.LValue) {
@@ -56,11 +58,13 @@ func LuaValueToGo(v luaEngine.LValue) any {
 		if math.Trunc(f) != f {
 			return f
 		}
+
 		if f >= math.MinInt64 && f <= math.MaxInt64 {
 			return int64(f)
 		}
 
 		return f
+
 	case luaEngine.LBool:
 		return bool(x)
 	case *luaEngine.LTable:
@@ -95,7 +99,7 @@ func LuaTableToGo(t *luaEngine.LTable) any {
 	return m
 }
 
-func GoValueToLua(L *luaEngine.LState, v any) luaEngine.LValue {
+func GoValueToLua(ls *luaEngine.LState, v any) luaEngine.LValue {
 	if v == nil {
 		return luaEngine.LNil
 	}
@@ -136,29 +140,29 @@ func GoValueToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 		return luaEngine.LNumber(x)
 
 	case map[string]any:
-		t := L.NewTable()
+		t := ls.NewTable()
 
 		for k, v := range x {
-			t.RawSetString(k, GoValueToLua(L, v))
+			t.RawSetString(k, GoValueToLua(ls, v))
 		}
 
 		return t
 
 	case []any:
-		t := L.NewTable()
+		t := ls.NewTable()
 
 		for _, v := range x {
-			t.Append(GoValueToLua(L, v))
+			t.Append(GoValueToLua(ls, v))
 		}
 
 		return t
 
 	default:
-		return ReflectToLua(L, x)
+		return ReflectToLua(ls, x)
 	}
 }
 
-func ReflectToLua(L *luaEngine.LState, v any) luaEngine.LValue {
+func ReflectToLua(ls *luaEngine.LState, v any) luaEngine.LValue {
 	rv := reflect.ValueOf(v)
 
 	// pointer
@@ -167,15 +171,15 @@ func ReflectToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 			return luaEngine.LNil
 		}
 
-		return ReflectToLua(L, rv.Elem().Interface())
+		return ReflectToLua(ls, rv.Elem().Interface())
 	}
 
 	switch rv.Kind() {
 	case reflect.Struct:
-		t := L.NewTable()
+		t := ls.NewTable()
 		rt := rv.Type()
 
-		for i := 0; i < rv.NumField(); i++ {
+		for i := range rv.NumField() {
 			field := rt.Field(i)
 
 			if field.PkgPath != "" {
@@ -189,17 +193,17 @@ func ReflectToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 
 			t.RawSetString(
 				key,
-				GoValueToLua(L, rv.Field(i).Interface()),
+				GoValueToLua(ls, rv.Field(i).Interface()),
 			)
 		}
 
 		return t
 
 	case reflect.Slice, reflect.Array:
-		t := L.NewTable()
+		t := ls.NewTable()
 
-		for i := 0; i < rv.Len(); i++ {
-			t.Append(GoValueToLua(L, rv.Index(i).Interface()))
+		for i := range rv.Len() {
+			t.Append(GoValueToLua(ls, rv.Index(i).Interface()))
 		}
 
 		return t
@@ -209,12 +213,12 @@ func ReflectToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 			return luaEngine.LNil
 		}
 
-		t := L.NewTable()
+		t := ls.NewTable()
 
 		for _, key := range rv.MapKeys() {
 			t.RawSetString(
 				key.String(),
-				GoValueToLua(L, rv.MapIndex(key).Interface()),
+				GoValueToLua(ls, rv.MapIndex(key).Interface()),
 			)
 		}
 
@@ -226,19 +230,19 @@ func ReflectToLua(L *luaEngine.LState, v any) luaEngine.LValue {
 }
 
 func MapResultToLua(
-	L *luaEngine.LState,
+	ls *luaEngine.LState,
 	data map[string][]map[string]any,
 ) *luaEngine.LTable {
-	root := L.NewTable()
+	root := ls.NewTable()
 
 	for name, rows := range data {
-		arr := L.NewTable()
+		arr := ls.NewTable()
 
 		for _, row := range rows {
-			rowTbl := L.NewTable()
+			rowTbl := ls.NewTable()
 
 			for k, v := range row {
-				rowTbl.RawSetString(k, GoValueToLua(L, v))
+				rowTbl.RawSetString(k, GoValueToLua(ls, v))
 			}
 
 			arr.Append(rowTbl)

@@ -15,7 +15,11 @@ type Server struct {
 	log *slog.Logger
 }
 
-func NewServer(addr string, ping func(context.Context) error, log *slog.Logger) *Server {
+func NewServer(
+	addr string,
+	ping func(context.Context) error,
+	log *slog.Logger,
+) *Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -24,21 +28,33 @@ func NewServer(addr string, ping func(context.Context) error, log *slog.Logger) 
 
 		if err := ping(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+
 			return
 		}
 
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			slog.ErrorContext(
+				r.Context(),
+				"write health response",
+				slog.Any("error", err),
+			)
+		}
 	})
 
 	return &Server{
-		srv: &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second},
+		srv: &http.Server{
+			Addr:              addr,
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+		},
 		log: log,
 	}
 }
 
 func (s *Server) Start() {
 	go func() {
-		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.srv.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
 			s.log.Error("metrics server stopped", slog.Any("error", err))
 		}
 	}()

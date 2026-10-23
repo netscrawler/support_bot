@@ -2,6 +2,7 @@ package eventcreator
 
 import (
 	"context"
+
 	"support_bot/internal/models"
 )
 
@@ -10,7 +11,10 @@ type EventAPI struct {
 	OutSpC chan models.SpecialEventForLK
 }
 
-func NewEventAPI(outC chan models.Event, outSpC chan models.SpecialEventForLK) *EventAPI {
+func NewEventAPI(
+	outC chan models.Event,
+	outSpC chan models.SpecialEventForLK,
+) *EventAPI {
 	return &EventAPI{
 		OutC:   outC,
 		OutSpC: outSpC,

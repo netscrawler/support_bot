@@ -3,8 +3,9 @@ package store
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/db/sqlcgen"
 	"testing"
+
+	"support_bot/internal/db/sqlcgen"
 
 	"github.com/pashagolub/pgxmock/v4"
 )
@@ -34,8 +35,17 @@ func TestUserStore_GetByUsername_ReturnsPopulatedUser(t *testing.T) {
 	pool.ExpectQuery("select id, telegram_id, username, first_name, last_name, role").
 		WithArgs(&username).
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"id", "telegram_id", "username", "first_name", "last_name", "role"},
-		).AddRow(int32(1), int64(42), &username, &firstName, (*string)(nil), sqlcgen.UserRoleAdmin))
+			[]string{
+				"id",
+				"telegram_id",
+				"username",
+				"first_name",
+				"last_name",
+				"role",
+			},
+		).
+			AddRow(int32(1), int64(42), &username, &firstName, (*string)(nil), sqlcgen.UserRoleAdmin),
+		)
 
 	s := NewUserStoreForTest(sqlcgen.New(pool))
 
@@ -43,11 +53,20 @@ func TestUserStore_GetByUsername_ReturnsPopulatedUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByUsername() error = %v", err)
 	}
+
 	if user == nil {
-		t.Fatal("GetByUsername() returned nil user, want a populated *models.User")
+		t.Fatal(
+			"GetByUsername() returned nil user, want a populated *models.User",
+		)
 	}
-	if user.TelegramID != 42 || user.Username != username || user.Role != "admin" {
-		t.Errorf("GetByUsername() = %+v, want TelegramID=42 Username=%q Role=admin", user, username)
+
+	if user.TelegramID != 42 || user.Username != username ||
+		user.Role != "admin" {
+		t.Errorf(
+			"GetByUsername() = %+v, want TelegramID=42 Username=%q Role=admin",
+			user,
+			username,
+		)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {
@@ -69,8 +88,17 @@ func TestUserStore_GetAllAdmins_ReturnsOnlyAdminAndPrimaryRoles(t *testing.T) {
 
 	pool.ExpectQuery("select id, telegram_id, username, first_name, last_name, role\nfrom users\nwhere role in").
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"id", "telegram_id", "username", "first_name", "last_name", "role"},
-		).AddRow(int32(3), int64(99), &adminName, (*string)(nil), (*string)(nil), sqlcgen.UserRoleAdmin))
+			[]string{
+				"id",
+				"telegram_id",
+				"username",
+				"first_name",
+				"last_name",
+				"role",
+			},
+		).
+			AddRow(int32(3), int64(99), &adminName, (*string)(nil), (*string)(nil), sqlcgen.UserRoleAdmin),
+		)
 
 	s := NewUserStoreForTest(sqlcgen.New(pool))
 
@@ -78,6 +106,7 @@ func TestUserStore_GetAllAdmins_ReturnsOnlyAdminAndPrimaryRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllAdmins() error = %v", err)
 	}
+
 	if len(admins) != 1 || admins[0].Role != "admin" {
 		t.Errorf("GetAllAdmins() = %+v, want exactly 1 admin", admins)
 	}
