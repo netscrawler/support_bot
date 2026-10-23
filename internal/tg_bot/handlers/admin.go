@@ -227,6 +227,18 @@ func (h *AdminHandler) GenerateSelectedReport(
 	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	uses, err := h.report.UsesPeriod(tctx, repInf.ReportName)
+	if err != nil {
+		return editOrSend(ctx, query, "Не удалось получить информацию об отчете", menu.BackMarkup)
+	}
+
+	period, mark := periodStep(repInf, uses, fmt.Sprintf(
+		"admin_report_select;%s;%s;%d", repInf.ID, repInf.ReportName, repInf.PageFrom,
+	))
+	if mark != nil {
+		return editOrSend(ctx, query, "Выберите период отчёта.", mark)
+	}
+
 	title := query.Message.Message().Chat.FirstName
 
 	chat := &models.Chat{
@@ -237,7 +249,7 @@ func (h *AdminHandler) GenerateSelectedReport(
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateTestReportByName(tctx, repInf.ReportName, chat); err != nil {
+	if err := h.report.GenerateTestReportByName(tctx, repInf.ReportName, chat, period); err != nil {
 		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:      telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID:   query.Message.Message().MessageID,
@@ -251,7 +263,8 @@ func (h *AdminHandler) GenerateSelectedReport(
 	return editOrSend(
 		ctx,
 		query,
-		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут."+
+		"Отчёт"+periodPhrase(period)+" поставлен в очередь."+
+			" Результат придёт в этот чат в течение нескольких минут."+
 			" Это пробный запуск: условие отправки не проверяется.",
 		menu.BackMarkup,
 	)

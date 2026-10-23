@@ -36,6 +36,8 @@ func NewEngine() (*Engine, error) {
 		ext.TwoVarComprehensions(),
 		cel.OptionalTypes(),
 		cel.Macros(cel.StandardMacros...),
+		cel.Variable("period_from", cel.TimestampType),
+		cel.Variable("period_to", cel.TimestampType),
 		cel.Variable(
 			"report",
 			cel.MapType(
@@ -60,7 +62,11 @@ func NewEngine() (*Engine, error) {
 	}, nil
 }
 
-func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error) {
+func (e *Engine) EvalStr(
+	ctx context.Context,
+	expression string,
+	from, to time.Time,
+) (string, error) {
 	if strings.HasPrefix(expression, "=") {
 		expression = expression[1:]
 	} else {
@@ -77,7 +83,7 @@ func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error)
 		return expression, err
 	}
 
-	out, _, err := prg.ContextEval(ctx, map[string]any{})
+	out, _, err := prg.ContextEval(ctx, map[string]any{"period_from": from, "period_to": to})
 	if err != nil {
 		return expression, err
 	}

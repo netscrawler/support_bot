@@ -27,7 +27,7 @@ func (f fakeEvaluator) Evaluate(_ context.Context, _ models.Dataset, _ string) (
 	return f.approve, f.err
 }
 
-func (f fakeEvaluator) EvalStr(_ context.Context, expr string) (string, error) {
+func (f fakeEvaluator) EvalStr(_ context.Context, expr string, _, _ time.Time) (string, error) {
 	return expr, nil
 }
 
@@ -299,5 +299,62 @@ func TestGenerate_IgnoreEvaluateExportsOnNegative(t *testing.T) {
 
 	if len(res) != 1 {
 		t.Fatalf("generate() res = %+v, want one exported file", res)
+	}
+}
+
+type rangeEvaluator struct {
+	fakeEvaluator
+	from, to *time.Time
+}
+
+func (r rangeEvaluator) EvalStr(
+	_ context.Context,
+	expr string,
+	from, to time.Time,
+) (string, error) {
+	*r.from, *r.to = from, to
+
+	return expr, nil
+}
+
+// Period запуска важнее DefaultPeriod отчёта; без обоих — DefaultPeriod.
+func TestGenerate_PeriodSelection(t *testing.T) {
+	cases := []struct {
+		name         string
+		period, def  models.PeriodName
+		wantDuration time.Duration
+	}{
+		{"default yesterday", "", models.PeriodYesterday, 24 * time.Hour},
+		{"run period overrides", models.PeriodWeek, models.PeriodYesterday, 7 * 24 * time.Hour},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var from, to time.Time
+
+			g := &Generator{
+				clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				eval: rangeEvaluator{from: &from, to: &to},
+				log:  slog.New(slog.DiscardHandler),
+			}
+
+			report := models.Report{
+				Name:          "r1",
+				Period:        c.period,
+				DefaultPeriod: c.def,
+				Queries: []models.Card{
+					{Title: "q1", RawParams: []byte(`{"a":"period_from"}`)},
+				},
+			}
+
+			if _, _, _, err := g.generate(context.Background(), report); err != nil {
+				t.Fatalf("generate() error = %v", err)
+			}
+
+			// Сутки в локали могут быть 23/25 ч при смене времени; сверяем по дням.
+			if days := to.Sub(from).Round(24 * time.Hour); days != c.wantDuration {
+				t.Errorf("range = %v..%v, want %v long", from, to, c.wantDuration)
+			}
+		})
 	}
 }

@@ -127,7 +127,7 @@ func (o *Orchestrator) run(ctx context.Context) {
 				o.processDelReportEvent(ctx, event.Name)
 
 			default:
-				o.processGenReportEvent(ctx, event.Name, true, nil, models.RunKindCron)
+				o.processGenReportEvent(ctx, event.Name, true, nil, models.RunKindCron, "")
 			}
 		case event, ok := <-o.SpecialEventC:
 			if !ok {
@@ -143,9 +143,11 @@ func (o *Orchestrator) run(ctx context.Context) {
 					kind = models.RunKindTest
 				}
 
-				o.processGenReportEvent(ctx, event.Event.Name, false, &event.Recipient, kind)
+				o.processGenReportEvent(
+					ctx, event.Event.Name, false, &event.Recipient, kind, event.Period,
+				)
 			case models.EventTypeGenReport:
-				o.processGenReportEvent(ctx, event.Event.Name, false, nil, models.RunKindManual)
+				o.processGenReportEvent(ctx, event.Event.Name, false, nil, models.RunKindManual, "")
 			default:
 			}
 		}
@@ -164,6 +166,7 @@ func (o *Orchestrator) processGenReportEvent(
 	active bool,
 	recipientOverride *models.Recipient,
 	kind models.RunKind,
+	period models.PeriodName,
 ) {
 	reports, err := o.getReportByEvent(ctx, event, active)
 	if err != nil {
@@ -177,6 +180,7 @@ func (o *Orchestrator) processGenReportEvent(
 
 		// Пробный запуск админа экспортирует отчёт даже при ложном evaluate.
 		report.IgnoreEvaluate = kind == models.RunKindTest
+		report.Period = period
 
 		if recipientOverride != nil {
 			report.Recipients = []models.Recipient{*recipientOverride}

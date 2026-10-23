@@ -132,14 +132,15 @@ type Recipient struct {
 }
 
 type Report struct {
-	ID           int32
-	Name         string
-	Active       bool
-	Title        string
-	EvalID       int64
-	AccessFromLk bool
-	PipelineID   *int64
-	Dedup        bool
+	ID            int32
+	Name          string
+	Active        bool
+	Title         string
+	EvalID        int64
+	AccessFromLk  bool
+	PipelineID    *int64
+	Dedup         bool
+	DefaultPeriod string
 }
 
 type ReportCron struct {

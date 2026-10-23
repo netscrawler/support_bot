@@ -21,8 +21,9 @@ func (api *EventAPI) ProduceSpecialEvent(
 	ctx context.Context,
 	name string,
 	recipient models.Recipient,
+	period models.PeriodName,
 ) {
-	api.produceSpecialEvent(ctx, name, recipient, false)
+	api.produceSpecialEvent(ctx, name, recipient, false, period)
 }
 
 // ProduceTestEvent — то же, что ProduceSpecialEvent, но с признаком пробного запуска.
@@ -30,8 +31,9 @@ func (api *EventAPI) ProduceTestEvent(
 	ctx context.Context,
 	name string,
 	recipient models.Recipient,
+	period models.PeriodName,
 ) {
-	api.produceSpecialEvent(ctx, name, recipient, true)
+	api.produceSpecialEvent(ctx, name, recipient, true, period)
 }
 
 func (api *EventAPI) ProduceGenEvent(ctx context.Context, name string) {
@@ -71,6 +73,7 @@ func (api *EventAPI) produceSpecialEvent(
 	name string,
 	recipient models.Recipient,
 	test bool,
+	period models.PeriodName,
 ) {
 	ev := models.SpecialEventForLK{
 		Event: models.Event{
@@ -79,6 +82,7 @@ func (api *EventAPI) produceSpecialEvent(
 		},
 		Recipient: recipient,
 		Test:      test,
+		Period:    period,
 	}
 
 	go func() {

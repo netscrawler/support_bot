@@ -162,6 +162,48 @@ ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/deploy-docker.ym
 ### Источники (Queries)
 Отчет может собирать данные из нескольких источников. В CEL и шаблонах данные доступны по `title` запроса.
 
+#### Период (`period_from` / `period_to`)
+В значениях `params`, начинающихся с `=` (CEL), доступны переменные `period_from` и `period_to` (timestamp): начало периода включительно, конец не включительно. В условии отчёта (`evaluation`) они недоступны — только в `params`. `${name}` в `query` подставляет значение параметра.
+
+| Период | `period_from` | `period_to` |
+|--------|---------------|-------------|
+| `today` | сегодня 00:00 | завтра 00:00 |
+| `yesterday` | вчера 00:00 | сегодня 00:00 |
+| `week` | 7 полных дней до сегодня: сегодня 00:00 − 7 дней | сегодня 00:00 |
+| `month` | 1-е число прошлого календарного месяца 00:00 | 1-е число текущего месяца 00:00 |
+
+Время считается в часовом поясе процесса.
+
+Поле отчёта `default_period` (по умолчанию `today`) задаёт период для запусков по cron и кнопки «▶️ Запустить». В боте («📤 Получить», ЛК) для отчётов, где в `params` есть `period_`, сначала показывается выбор периода (Сегодня / Вчера / Неделя / Месяц); для остальных отчётов выбор не показывается.
+
+Пример: PostgreSQL-запрос за вчерашний день.
+
+```json
+{
+  "name": "orders_daily",
+  "title": "Заказы за день",
+  "default_period": "yesterday",
+  "queries": [
+    {
+      "card_uuid": "main",
+      "title": "orders",
+      "type": "pg",
+      "query": "select id, amount from orders where created_at >= '${from}' and created_at < '${to}'",
+      "params": {"from": "=period_from", "to": "=period_to"}
+    }
+  ],
+  "recipients": [
+    {"name": "ops chat", "type": "tg", "chat": {"chat_id": -1001234567890, "type": "supergroup", "is_active": true, "ch_type": "tg"}}
+  ],
+  "exports": [{"format": "xlsx", "file_name": "orders.xlsx"}],
+  "evaluation": "size(report[\"orders\"]) > 0",
+  "active": true,
+  "crons": [{"name": "daily 09:00", "cron": "0 9 * * *", "is_active": true, "event_type": 0}]
+}
+```
+
+Миграцию `migrations/init.sql/010_report_default_period.sql` на существующей БД нужно накатить вручную (init-скрипты выполняются только при первом старте пустой БД).
+
 ### Процессоры (Pipeline)
 После сбора данные могут быть обработаны:
 - **SQL (DuckDB)**: Выполнение аналитических запросов над собранными данными.

@@ -178,3 +178,17 @@ func TestValidateExport(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDefaultPeriod(t *testing.T) {
+	v := NewReportValidation()
+
+	for period, wantErr := range map[models.PeriodName]bool{"": false, "yesterday": false, "weak": true} {
+		r := baseReport()
+		r.DefaultPeriod = period
+
+		err := v.Validate(context.Background(), r)
+		if (err != nil) != wantErr {
+			t.Errorf("period %q: err = %v, wantErr %v", period, err, wantErr)
+		}
+	}
+}

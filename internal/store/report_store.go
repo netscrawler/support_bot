@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -52,6 +53,7 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 			row.Active,
 			row.AccessFromLk,
 			row.Dedup,
+			row.DefaultPeriod,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -89,6 +91,7 @@ func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
 			row.Active,
 			row.AccessFromLk,
 			row.Dedup,
+			row.DefaultPeriod,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -123,6 +126,7 @@ func (s *ReportStore) GetByID(ctx context.Context, id int64) (*models.Report, er
 		row.Active,
 		row.AccessFromLk,
 		row.Dedup,
+		row.DefaultPeriod,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -142,6 +146,7 @@ func (s *ReportStore) GetByName(ctx context.Context, name string) (*models.Repor
 		row.Active,
 		row.AccessFromLk,
 		row.Dedup,
+		row.DefaultPeriod,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -166,6 +171,7 @@ func (s *ReportStore) LoadByEvent(
 			row.Active,
 			row.AccessFromLk,
 			row.Dedup,
+			row.DefaultPeriod,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -184,6 +190,7 @@ func (s *ReportStore) LoadByEvent(
 		row.Active,
 		row.AccessFromLk,
 		row.Dedup,
+		row.DefaultPeriod,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -367,6 +374,7 @@ func (s *ReportStore) assemble(
 	id int64,
 	name, title string,
 	active, accessFromLK, dedup bool,
+	defaultPeriod string,
 	pipelineID *int64,
 	evaluation string,
 ) (*models.Report, error) {
@@ -403,17 +411,18 @@ func (s *ReportStore) assemble(
 	}
 
 	return &models.Report{
-		Name:         name,
-		Title:        title,
-		Queries:      mapCardRows(cardRows),
-		Recipients:   mapRecipientRows(recipientRows),
-		Exports:      s.mapExportRows(ctx, exportRows),
-		Pipeline:     pipeline,
-		Evaluation:   evaluation,
-		Active:       active,
-		AccessFromLK: accessFromLK,
-		Dedup:        dedup,
-		Crons:        mapCronRows(cronRows),
+		Name:          name,
+		Title:         title,
+		Queries:       mapCardRows(cardRows),
+		Recipients:    mapRecipientRows(recipientRows),
+		Exports:       s.mapExportRows(ctx, exportRows),
+		Pipeline:      pipeline,
+		Evaluation:    evaluation,
+		Active:        active,
+		AccessFromLK:  accessFromLK,
+		Dedup:         dedup,
+		DefaultPeriod: models.PeriodName(defaultPeriod),
+		Crons:         mapCronRows(cronRows),
 	}, nil
 }
 
@@ -593,13 +602,14 @@ func (s *ReportStore) createWithPool(
 		}
 
 		reportID, err = q.CreateReport(ctx, sqlcgen.CreateReportParams{
-			Name:         rep.Name,
-			Title:        rep.Title,
-			EvalID:       evalID,
-			PipelineID:   pipelineID,
-			AccessFromLk: rep.AccessFromLK,
-			Active:       rep.Active,
-			Dedup:        rep.Dedup,
+			Name:          rep.Name,
+			Title:         rep.Title,
+			EvalID:        evalID,
+			PipelineID:    pipelineID,
+			AccessFromLk:  rep.AccessFromLK,
+			Active:        rep.Active,
+			Dedup:         rep.Dedup,
+			DefaultPeriod: string(cmp.Or(rep.DefaultPeriod, models.PeriodToday)),
 		})
 		if err != nil {
 			return fmt.Errorf("create report: %w", err)

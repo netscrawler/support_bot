@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -154,8 +155,8 @@ func (h *UserHandler) GenerateSelectedReport(
 	ctx *th.Context,
 	query telego.CallbackQuery,
 ) error {
-	data := strings.Split(query.Data, ";")
-	if len(data) < 2 {
+	rep, err := getReportInfoFromQuery(query)
+	if err != nil {
 		err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
 			Text:            "Не удалось определить отчет",
@@ -173,6 +174,16 @@ func (h *UserHandler) GenerateSelectedReport(
 	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	uses, err := h.report.UsesPeriod(tctx, rep.ReportName)
+	if err != nil {
+		return editOrSend(ctx, query, "Не удалось запустить отчёт. Повторите попытку позже.", nil)
+	}
+
+	period, mark := periodStep(rep, uses, fmt.Sprintf("user_report_page;%d", rep.PageFrom))
+	if mark != nil {
+		return editOrSend(ctx, query, "Выберите период отчёта.", mark)
+	}
+
 	title := query.Message.Message().Chat.FirstName
 
 	chat := &models.Chat{
@@ -183,7 +194,7 @@ func (h *UserHandler) GenerateSelectedReport(
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateReportByName(tctx, data[2], chat); err != nil {
+	if err := h.report.GenerateReportByName(tctx, rep.ReportName, chat, period); err != nil {
 		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID: query.Message.Message().MessageID,
@@ -196,7 +207,8 @@ func (h *UserHandler) GenerateSelectedReport(
 	return editOrSend(
 		ctx,
 		query,
-		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.",
+		"Отчёт"+periodPhrase(period)+" поставлен в очередь."+
+			" Результат придёт в этот чат в течение нескольких минут.",
 		nil,
 	)
 }

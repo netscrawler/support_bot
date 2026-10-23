@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"html"
+	"log/slog"
 	"strconv"
 	"strings"
 	"support_bot/internal/models"
@@ -13,6 +14,8 @@ import (
 	th "github.com/mymmrac/telego/telegohandler"
 	"github.com/mymmrac/telego/telegoutil"
 )
+
+const maxCallbackData = 64
 
 func mapReportRPLToMarkup(rp models.LoadReportRPL) telego.InlineKeyboardMarkup {
 	var rows [][]telego.InlineKeyboardButton
@@ -213,14 +216,22 @@ type reportInfoFromQuery struct {
 	ReportName string
 	PageFrom   int
 	Callback   string
+	// PeriodCode — необязательное 5-е поле callback (t|y|w|m).
+	PeriodCode string
 }
 
 func getReportInfoFromQuery(query telego.CallbackQuery) (reportInfoFromQuery, error) {
 	data := strings.Split(query.Data, ";")
-	if len(data) != 4 {
+	if len(data) != 4 && len(data) != 5 {
 		return reportInfoFromQuery{}, fmt.Errorf(
-			"report info must be a format: (callback;id;report_name;page_from) %s", query.Data,
+			"report info must be a format: (callback;id;report_name;page_from[;period]) %s",
+			query.Data,
 		)
+	}
+
+	periodCode := ""
+	if len(data) == 5 {
+		periodCode = data[4]
 	}
 
 	callback, id, reportName, pageFromStr := data[0], data[1], data[2], data[3]
@@ -243,7 +254,64 @@ func getReportInfoFromQuery(query telego.CallbackQuery) (reportInfoFromQuery, er
 		ReportName: reportName,
 		PageFrom:   pageFrom,
 		Callback:   callback,
+		PeriodCode: periodCode,
 	}, nil
+}
+
+// periodStep решает, что делать с запуском: вернуть markup — показать выбор периода,
+// иначе запускать за period (пустой — DefaultPeriod отчёта).
+func periodStep(
+	rep reportInfoFromQuery,
+	usesPeriod bool,
+	back string,
+) (models.PeriodName, *telego.InlineKeyboardMarkup) {
+	if rep.PeriodCode != "" {
+		p, ok := models.PeriodByCode(rep.PeriodCode)
+		if !ok {
+			slog.Warn("unknown period code, using default", slog.String("data", rep.PeriodCode))
+		}
+
+		return p, nil
+	}
+
+	if !usesPeriod {
+		return "", nil
+	}
+
+	base := fmt.Sprintf("%s;%s;%s;%d;", rep.Callback, rep.ID, rep.ReportName, rep.PageFrom)
+	// Telegram: callback data не длиннее 64 байт; код всегда один символ.
+	if len(base)+1 > maxCallbackData {
+		slog.Warn("period callback too long, using default period",
+			slog.String("report", rep.ReportName))
+
+		return "", nil
+	}
+
+	btn := func(text string, p models.PeriodName) telego.InlineKeyboardButton {
+		return telego.InlineKeyboardButton{Text: text, CallbackData: base + p.Code()}
+	}
+
+	return "", &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{
+		{btn("Сегодня", models.PeriodToday), btn("Вчера", models.PeriodYesterday)},
+		{btn("Неделя (7 дн.)", models.PeriodWeek), btn("Прошлый месяц", models.PeriodMonth)},
+		{{Text: "⬅️ Назад", CallbackData: back}},
+	}}
+}
+
+// periodPhrase — « за вчера» для текста подтверждения; для пустого периода — "".
+func periodPhrase(p models.PeriodName) string {
+	switch p {
+	case models.PeriodToday:
+		return " за сегодня"
+	case models.PeriodYesterday:
+		return " за вчера"
+	case models.PeriodWeek:
+		return " за неделю"
+	case models.PeriodMonth:
+		return " за прошлый месяц"
+	default:
+		return ""
+	}
 }
 
 const runErrMaxRunes = 200

@@ -108,3 +108,12 @@ func TestReportJSON_Dedup(t *testing.T) {
 		t.Errorf("Marshal = %s, err = %v, want содержит \"dedup\":true", b, err)
 	}
 }
+
+func TestReport_UsesPeriod(t *testing.T) {
+	with := models.Report{Queries: []models.Card{{RawParams: []byte(`{"d":"period_from"}`)}}}
+	without := models.Report{Queries: []models.Card{{RawParams: []byte(`{"d":"today"}`)}}}
+
+	if !with.UsesPeriod() || without.UsesPeriod() {
+		t.Errorf("UsesPeriod: with=%v without=%v", with.UsesPeriod(), without.UsesPeriod())
+	}
+}

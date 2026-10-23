@@ -93,8 +93,9 @@ func (r *Report) GenerateReportByName(
 	ctx context.Context,
 	reportName string,
 	chat *models.Chat,
+	period models.PeriodName,
 ) error {
-	r.ProduceSpecialEvent(ctx, reportName, tgRecipient(chat))
+	r.ProduceSpecialEvent(ctx, reportName, tgRecipient(chat), period)
 
 	return nil
 }
@@ -104,10 +105,21 @@ func (r *Report) GenerateTestReportByName(
 	ctx context.Context,
 	reportName string,
 	chat *models.Chat,
+	period models.PeriodName,
 ) error {
-	r.ProduceTestEvent(ctx, reportName, tgRecipient(chat))
+	r.ProduceTestEvent(ctx, reportName, tgRecipient(chat), period)
 
 	return nil
+}
+
+// UsesPeriod — нужно ли спрашивать период перед запуском отчёта.
+func (r *Report) UsesPeriod(ctx context.Context, reportName string) (bool, error) {
+	rpt, err := r.repo.GetByName(ctx, reportName)
+	if err != nil {
+		return false, fmt.Errorf("%w: (%w)", models.ErrInternal, err)
+	}
+
+	return rpt.UsesPeriod(), nil
 }
 
 func tgRecipient(chat *models.Chat) models.Recipient {

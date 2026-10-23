@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,7 +28,7 @@ type Evaluator interface {
 		data models.Dataset,
 		expr string,
 	) (bool, error)
-	EvalStr(ctx context.Context, expr string) (string, error)
+	EvalStr(ctx context.Context, expr string, from, to time.Time) (string, error)
 }
 
 // job — единица работы, отправляемая в общий пул воркеров Generator. result
@@ -132,10 +133,17 @@ func (g *Generator) generate(
 	l := g.log
 	l.DebugContext(ctx, "start generating report", slog.Any("report", report))
 
+	p := cmp.Or(report.Period, report.DefaultPeriod, models.PeriodToday)
+
+	from, to, err := p.Range(time.Now())
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("report period: %w", err)
+	}
+
 	var queries []models.Card
 
 	for _, q := range report.Queries {
-		err := q.ResolveParams(ctx, g.eval)
+		err := q.ResolveParams(ctx, g.eval, from, to)
 		if err != nil {
 			l.ErrorContext(
 				ctx,

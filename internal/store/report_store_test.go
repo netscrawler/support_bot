@@ -30,7 +30,7 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -40,11 +40,15 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 				"active",
 				"access_from_lk",
 				"dedup",
+				"default_period",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, true, &pipelineID, new("1 == 1")))
+			AddRow(
+				int32(1), "r1", "Report One", true, true, true, "yesterday",
+				&pipelineID, new("1 == 1"),
+			))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
@@ -130,6 +134,9 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 		t.Fatalf("GetByID() error = %v", err)
 	}
 
+	if report.DefaultPeriod != models.PeriodYesterday {
+		t.Errorf("DefaultPeriod = %q, want yesterday", report.DefaultPeriod)
+	}
 	if !report.Dedup {
 		t.Errorf("Dedup = false, want true")
 	}
@@ -217,7 +224,7 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -227,11 +234,15 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 				"active",
 				"access_from_lk",
 				"dedup",
+				"default_period",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, true, &pipelineID, new("1 == 1")))
+			AddRow(
+				int32(1), "r1", "Report One", true, true, true, "yesterday",
+				&pipelineID, new("1 == 1"),
+			))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
@@ -432,7 +443,7 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 		WithArgs("1 == 1").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true, false).
+		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 	pool.ExpectCommit()
 
@@ -472,7 +483,7 @@ func TestReportStore_Create_PassesDedup(t *testing.T) {
 		WithArgs("").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, true).
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, true, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 	pool.ExpectCommit()
 
@@ -510,7 +521,7 @@ func TestReportStore_Create_QueryTextPassedToFindAndInsert(t *testing.T) {
 		WithArgs("").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, false).
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	for i, query := range []*string{&q1, &q2} {
@@ -642,7 +653,7 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 
 	pool.ExpectQuery("insert into reports").
-		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true, false).
+		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	// Карточка: не найдена -> создаётся с промаршаленными card.Params.

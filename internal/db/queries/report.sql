@@ -7,32 +7,32 @@
 select exists(select 1 from reports where name = $1);
 
 -- name: GetReportRowByID :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.id = $1::bigint
 limit 1;
 
 -- name: ListReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id;
 
 -- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.active = true;
 
 -- name: GetActiveReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
 limit 1;
 
 -- name: GetAnyReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1
@@ -146,8 +146,8 @@ returning id;
 insert into email_templates(dest, copy, subject, body) values ($1, $2, $3, $4) returning id;
 
 -- name: CreateReport :one
-insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active, dedup)
-values ($1, $2, $3, $4, $5, $6, $7)
+insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active, dedup, default_period)
+values ($1, $2, $3, $4, $5, $6, $7, $8)
 returning id;
 
 -- name: LinkQueryToReport :exec

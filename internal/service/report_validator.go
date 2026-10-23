@@ -25,6 +25,10 @@ func (r *ReportValidation) Validate(ctx context.Context, report models.Report) e
 		return fmt.Errorf("report evaluation is empty")
 	}
 
+	if _, err := models.ParsePeriod(string(report.DefaultPeriod)); err != nil {
+		return fmt.Errorf("report default_period: %w", err)
+	}
+
 	seenQueries := make(map[string]bool)
 
 	for _, q := range report.Queries {

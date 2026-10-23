@@ -1,8 +1,9 @@
 package models
 
 var ReportExample = Report{
-	Name:  "Example Report",
-	Title: "Example Report Title",
+	Name:          "Example Report",
+	Title:         "Example Report Title",
+	DefaultPeriod: PeriodToday,
 	Queries: []Card{
 		{
 			CardUUID: "uuid",

@@ -2,7 +2,9 @@ package evaluator_test
 
 import (
 	"support_bot/internal/evaluator"
+	"support_bot/internal/models"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,4 +89,29 @@ func TestEvaluator_Evaluate(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ok)
 	})
+}
+
+func TestEngine_EvalStr_Period(t *testing.T) {
+	t.Parallel()
+
+	eval, err := evaluator.NewEngine()
+	require.NoError(t, err)
+
+	from, to, err := models.PeriodToday.Range(time.Now())
+	require.NoError(t, err)
+
+	want, err := eval.EvalStr(t.Context(), "=today()", from, to)
+	require.NoError(t, err)
+
+	got, err := eval.EvalStr(t.Context(), "=period_from", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	got, err = eval.EvalStr(t.Context(), "=addDays(period_to, -1)", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	got, err = eval.EvalStr(t.Context(), "plain", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, "plain", got)
 }

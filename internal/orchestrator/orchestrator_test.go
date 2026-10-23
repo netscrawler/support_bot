@@ -30,7 +30,7 @@ func (f fakeEvaluator) Evaluate(_ context.Context, _ models.Dataset, _ string) (
 	return f.approve, nil
 }
 
-func (f fakeEvaluator) EvalStr(_ context.Context, expr string) (string, error) {
+func (f fakeEvaluator) EvalStr(_ context.Context, expr string, _, _ time.Time) (string, error) {
 	return expr, nil
 }
 
@@ -167,7 +167,7 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	var wg sync.WaitGroup
 	for range maxInFlightGenerations * 4 {
 		wg.Go(func() {
-			o.processGenReportEvent(ctx, "ev", true, nil, models.RunKindCron)
+			o.processGenReportEvent(ctx, "ev", true, nil, models.RunKindCron, "")
 		})
 	}
 
@@ -658,6 +658,71 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 
 			if tt.wantNote == "❌" && !strings.HasPrefix(texts[0], "❌") {
 				t.Fatalf("note = %q, want ❌ prefix", texts[0])
+			}
+		})
+	}
+}
+
+type spanEvaluator struct {
+	fakeEvaluator
+	span chan time.Duration
+}
+
+func (s spanEvaluator) EvalStr(_ context.Context, expr string, from, to time.Time) (string, error) {
+	s.span <- to.Sub(from)
+
+	return expr, nil
+}
+
+// Период события берётся только для lk; cron/manual идут с периодом по умолчанию (today).
+func TestOrchestrator_ProcessGenReportEvent_Period(t *testing.T) {
+	cases := []struct {
+		name   string
+		kind   models.RunKind
+		period models.PeriodName
+		want   time.Duration
+	}{
+		{"lk берёт период события", models.RunKindLK, models.PeriodWeek, 7 * 24 * time.Hour},
+		{"cron игнорирует период", models.RunKindCron, "", 24 * time.Hour},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+
+			span := make(chan time.Duration, 10)
+			g := generator.New(
+				fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				nil,
+				spanEvaluator{span: span},
+				1,
+				slog.New(slog.DiscardHandler),
+			)
+			g.Start(ctx)
+
+			report := models.Report{
+				Name:    "r1",
+				Queries: []models.Card{{Title: "q1", RawParams: []byte(`{"a":"period_from"}`)}},
+			}
+			o := &Orchestrator{
+				gen:    g,
+				rL:     fakeLoader{report: report},
+				runs:   &fakeRecorder{},
+				genSem: make(chan struct{}, maxInFlightGenerations),
+				log:    slog.New(slog.DiscardHandler),
+			}
+
+			o.processGenReportEvent(ctx, "ev", false, nil, c.kind, c.period)
+
+			select {
+			case got := <-span:
+				// Сутки в локали могут быть 23/25 ч при смене времени.
+				if got.Round(24*time.Hour) != c.want {
+					t.Errorf("range length = %v, want about %v", got, c.want)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("EvalStr not called")
 			}
 		})
 	}
