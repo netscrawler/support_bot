@@ -10,6 +10,7 @@ import (
 	"support_bot/internal/collector/metabase"
 	pgcoll "support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/telegram"
@@ -145,9 +146,10 @@ func newLuaStdCollector(
 	pg *pgcoll.Collector,
 	prom *prometheus.Collector,
 	alerts *grafana.Collector,
+	zbx *zabbix.Collector,
 ) *luastd.CollectPlugin {
 	// Типизированный nil-указатель в интерфейсе не nil: без источника записи в map быть не должно,
-	// иначе модуль попадёт в Lua. prom и grafana_alerts создаются всегда, поэтому смотрим конфиг.
+	// иначе модуль попадёт в Lua. prom, grafana_alerts и zabbix создаются всегда, поэтому смотрим конфиг.
 	queries := map[string]luastd.QueryCollector{}
 	if pg != nil {
 		queries["pg"] = pg
@@ -159,6 +161,10 @@ func newLuaStdCollector(
 
 	if len(cfg.Grafana) > 0 {
 		queries["grafana_alerts"] = alerts
+	}
+
+	if len(cfg.Zabbix) > 0 {
+		queries["zabbix"] = zbx
 	}
 
 	return luastd.NewCollector(map[string]luastd.DirectCollector{

@@ -55,6 +55,27 @@ prometheus:
     main_via_grafana:
         grafana: ops
         datasource_uid: P1809F7CD0C75ACF3
+# Источники Zabbix (коллектор типа zabbix). Ключ — имя источника, указывается в card_uuid запроса.
+# url — корень фронтенда Zabbix, бот сам дописывает /api_jsonrpc.php. timeout по умолчанию 30s.
+# Права: отдельный пользователь Zabbix, роль с «Access to API» -> allow list `*.get`,
+# группа пользователей с read-only правами на нужные группы хостов. Бот сам тоже пропускает только методы `*.get`.
+# Запрос: q_type = 'zabbix', card_uuid = имя источника (prod), query = JSON {"method": "<сервис>.get", "params": {...}}.
+# params запроса — значения для ${name}; подстановка только внутри строковых значений JSON
+# (числа передавайте строкой: "limit": "${n}").
+# Пример problem.get (params: {"group": "15"}):
+#   {"method":"problem.get","params":{"groupids":["${group}"],"severities":[4,5],"selectHosts":["host"],"selectTags":"extend"}}
+# Пример history.get:
+#   {"method":"history.get","params":{"itemids":["${item}"],"history":0,"time_from":"${from}","sortfield":"clock","sortorder":"DESC","limit":1000}}
+#   Без limit/time_from ответ может быть огромным: бот лимит не подставляет.
+# Результат: строка на элемент result, вложенное разворачивается в колонки (hosts.0.host, tags.0.value);
+# countOutput -> одна строка {result: "42"}; значения как есть: severity кодом 0-5, clock — epoch секунды.
+# Из Lua: collector.zabbix.collect("prod", [[{"method":"host.get","params":{"countOutput":true}}]], {})
+#   возвращает rows, nil или nil, err.
+zabbix:
+    prod:
+        url: https://zabbix.example.com
+        token: <api-token>
+        timeout: 30s
 # Настройки Lua-процессора.
 lua:
     # Таймаут для выполнения плагина.

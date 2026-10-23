@@ -10,6 +10,7 @@ import (
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/retry"
 	"time"
@@ -28,6 +29,7 @@ var collectorsModule = fx.Module(
 		newPostgresCollector,
 		newPrometheusCollector,
 		newGrafanaAlertsCollector,
+		newZabbixCollector,
 		newCollector,
 		newRetry,
 	),
@@ -100,6 +102,13 @@ func newGrafanaAlertsCollector(
 	return grafana.New(cfg.Grafana, log)
 }
 
+func newZabbixCollector(
+	cfg *config.Config,
+	log *slog.Logger,
+) (*zabbix.Collector, error) {
+	return zabbix.New(cfg.Zabbix, log)
+}
+
 func newCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
@@ -107,9 +116,12 @@ func newCollector(
 	pg *postgres.Collector,
 	prom *prometheus.Collector,
 	alerts *grafana.Collector,
+	zbx *zabbix.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
-	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, prom, alerts, log)
+	return collector.NewCollector(
+		collectorsParallel, mb, appM, jiraColl, pg, prom, alerts, zbx, log,
+	)
 }
 
 func newRetry(log *slog.Logger) *retry.Retry {

@@ -11,6 +11,7 @@ import (
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
@@ -38,6 +39,7 @@ type Config struct {
 	Databases      map[string]pgcollector.Config       `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
 	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."`
 	Prometheus     map[string]prometheus.Config        `yaml:"prometheus"      comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
+	Zabbix         map[string]zabbix.Config            `yaml:"zabbix"          comment:"Источники Zabbix для коллектора типа zabbix.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
 	TgBot          tgbot.Config                        `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout                             `yaml:"timeout"         comment:"Настройка таймаутов"`
 	SMB            smb.Config                          `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
@@ -150,6 +152,14 @@ func (c Config) LogValue() slog.Value {
 	}
 
 	c.Prometheus = prom
+
+	zbx := make(map[string]zabbix.Config, len(c.Zabbix))
+	for k, v := range c.Zabbix {
+		v.Token = "***"
+		zbx[k] = v
+	}
+
+	c.Zabbix = zbx
 
 	return slog.AnyValue(safeConfig(c))
 }

@@ -32,6 +32,7 @@ type Collector struct {
 	pg         QueryFetcher
 	prom       QueryFetcher
 	alerts     QueryFetcher
+	zabbix     QueryFetcher
 	log        *slog.Logger
 	parallel   chan struct{}
 }
@@ -44,6 +45,7 @@ func NewCollector(
 	pg QueryFetcher,
 	prom QueryFetcher,
 	alerts QueryFetcher,
+	zabbix QueryFetcher,
 	log *slog.Logger,
 ) *Collector {
 	l := log.With(slog.Any("module", "collector"))
@@ -62,6 +64,7 @@ func NewCollector(
 		pg:         pg,
 		prom:       prom,
 		alerts:     alerts,
+		zabbix:     zabbix,
 		log:        l,
 		parallel:   semaphore,
 	}
@@ -156,6 +159,10 @@ func (c *Collector) collect(
 			case models.CollectTypeGrafanaAlerts:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.alerts.Fetch(ctx, target, crd.Query, params)
+				}
+			case models.CollectTypeZabbix:
+				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
+					return c.zabbix.Fetch(ctx, target, crd.Query, params)
 				}
 			default:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {

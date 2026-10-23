@@ -84,6 +84,7 @@ const (
 	CollectTypePostgres      = "pg"
 	CollectTypePrometheus    = "prom"
 	CollectTypeGrafanaAlerts = "grafana_alerts"
+	CollectTypeZabbix        = "zabbix"
 )
 
 type Card struct {

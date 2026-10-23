@@ -36,7 +36,7 @@ func TestCollect(t *testing.T) {
 			{"field": "value1"},
 		}, nil)
 
-		c := collector.NewCollector(0, df, df, df, nil, nil, nil, l)
+		c := collector.NewCollector(0, df, df, df, nil, nil, nil, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -61,7 +61,7 @@ func TestCollect(t *testing.T) {
 		pg.On("Fetch", ctx, "analytics", "select 1", params).
 			Return([]map[string]any{{"field": "pg"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, l)
+		c := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -84,7 +84,7 @@ func TestCollect(t *testing.T) {
 		prom.On("Fetch", ctx, "main", "up", params).
 			Return([]map[string]any{{"field": "prom"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, nil, prom, nil, l)
+		c := collector.NewCollector(0, nil, nil, nil, nil, prom, nil, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -107,13 +107,36 @@ func TestCollect(t *testing.T) {
 		alerts.On("Fetch", ctx, "ops", "active", params).
 			Return([]map[string]any{{"field": "alerts"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, nil, nil, alerts, l)
+		c := collector.NewCollector(0, nil, nil, nil, nil, nil, alerts, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
 		require.NoError(t, err)
 		assert.Equal(t, "alerts", result["card1"][0]["field"])
 		alerts.AssertExpectations(t)
+	})
+
+	t.Run("zabbix card", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+
+		zbx := &cmock.MockQueryFetcher{}
+		params := map[string]string{"a": "b"}
+		card := models.Card{
+			Title: "card1", CardUUID: "host1", Type: models.CollectTypeZabbix,
+			Query: "item.key", Params: params,
+		}
+
+		zbx.On("Fetch", ctx, "host1", "item.key", params).
+			Return([]map[string]any{{"field": "zabbix"}}, nil)
+
+		c := collector.NewCollector(0, nil, nil, nil, nil, nil, nil, zbx, l)
+
+		result, err := c.Collect(ctx, card)
+
+		require.NoError(t, err)
+		assert.Equal(t, "zabbix", result["card1"][0]["field"])
+		zbx.AssertExpectations(t)
 	})
 
 	t.Run("many query", func(t *testing.T) {
@@ -137,7 +160,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, l)
+		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -176,7 +199,7 @@ func TestCollect(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, l)
+		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -213,7 +236,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
 
-		c := collector.NewCollector(2, df, df, df, nil, nil, nil, slog.Default())
+		c := collector.NewCollector(2, df, df, df, nil, nil, nil, nil, slog.Default())
 
 		start := time.Now()
 
@@ -307,7 +330,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, slog.Default())
+		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, slog.Default())
 
 		var wg sync.WaitGroup
 

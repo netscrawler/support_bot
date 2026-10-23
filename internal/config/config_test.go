@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
 	"testing"
 
@@ -32,15 +33,17 @@ func TestLogValueMasksPrometheus(t *testing.T) {
 			"a": {BearerToken: "bearer-secret"},
 			"b": {BasicAuth: &prometheus.BasicAuth{User: "u", Password: "pass-secret"}},
 		},
+		Zabbix: map[string]zabbix.Config{"z": {Token: "zbx-secret"}},
 	}
 
 	out := fmt.Sprintf("%+v", cfg.LogValue().Any())
 
-	for _, secret := range []string{"tok-secret", "bearer-secret", "pass-secret"} {
+	for _, secret := range []string{"tok-secret", "bearer-secret", "pass-secret", "zbx-secret"} {
 		assert.NotContains(t, out, secret)
 	}
 
 	assert.Equal(t, "tok-secret", cfg.Grafana["ops"].Token)
 	assert.Equal(t, "bearer-secret", cfg.Prometheus["a"].BearerToken)
 	assert.Equal(t, "pass-secret", cfg.Prometheus["b"].BasicAuth.Password)
+	assert.Equal(t, "zbx-secret", cfg.Zabbix["z"].Token)
 }

@@ -24,6 +24,7 @@ import (
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 	"sync"
@@ -132,6 +133,7 @@ type config struct {
 	Databases  map[string]postgres.Config          `json:"databases"`
 	Prometheus map[string]prometheus.Config        `json:"prometheus"`
 	Grafana    map[string]prometheus.GrafanaConfig `json:"grafana"`
+	Zabbix     map[string]zabbix.Config            `json:"zabbix"`
 }
 
 func main() {
@@ -212,6 +214,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	zbx, err := zabbix.New(cfg.Zabbix, log)
+	if err != nil {
+		log.Error("error create zabbix collector", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	pg, err := postgres.New(ctx, cfg.Databases, log)
 	if err != nil {
 		log.Error("error create postgres collector", slog.Any("error", err))
@@ -227,6 +235,7 @@ func main() {
 		pg,
 		prom,
 		grafana.New(cfg.Grafana, log),
+		zbx,
 		slog.Default(),
 	)
 
