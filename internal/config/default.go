@@ -1,15 +1,19 @@
 package config
 
 import (
+	"time"
+
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
+	pgcollector "support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
 	"support_bot/internal/runlog"
-	"time"
 
 	apihttp "support_bot/internal/api/http"
 
@@ -102,5 +106,62 @@ func Default() *Config {
 			MaxBodyBytes:      10 << 20,
 		},
 		Runs: runlog.Config{Retention: 720 * time.Hour},
+		Databases: map[string]pgcollector.Config{
+			"example": {
+				DSN:              "dsn://",
+				ReadOnly:         new(true),
+				StatementTimeout: 5 * time.Second,
+				MaxConns:         5,
+			},
+			"example-2": {
+				DSN:              "dsn://",
+				ReadOnly:         new(true),
+				StatementTimeout: 5 * time.Second,
+				MaxConns:         5,
+			},
+		},
+		Grafana: map[string]prometheus.GrafanaConfig{
+			"example": {
+				URL:     "https://grafana.example",
+				Token:   "token",
+				Timeout: 15 * time.Second,
+			},
+			"example-2": {
+				URL:     "https://grafana.example",
+				Token:   "token",
+				Timeout: 15 * time.Second,
+			},
+		},
+		Prometheus: map[string]prometheus.Config{
+			"example": {
+				URL:           "https://prometheus.org",
+				BearerToken:   "token",
+				Grafana:       "",
+				DatasourceUID: "",
+				Timeout:       0,
+			},
+			"example-2": {
+				URL:         "https://prometheus.org",
+				BearerToken: "",
+				BasicAuth: &prometheus.BasicAuth{
+					User:     "user",
+					Password: "password",
+				},
+				Grafana:       "",
+				DatasourceUID: "",
+				Timeout:       15 * time.Second,
+			},
+		},
+		Zabbix: map[string]zabbix.Config{
+			"example": {
+				URL:     "https://zabbix.org",
+				Token:   "token",
+				Timeout: 15 * time.Second,
+			},
+		},
+		Alerts: runlog.AlertsConfig{
+			ChatID:   13141412432,
+			ThreadID: 12,
+		},
 	}
 }
