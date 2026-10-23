@@ -36,7 +36,7 @@ type Config struct {
 	Lua            lua.Config                          `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
 	Database       postgres.Config                     `yaml:"database"        comment:"Настройки подключения к Postgres"`
 	Databases      map[string]pgcollector.Config       `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
-	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana для запросов к Prometheus через proxy datasource.\nКлюч — имя, на которое ссылается поле grafana в секции prometheus."`
+	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."`
 	Prometheus     map[string]prometheus.Config        `yaml:"prometheus"      comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
 	TgBot          tgbot.Config                        `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
 	Timeout        timeout                             `yaml:"timeout"         comment:"Настройка таймаутов"`

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/grafana"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
@@ -26,6 +27,7 @@ var collectorsModule = fx.Module(
 		newJira,
 		newPostgresCollector,
 		newPrometheusCollector,
+		newGrafanaAlertsCollector,
 		newCollector,
 		newRetry,
 	),
@@ -91,15 +93,23 @@ func newPrometheusCollector(
 	return prometheus.New(cfg.Prometheus, cfg.Grafana, log)
 }
 
+func newGrafanaAlertsCollector(
+	cfg *config.Config,
+	log *slog.Logger,
+) *grafana.Collector {
+	return grafana.New(cfg.Grafana, log)
+}
+
 func newCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
 	pg *postgres.Collector,
 	prom *prometheus.Collector,
+	alerts *grafana.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
-	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, prom, log)
+	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, prom, alerts, log)
 }
 
 func newRetry(log *slog.Logger) *retry.Retry {

@@ -29,8 +29,14 @@ databases:
         read_only: true
         statement_timeout: 30s
         max_conns: 4
-# Подключения к Grafana (для чтения Prometheus через proxy datasource). Ключ — имя, на него ссылается grafana в секции prometheus.
-# Токен — service account Grafana с минимальными правами (роль Viewer).
+# Подключения к Grafana: чтение Prometheus через proxy datasource и коллектор алертов grafana_alerts.
+# Ключ — имя, на него ссылается grafana в секции prometheus и card_uuid запроса grafana_alerts.
+# Токен — service account Grafana с минимальными правами (роль Viewer: чтение правил и аннотаций).
+# grafana_alerts: query = режим active | rules | history; params-фильтры:
+#   active/rules — folder, group, state, alertname;
+#   history — from, to (RFC3339 или epoch ms), limit (по умолчанию 10000), alertname.
+# state — точное значение из Grafana: у правил inactive/pending/firing,
+#   у экземпляров Alerting/Pending/Normal/"Alerting (NoData)" и т.п.
 grafana:
     ops:
         url: https://grafana.example

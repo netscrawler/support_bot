@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/grafana"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	pgcoll "support_bot/internal/collector/postgres"
@@ -143,9 +144,10 @@ func newLuaStdCollector(
 	jiraColl *jira.Collector,
 	pg *pgcoll.Collector,
 	prom *prometheus.Collector,
+	alerts *grafana.Collector,
 ) *luastd.CollectPlugin {
 	// Типизированный nil-указатель в интерфейсе не nil: без источника записи в map быть не должно,
-	// иначе collector.pg / collector.prom попадёт в Lua. prom создаётся всегда, поэтому смотрим конфиг.
+	// иначе модуль попадёт в Lua. prom и grafana_alerts создаются всегда, поэтому смотрим конфиг.
 	queries := map[string]luastd.QueryCollector{}
 	if pg != nil {
 		queries["pg"] = pg
@@ -153,6 +155,10 @@ func newLuaStdCollector(
 
 	if len(cfg.Prometheus) > 0 {
 		queries["prom"] = prom
+	}
+
+	if len(cfg.Grafana) > 0 {
+		queries["grafana_alerts"] = alerts
 	}
 
 	return luastd.NewCollector(map[string]luastd.DirectCollector{

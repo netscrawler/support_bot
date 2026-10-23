@@ -19,6 +19,7 @@ import (
 	"strings"
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/grafana"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
@@ -225,6 +226,7 @@ func main() {
 		jira.New(cfg.Jira),
 		pg,
 		prom,
+		grafana.New(cfg.Grafana, log),
 		slog.Default(),
 	)
 

@@ -78,11 +78,12 @@ func (r ReportInfo) String() string {
 }
 
 const (
-	CollectTypeMetabase   = "mb"
-	CollectTypeAppMetrica = "appmetrica"
-	CollectTypeJIRA       = "jira"
-	CollectTypePostgres   = "pg"
-	CollectTypePrometheus = "prom"
+	CollectTypeMetabase      = "mb"
+	CollectTypeAppMetrica    = "appmetrica"
+	CollectTypeJIRA          = "jira"
+	CollectTypePostgres      = "pg"
+	CollectTypePrometheus    = "prom"
+	CollectTypeGrafanaAlerts = "grafana_alerts"
 )
 
 type Card struct {
