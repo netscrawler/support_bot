@@ -127,6 +127,17 @@ Support TgBot — сервис для автоматической генера�
 
 - `GET /api/v1/public/report/{report_id}` — скачать сгенерированный отчёт по публичному UUID.
 
+Ссылки управляются через CLI:
+
+```bash
+# ссылка на неделю (без -ttl или с -ttl 0 — бессрочная)
+sbot ctl link create -config config/local.yaml -report my_report -ttl 168h
+sbot ctl link list   -config config/local.yaml [-report my_report]
+sbot ctl link revoke -config config/local.yaml <uuid>
+```
+
+Истёкшая или отозванная ссылка отвечает `410 Gone`.
+
 Настройки сервера — секция `http` в конфиге (`host`, `port`, таймауты, лимиты на размер тела/заголовков). Эндпоинт не
 требует аутентификации — не используйте его для отчетов с чувствительными данными без дополнительной защиты на уровне
 сети/прокси.

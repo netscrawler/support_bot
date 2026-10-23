@@ -26,6 +26,11 @@ func (h *Handler) GetGeneratedReportByID(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
+		if errors.Is(err, models.ErrLinkExpired) {
+			httplib.ErrGone.Write(w)
+			return
+		}
+
 		h.log.ErrorContext(r.Context(), "generate report failed", slog.Any("error", err))
 		httplib.ErrInternal.Write(w)
 		return

@@ -8,7 +8,9 @@ import (
 	"log/slog"
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -193,12 +195,100 @@ func (s *ReportStore) GetByPublicID(ctx context.Context, publicID string) (*mode
 		return nil, fmt.Errorf("parse public id: %w", err)
 	}
 
-	reportID, err := s.q.GetReportIDByPublicID(ctx, id)
+	link, err := s.q.GetPublicLink(ctx, id)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	return s.GetByID(ctx, reportID)
+	if link.ExpiresAt.Valid && !link.ExpiresAt.Time.After(time.Now()) {
+		return nil, models.ErrLinkExpired
+	}
+
+	return s.GetByID(ctx, link.ReportID)
+}
+
+// CreatePublicLink создаёт ссылку на отчёт; ttl == 0 — бессрочная.
+func (s *ReportStore) CreatePublicLink(
+	ctx context.Context,
+	reportName string,
+	ttl time.Duration,
+) (string, error) {
+	row, err := s.q.GetAnyReportRowByName(ctx, reportName)
+	if err != nil {
+		return "", translateNoRows(err)
+	}
+
+	var expires pgtype.Timestamptz
+	if ttl > 0 {
+		expires = pgtype.Timestamptz{Time: time.Now().Add(ttl), Valid: true}
+	}
+
+	id := uuid.New()
+
+	if _, err := s.q.CreatePublicLink(ctx, sqlcgen.CreatePublicLinkParams{
+		PublicID:  pgtype.UUID{Bytes: id, Valid: true},
+		ReportID:  int64(row.ID),
+		ExpiresAt: expires,
+	}); err != nil {
+		return "", fmt.Errorf("create public link: %w", err)
+	}
+
+	return id.String(), nil
+}
+
+// ListPublicLinks возвращает ссылки, новые первыми; пустое reportName — без фильтра.
+func (s *ReportStore) ListPublicLinks(
+	ctx context.Context,
+	reportName string,
+) ([]models.PublicLink, error) {
+	var filter *string
+	if reportName != "" {
+		filter = &reportName
+	}
+
+	rows, err := s.q.ListPublicLinks(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("list public links: %w", err)
+	}
+
+	links := make([]models.PublicLink, 0, len(rows))
+	for _, row := range rows {
+		link := models.PublicLink{
+			ID:        uuid.UUID(row.PublicID.Bytes).String(),
+			Report:    row.ReportName,
+			CreatedAt: row.CreatedAt.Time,
+		}
+		if row.ExpiresAt.Valid {
+			link.ExpiresAt = &row.ExpiresAt.Time
+		}
+
+		links = append(links, link)
+	}
+
+	return links, nil
+}
+
+// ExpirePublicLink гасит ссылку; false, nil — ссылка уже неактивна.
+func (s *ReportStore) ExpirePublicLink(ctx context.Context, publicID string) (bool, error) {
+	var id pgtype.UUID
+	if err := id.Scan(publicID); err != nil {
+		return false, fmt.Errorf("parse public id: %w", err)
+	}
+
+	n, err := s.q.ExpirePublicLink(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("expire public link: %w", err)
+	}
+
+	if n > 0 {
+		return true, nil
+	}
+
+	if _, err := s.q.GetPublicLink(ctx, id); err != nil {
+		return false, translateNoRows(err)
+	}
+
+	return false, nil
 }
 
 func (s *ReportStore) LoadPaged(

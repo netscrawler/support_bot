@@ -103,6 +103,23 @@ func (q *Queries) CreatePipeline(ctx context.Context, pipeline []byte) (int32, e
 	return id, err
 }
 
+const createPublicLink = `-- name: CreatePublicLink :one
+insert into public_reports (public_id, report_id, expires_at) values ($1, $2, $3) returning public_id
+`
+
+type CreatePublicLinkParams struct {
+	PublicID  pgtype.UUID
+	ReportID  int64
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreatePublicLink(ctx context.Context, arg CreatePublicLinkParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createPublicLink, arg.PublicID, arg.ReportID, arg.ExpiresAt)
+	var public_id pgtype.UUID
+	err := row.Scan(&public_id)
+	return public_id, err
+}
+
 const createQuery = `-- name: CreateQuery :one
 insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id
 `
@@ -205,6 +222,19 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const expirePublicLink = `-- name: ExpirePublicLink :execrows
+update public_reports set expires_at = now()
+where public_id = $1 and (expires_at is null or expires_at > now())
+`
+
+func (q *Queries) ExpirePublicLink(ctx context.Context, publicID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, expirePublicLink, publicID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findCronIDByNameAndExpr = `-- name: FindCronIDByNameAndExpr :one
@@ -372,15 +402,20 @@ func (q *Queries) GetPipelineByID(ctx context.Context, dollar_1 int64) ([]byte, 
 	return pipeline, err
 }
 
-const getReportIDByPublicID = `-- name: GetReportIDByPublicID :one
-select report_id from public_reports where public_id = $1 limit 1
+const getPublicLink = `-- name: GetPublicLink :one
+select report_id, expires_at from public_reports where public_id = $1
 `
 
-func (q *Queries) GetReportIDByPublicID(ctx context.Context, publicID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getReportIDByPublicID, publicID)
-	var report_id int64
-	err := row.Scan(&report_id)
-	return report_id, err
+type GetPublicLinkRow struct {
+	ReportID  int64
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetPublicLink(ctx context.Context, publicID pgtype.UUID) (GetPublicLinkRow, error) {
+	row := q.db.QueryRow(ctx, getPublicLink, publicID)
+	var i GetPublicLinkRow
+	err := row.Scan(&i.ReportID, &i.ExpiresAt)
+	return i, err
 }
 
 const getReportRowByID = `-- name: GetReportRowByID :one
@@ -661,6 +696,46 @@ func (q *Queries) ListExportsByReportID(ctx context.Context, dollar_1 int64) ([]
 			&i.TemplateType,
 			&i.TemplateText,
 			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicLinks = `-- name: ListPublicLinks :many
+select p.public_id, r.name as report_name, p.created_at, p.expires_at
+from public_reports p
+join reports r on r.id = p.report_id
+where $1::text is null or r.name = $1
+order by p.created_at desc
+`
+
+type ListPublicLinksRow struct {
+	PublicID   pgtype.UUID
+	ReportName string
+	CreatedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+}
+
+func (q *Queries) ListPublicLinks(ctx context.Context, reportName *string) ([]ListPublicLinksRow, error) {
+	rows, err := q.db.Query(ctx, listPublicLinks, reportName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicLinksRow
+	for rows.Next() {
+		var i ListPublicLinksRow
+		if err := rows.Scan(
+			&i.PublicID,
+			&i.ReportName,
+			&i.CreatedAt,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}

@@ -23,7 +23,7 @@ import (
 func Ctl() {
 	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "Usage: %s ctl <command> [args]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Commands: export, create, apply, validate, script\n")
+		fmt.Fprintf(os.Stderr, "Commands: export, create, apply, validate, script, link\n")
 		return
 	}
 
@@ -39,6 +39,8 @@ func Ctl() {
 		err = validateDSLs(os.Args[3:])
 	case "script":
 		err = scriptCtl(os.Args[3:])
+	case "link":
+		err = linkCtl(os.Args[3:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown ctl command: %s\n", os.Args[2])
 		os.Exit(1)

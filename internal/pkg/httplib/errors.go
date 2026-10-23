@@ -45,6 +45,7 @@ var (
 		http.StatusConflict,
 		"the request conflicts with the current state of the resource",
 	)
+	ErrGone     = NewHTTPError(http.StatusGone, "the link has expired")
 	ErrInternal = NewHTTPError(
 		http.StatusInternalServerError,
 		"an unexpected error occurred while processing the request",

@@ -38,8 +38,22 @@ left join evaluate e on e.id = r.eval_id
 where r.name = $1
 limit 1;
 
--- name: GetReportIDByPublicID :one
-select report_id from public_reports where public_id = $1 limit 1;
+-- name: GetPublicLink :one
+select report_id, expires_at from public_reports where public_id = $1;
+
+-- name: CreatePublicLink :one
+insert into public_reports (public_id, report_id, expires_at) values ($1, $2, $3) returning public_id;
+
+-- name: ListPublicLinks :many
+select p.public_id, r.name as report_name, p.created_at, p.expires_at
+from public_reports p
+join reports r on r.id = p.report_id
+where sqlc.narg('report_name')::text is null or r.name = sqlc.narg('report_name')
+order by p.created_at desc;
+
+-- name: ExpirePublicLink :execrows
+update public_reports set expires_at = now()
+where public_id = $1 and (expires_at is null or expires_at > now());
 
 -- name: ListCardsByReportID :many
 select q.card_uuid, q.title, q.q_type, q.params, q.query

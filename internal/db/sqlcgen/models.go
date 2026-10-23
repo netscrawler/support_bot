@@ -103,9 +103,11 @@ type Pipeline struct {
 }
 
 type PublicReport struct {
-	ID       int32
-	PublicID pgtype.UUID
-	ReportID int64
+	ID        int32
+	PublicID  pgtype.UUID
+	ReportID  int64
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
 }
 
 type Query struct {

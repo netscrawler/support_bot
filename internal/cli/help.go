@@ -69,7 +69,20 @@ func Help() {
 	fmt.Fprintf(os.Stderr, "                         create -out <путь>  Создать пример скрипта\n")
 	fmt.Fprintf(
 		os.Stderr,
-		"                         save   -config <путь> -script <путь>  Сохранить скрипт в БД\n\n",
+		"                         save   -config <путь> -script <путь>  Сохранить скрипт в БД\n",
+	)
+	fmt.Fprintf(os.Stderr, "               link      Публичные ссылки на отчеты\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"                         create -config <путь> -report <имя> [-ttl 168h]  Создать ссылку (0 — бессрочно)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         list   -config <путь> [-report <имя>]  Список ссылок\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         revoke -config <путь> <uuid>  Отозвать ссылку\n\n",
 	)
 
 	fmt.Fprintf(
