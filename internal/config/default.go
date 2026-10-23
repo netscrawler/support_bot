@@ -8,6 +8,7 @@ import (
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
+	"support_bot/internal/runlog"
 	"time"
 
 	apihttp "support_bot/internal/api/http"
@@ -100,5 +101,6 @@ func Default() *Config {
 			MaxHeaderBytes:    1 << 20,
 			MaxBodyBytes:      10 << 20,
 		},
+		Runs: runlog.Config{Retention: 720 * time.Hour},
 	}
 }

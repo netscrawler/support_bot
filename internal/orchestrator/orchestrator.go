@@ -8,6 +8,7 @@ import (
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
+	"time"
 )
 
 // ponytail: семафор фиксированного размера, не связан с реальным числом
@@ -27,6 +28,11 @@ type SentMsgSaver interface {
 	SaveTgMsg(ctx context.Context, reportName string, msgs []models.SentMessage) error
 }
 
+// RunRecorder записывает итог запуска отчёта в журнал (internal/runlog).
+type RunRecorder interface {
+	Record(ctx context.Context, run models.Run)
+}
+
 type Orchestrator struct {
 	EventC        chan models.Event
 	SpecialEventC chan models.SpecialEventForLK
@@ -38,6 +44,7 @@ type Orchestrator struct {
 
 	snd         models.SenderProvider
 	sentMsgRepo SentMsgSaver
+	runs        RunRecorder
 
 	genSem chan struct{}
 
@@ -52,6 +59,7 @@ func New(
 	gen *generator.Generator,
 	snd models.SenderProvider,
 	sentMsgRepo SentMsgSaver,
+	runs RunRecorder,
 	log *slog.Logger,
 ) *Orchestrator {
 	l := log.With(slog.Any("module", "orchestrator"))
@@ -64,6 +72,7 @@ func New(
 		gen:           gen,
 		snd:           snd,
 		sentMsgRepo:   sentMsgRepo,
+		runs:          runs,
 		genSem:        make(chan struct{}, maxInFlightGenerations),
 		log:           l,
 	}
@@ -116,8 +125,7 @@ func (o *Orchestrator) run(ctx context.Context) {
 				o.processDelReportEvent(ctx, event.Name)
 
 			default:
-				o.processGenReportEvent(ctx, event.Name, true, nil)
-
+				o.processGenReportEvent(ctx, event.Name, true, nil, models.RunKindCron)
 			}
 		case event, ok := <-o.SpecialEventC:
 			if !ok {
@@ -128,9 +136,15 @@ func (o *Orchestrator) run(ctx context.Context) {
 
 			switch event.Event.Type {
 			case models.EventTypeGenReportForTG:
-				o.processGenReportEvent(ctx, event.Event.Name, false, &event.Recipient)
+				o.processGenReportEvent(
+					ctx,
+					event.Event.Name,
+					false,
+					&event.Recipient,
+					models.RunKindLK,
+				)
 			case models.EventTypeGenReport:
-				o.processGenReportEvent(ctx, event.Event.Name, false, nil)
+				o.processGenReportEvent(ctx, event.Event.Name, false, nil, models.RunKindManual)
 			default:
 			}
 		}
@@ -148,6 +162,7 @@ func (o *Orchestrator) processGenReportEvent(
 	event string,
 	active bool,
 	recipientOverride *models.Recipient,
+	kind models.RunKind,
 ) {
 	reports, err := o.getReportByEvent(ctx, event, active)
 	if err != nil {
@@ -157,8 +172,14 @@ func (o *Orchestrator) processGenReportEvent(
 	}
 
 	for _, report := range reports {
+		var chatID *int64
+
 		if recipientOverride != nil {
 			report.Recipients = []models.Recipient{*recipientOverride}
+
+			if recipientOverride.Chat != nil {
+				chatID = &recipientOverride.Chat.ChatID
+			}
 		}
 
 		o.log.DebugContext(ctx, "sending report to generator", slog.Any("report", report.Name))
@@ -168,7 +189,7 @@ func (o *Orchestrator) processGenReportEvent(
 			go func(report models.Report) {
 				defer func() { <-o.genSem }()
 
-				o.generateAndDeliver(ctx, report)
+				o.generateAndDeliver(ctx, report, kind, chatID)
 			}(report)
 		case <-ctx.Done():
 			return
@@ -194,37 +215,67 @@ func (o *Orchestrator) generate(
 // generateAndDeliver прогоняет отчет через общий пул воркеров генератора и,
 // при положительной оценке, доставляет его получателям отчета. Запускается
 // в отдельной горутине, чтобы занятый пул никогда не блокировал event loop.
-func (o *Orchestrator) generateAndDeliver(ctx context.Context, report models.Report) {
+// Итог запуска пишется в журнал ровно один раз.
+func (o *Orchestrator) generateAndDeliver(
+	ctx context.Context,
+	report models.Report,
+	kind models.RunKind,
+	chatID *int64,
+) {
+	run := models.Run{
+		ReportName: report.Name,
+		Kind:       kind,
+		Status:     models.RunStatusSuccess,
+		ChatID:     chatID,
+		StartedAt:  time.Now(),
+	}
+
+	defer func() {
+		run.FinishedAt = time.Now()
+		o.runs.Record(ctx, run)
+	}()
+
 	dataset, data, approve, err := o.generate(ctx, report)
 	if err != nil {
 		o.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
+
+		run.Status, run.Error = models.RunStatusFailed, err.Error()
 
 		return
 	}
 
 	if !approve {
+		run.Status, run.Reason = models.RunStatusSkipped, "evaluate"
+
 		return
 	}
 
-	if err := o.deliver(ctx, report, dataset, data); err != nil {
+	delivered, err := o.deliver(ctx, report, dataset, data)
+	if err != nil {
 		o.log.ErrorContext(ctx, "error delivering report", slog.Any("error", err))
+
+		run.Status, run.Error = models.RunStatusFailed, err.Error()
+		if delivered > 0 {
+			run.Status = models.RunStatusPartial
+		}
 	}
 }
 
 // deliver отправляет сгенерированный отчет настроенным получателям и
-// сохраняет состояние отправленных сообщений.
+// сохраняет состояние отправленных сообщений. Возвращает число получателей,
+// которым отправка прошла без ошибки, и ошибку отправки (если была).
 func (o *Orchestrator) deliver(
 	ctx context.Context,
 	report models.Report,
 	data models.Dataset,
 	res []models.Data,
-) error {
+) (int, error) {
 	l := o.log
 
 	if len(report.Recipients) == 0 {
 		l.ErrorContext(ctx, "empty targets list")
 
-		return fmt.Errorf("empty targets list")
+		return 0, fmt.Errorf("empty targets list")
 	}
 
 	// Достаем "_meta" лист из данных, для использования в шаблоне email
@@ -238,15 +289,15 @@ func (o *Orchestrator) deliver(
 	l.InfoContext(ctx, "meta", slog.Any("meta", addMeta), slog.Any("_meta", data["_meta"]))
 	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
 
-	resMsg, err := msg.Send(ctx, o.snd)
-	if err != nil {
-		l.ErrorContext(ctx, "error while send message", slog.Any("error", err))
+	resMsg, delivered, sendErr := msg.Send(ctx, o.snd)
+	if sendErr != nil {
+		l.ErrorContext(ctx, "error while send message", slog.Any("error", sendErr))
 	}
 
 	if len(resMsg) == 0 {
 		l.InfoContext(ctx, "report generated")
 
-		return nil
+		return delivered, sendErr
 	}
 
 	l.InfoContext(
@@ -256,12 +307,11 @@ func (o *Orchestrator) deliver(
 		slog.Any("message", resMsg),
 	)
 
-	err = o.sentMsgRepo.SaveTgMsg(ctx, msg.ReportName, resMsg)
-	if err != nil {
+	if err := o.sentMsgRepo.SaveTgMsg(ctx, msg.ReportName, resMsg); err != nil {
 		l.WarnContext(ctx, "result msg save failed", slog.Any("error", err))
 	}
 
-	return nil
+	return delivered, sendErr
 }
 
 func (o *Orchestrator) processDelReportEvent(ctx context.Context, event string) {

@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"support_bot/internal/models"
 	"testing"
 	"time"
@@ -210,5 +211,63 @@ func TestGenerator_Generate_SharesWorkerPoolAcrossCallers(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for Generate result")
 		}
+	}
+}
+
+// TestGenerate_ExportErrors проверяет обработку ошибок экспорта: упали все —
+// ошибка с обеими причинами, упал один — остальные доставляются, нет
+// экспортов — не ошибка.
+func TestGenerate_ExportErrors(t *testing.T) {
+	bad1 := models.Export{Format: "bad1"}
+	bad2 := models.Export{Format: "bad2"}
+	good := models.Export{Format: models.ReportFormatCsv, FileName: new("out")}
+
+	tests := []struct {
+		name     string
+		exports  []models.Export
+		wantRes  int
+		wantErrs []string
+	}{
+		{
+			"all fail",
+			[]models.Export{bad1, bad2},
+			0,
+			[]string{"all exports failed", "bad1", "bad2"},
+		},
+		{"one fails", []models.Export{bad1, good}, 1, nil},
+		{"no exports", nil, 0, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := &Generator{
+				clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				eval: fakeEvaluator{approve: true},
+				log:  slog.New(slog.DiscardHandler),
+			}
+
+			_, res, approve, err := g.generate(
+				context.Background(),
+				models.Report{Name: "r1", Evaluation: "true", Exports: tt.exports},
+			)
+
+			if !approve {
+				t.Fatalf("approve = false, want true")
+			}
+
+			if len(res) != tt.wantRes {
+				t.Fatalf("len(res) = %d, want %d", len(res), tt.wantRes)
+			}
+
+			if len(tt.wantErrs) == 0 && err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+
+			for _, w := range tt.wantErrs {
+				if err == nil || !strings.Contains(err.Error(), w) {
+					t.Fatalf("err = %v, want it to contain %q", err, w)
+				}
+			}
+		})
 	}
 }

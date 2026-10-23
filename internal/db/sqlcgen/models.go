@@ -149,6 +149,18 @@ type ReportQuery struct {
 	QueryID  int32
 }
 
+type ReportRun struct {
+	ID         int64
+	ReportName string
+	Kind       string
+	Status     string
+	Reason     *string
+	Error      *string
+	ChatID     *int64
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
 type ReportTemplate struct {
 	ReportID   int32
 	TemplateID int32

@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"fmt"
+	"html"
 	"strconv"
 	"strings"
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/menu"
+	"time"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
@@ -118,6 +120,12 @@ func getMarkupForReport(r models.ReportInfo, pageFrom int) telego.InlineKeyboard
 				{
 					Text:         "📤 Получить",
 					CallbackData: fmt.Sprintf("report_get;%s;%s;%d", r.ID, r.Name, pageFrom),
+				},
+			},
+			{
+				{
+					Text:         "🧾 Запуски",
+					CallbackData: fmt.Sprintf("report_runs;%s;%s;%d", r.ID, r.Name, pageFrom),
 				},
 			},
 		},
@@ -236,4 +244,61 @@ func getReportInfoFromQuery(query telego.CallbackQuery) (reportInfoFromQuery, er
 		PageFrom:   pageFrom,
 		Callback:   callback,
 	}, nil
+}
+
+const runErrMaxRunes = 200
+
+var runStatusIcon = map[models.RunStatus]string{
+	models.RunStatusSuccess: "✅",
+	models.RunStatusSkipped: "⏭",
+	models.RunStatusFailed:  "❌",
+	models.RunStatusPartial: "⚠️",
+}
+
+func formatRuns(name string, runs []models.Run, err error) string {
+	head := fmt.Sprintf("🧾 Последние запуски <b>%s</b>", html.EscapeString(name))
+
+	switch {
+	case err != nil:
+		return head + "\n\nНе удалось получить журнал запусков."
+	case len(runs) == 0:
+		return head + "\n\nЗапусков пока нет."
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(head + "\n")
+
+	for _, r := range runs {
+		sb.WriteString("\n" + formatRun(r))
+	}
+
+	return sb.String()
+}
+
+func formatRun(r models.Run) string {
+	icon := runStatusIcon[r.Status]
+	line := fmt.Sprintf(
+		"%s · %s · %s %s · %s",
+		r.StartedAt.Local().Format("02.01 15:04"),
+		html.EscapeString(string(r.Kind)),
+		icon,
+		html.EscapeString(string(r.Status)),
+		r.FinishedAt.Sub(r.StartedAt).Round(100*time.Millisecond),
+	)
+
+	detail := r.Error
+	if detail == "" {
+		detail = r.Reason
+	}
+
+	if detail == "" {
+		return line
+	}
+
+	if rs := []rune(detail); len(rs) > runErrMaxRunes {
+		detail = string(rs[:runErrMaxRunes]) + "…"
+	}
+
+	return line + " · " + html.EscapeString(detail)
 }

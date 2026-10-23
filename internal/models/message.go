@@ -88,12 +88,9 @@ func NewMessage(
 	}
 }
 
-func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, error) {
-	var (
-		sendErr error
-		sentMsg []SentMessage
-	)
-
+func (m *Message) Send(ctx context.Context, sp senderProvider) (
+	sentMsg []SentMessage, delivered int, sendErr error,
+) {
 	for _, r := range m.Recipients {
 		switch r.Type {
 		case TelegramRecipient:
@@ -103,6 +100,8 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 
 				continue
 			}
+
+			delivered++
 
 			if r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
@@ -114,6 +113,8 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 
 				continue
 			}
+
+			delivered++
 		case SambaRecipient:
 			err := m.sendSMB(ctx, sp.SMB(), r)
 			if err != nil {
@@ -121,6 +122,8 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 
 				continue
 			}
+
+			delivered++
 		case MaxRecipient:
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
 			if err != nil {
@@ -128,6 +131,8 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 
 				continue
 			}
+
+			delivered++
 
 			if r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
@@ -139,7 +144,7 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) ([]SentMessage, e
 		}
 	}
 
-	return sentMsg, sendErr
+	return sentMsg, delivered, sendErr
 }
 
 func (m *Message) sendTg(ctx context.Context, sender TgSender, r Recipient) ([]SentMessage, error) {

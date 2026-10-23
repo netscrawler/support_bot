@@ -101,10 +101,11 @@ func newReportService(
 	shed *sheduler.SheduleAPI,
 	evAPI *eventcreator.EventAPI,
 	reportStore *reportstore.ReportStore,
+	runStore *reportstore.RunStore,
 	cfg *config.Config,
 	log *slog.Logger,
 ) *service.Report {
-	return service.NewReportService(shed, evAPI, reportStore, cfg.MetabaseDomain, log)
+	return service.NewReportService(shed, evAPI, reportStore, runStore, cfg.MetabaseDomain, log)
 }
 
 func newAdminHandler(

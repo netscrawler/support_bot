@@ -152,6 +152,32 @@ func (h *AdminHandler) SelectReport(ctx *th.Context, query telego.CallbackQuery)
 	return editOrSendRich(ctx, query, rpInf.String(), &mark)
 }
 
+func (h *AdminHandler) ListRuns(ctx *th.Context, query telego.CallbackQuery) error {
+	repInf, err := getReportInfoFromQuery(query)
+	if err != nil {
+		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Не удалось определить отчет",
+		})
+	}
+
+	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	runs, err := h.report.ListRuns(tctx, repInf.ReportName, 10)
+
+	mark := telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{{{
+			Text: "⬅️ Назад",
+			CallbackData: fmt.Sprintf(
+				"admin_report_select;%s;%s;%d", repInf.ID, repInf.ReportName, repInf.PageFrom,
+			),
+		}}},
+	}
+
+	return editOrSend(ctx, query, formatRuns(repInf.ReportName, runs, err), &mark)
+}
+
 func (h *AdminHandler) ResendSelectReport(ctx *th.Context, query telego.CallbackQuery) error {
 	repInf, err := getReportInfoFromQuery(query)
 	if err != nil {

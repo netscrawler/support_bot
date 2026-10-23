@@ -191,6 +191,8 @@ func (g *Generator) generate(
 
 	res = make([]models.Data, 0, len(report.Exports))
 
+	var exportErr error
+
 	for _, e := range report.Exports {
 		r, err := exporter.Export(data, e)
 		if err != nil {
@@ -201,10 +203,17 @@ func (g *Generator) generate(
 				slog.Any("export", e),
 			)
 
+			exportErr = errors.Join(exportErr, err)
+
 			continue
 		}
 
 		res = append(res, r...)
+	}
+
+	// Частично упавшие экспорты не ошибка: доставляем то, что получилось.
+	if len(res) == 0 && len(report.Exports) > 0 {
+		return data, nil, true, fmt.Errorf("all exports failed: %w", exportErr)
 	}
 
 	return data, res, true, nil

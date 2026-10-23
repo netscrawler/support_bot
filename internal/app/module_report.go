@@ -24,9 +24,11 @@ import (
 	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
+	"support_bot/internal/runlog"
 	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
 	reportstore "support_bot/internal/store"
+	"support_bot/internal/tg_bot/service"
 
 	"go.uber.org/fx"
 )
@@ -53,6 +55,9 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newProcessorReg,
 	newProcessor,
 	newSentMsgStore,
+	newRunStore,
+	newRunAlerter,
+	newRunRecorder,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
 	newReportStore,
@@ -207,6 +212,37 @@ func newSentMsgStore(rdb *postgres.DB, log *slog.Logger) *reportstore.SentMsgSto
 	return reportstore.NewSentMsgStore(rdb.GetConn(), log)
 }
 
+func newRunStore(rdb *postgres.DB) *reportstore.RunStore {
+	return reportstore.NewRunStore(rdb.GetConn())
+}
+
+func newRunAlerter(
+	cfg *config.Config,
+	tg *telegram.ChatAdaptor,
+	notify *service.Notify,
+) runlog.Alerter {
+	return runlog.NewTgAlerter(cfg.Alerts, tg, notify)
+}
+
+func newRunRecorder(
+	appCtx context.Context,
+	store *reportstore.RunStore,
+	alerter runlog.Alerter,
+	cfg *config.Config,
+	log *slog.Logger,
+	lc fx.Lifecycle,
+) *runlog.Recorder {
+	rec := runlog.New(store, alerter, cfg.Runs, log)
+
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		rec.Start(appCtx)
+
+		return nil
+	}})
+
+	return rec
+}
+
 func newDeleter(
 	appCtx context.Context,
 	delChan chan models.Event,
@@ -259,6 +295,7 @@ func newOrchestrator(
 	gen *generator.Generator,
 	snd *models.SenderProvider,
 	delRepo *reportstore.SentMsgStore,
+	runs *runlog.Recorder,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Orchestrator {
@@ -270,6 +307,7 @@ func newOrchestrator(
 		gen,
 		*snd,
 		delRepo,
+		runs,
 		log,
 	)
 

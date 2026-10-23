@@ -20,11 +20,17 @@ type ReportProvider interface {
 	GetLinkedCrons(ctx context.Context, reportName string) ([]models.SheduleUnit, error)
 }
 
+// RunLister отдаёт журнал запусков отчёта (новые сначала).
+type RunLister interface {
+	List(ctx context.Context, reportName string, limit int) ([]models.Run, error)
+}
+
 type Report struct {
 	*sheduler.SheduleAPI
 	*eventcreator.EventAPI
 
 	repo ReportProvider
+	runs RunLister
 
 	mbURL string
 
@@ -35,6 +41,7 @@ func NewReportService(
 	shd *sheduler.SheduleAPI,
 	eventAPI *eventcreator.EventAPI,
 	repo ReportProvider,
+	runs RunLister,
 	mbURL string,
 	log *slog.Logger,
 ) *Report {
@@ -44,9 +51,14 @@ func NewReportService(
 		SheduleAPI: shd,
 		EventAPI:   eventAPI,
 		repo:       repo,
+		runs:       runs,
 		mbURL:      mbURL,
 		log:        l,
 	}
+}
+
+func (r *Report) ListRuns(ctx context.Context, reportName string, limit int) ([]models.Run, error) {
+	return r.runs.List(ctx, reportName, limit)
 }
 
 func (r *Report) LoadReportsWithPagination(ctx context.Context) (models.LoadReportRPL, error) {

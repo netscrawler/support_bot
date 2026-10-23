@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"sync"
@@ -14,10 +15,11 @@ import (
 
 type fakeCollector struct {
 	data models.Dataset
+	err  error
 }
 
 func (f fakeCollector) Collect(_ context.Context, _ ...models.Card) (models.Dataset, error) {
-	return f.data, nil
+	return f.data, f.err
 }
 
 type fakeEvaluator struct {
@@ -157,16 +159,15 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 	o := &Orchestrator{
 		gen:    g,
 		rL:     fakeLoader{report: models.Report{Name: "r1", Evaluation: "false"}},
+		runs:   &fakeRecorder{},
 		genSem: make(chan struct{}, maxInFlightGenerations),
 		log:    slog.New(slog.DiscardHandler),
 	}
 
 	var wg sync.WaitGroup
 	for range maxInFlightGenerations * 4 {
-
 		wg.Go(func() {
-
-			o.processGenReportEvent(ctx, "ev", true, nil)
+			o.processGenReportEvent(ctx, "ev", true, nil, models.RunKindCron)
 		})
 	}
 
@@ -199,5 +200,267 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 
 	if p := atomic.LoadInt32(&peak); p > maxInFlightGenerations {
 		t.Fatalf("peak in-flight generations = %d, want <= %d", p, maxInFlightGenerations)
+	}
+}
+
+// fakeRecorder сохраняет записи журнала запусков.
+type fakeRecorder struct {
+	mu   sync.Mutex
+	runs []models.Run
+}
+
+func (f *fakeRecorder) Record(_ context.Context, run models.Run) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.runs = append(f.runs, run)
+}
+
+// wait ждёт n записей (генерация идёт в горутине) и возвращает их копию.
+func (f *fakeRecorder) wait(t *testing.T, n int) []models.Run {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		f.mu.Lock()
+		got := append([]models.Run(nil), f.runs...)
+		f.mu.Unlock()
+
+		if len(got) >= n {
+			return got
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %d run records, got %d", n, len(got))
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// fakeSmb падает на пути "bad"; остальные Upload успешны.
+type fakeSmb struct{}
+
+func (fakeSmb) Upload(_ context.Context, remote string, _ models.Data) error {
+	if remote == "bad" {
+		return errors.New("upload failed")
+	}
+
+	return nil
+}
+
+type fakeSaver struct{}
+
+func (fakeSaver) SaveTgMsg(context.Context, string, []models.SentMessage) error { return nil }
+
+func smbRcpt(path string) models.Recipient {
+	return models.Recipient{Type: models.SambaRecipient, RemotePath: &path}
+}
+
+func goodReport(rcpts ...models.Recipient) models.Report {
+	return models.Report{
+		Name:       "r1",
+		Evaluation: "true",
+		Exports:    []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+		Recipients: rcpts,
+	}
+}
+
+func newRunOrch(t *testing.T, coll fakeCollector, approve bool) (*Orchestrator, *fakeRecorder) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	g := generator.New(coll, nil, fakeEvaluator{approve: approve}, 1, slog.New(slog.DiscardHandler))
+	g.Start(ctx)
+
+	rec := &fakeRecorder{}
+
+	return &Orchestrator{
+		gen:         g,
+		snd:         *models.NewSenderProvider(nil, fakeSmb{}, nil, nil),
+		sentMsgRepo: fakeSaver{},
+		runs:        rec,
+		genSem:      make(chan struct{}, maxInFlightGenerations),
+		log:         slog.New(slog.DiscardHandler),
+	}, rec
+}
+
+// TestOrchestrator_GenerateAndDeliver_RecordsRun проверяет статус записи
+// журнала для каждого исхода запуска.
+func TestOrchestrator_GenerateAndDeliver_RecordsRun(t *testing.T) {
+	data := models.Dataset{"q1": {{"col": "val"}}}
+	badExport := goodReport(smbRcpt("ok"))
+	badExport.Exports = []models.Export{{Format: "nope"}}
+
+	tests := []struct {
+		name       string
+		coll       fakeCollector
+		approve    bool
+		report     models.Report
+		wantStatus models.RunStatus
+		wantReason string
+		wantErr    string
+	}{
+		{
+			"success",
+			fakeCollector{data: data},
+			true,
+			goodReport(smbRcpt("ok")),
+			models.RunStatusSuccess,
+			"",
+			"",
+		},
+		{
+			"skipped",
+			fakeCollector{data: data},
+			false,
+			goodReport(smbRcpt("ok")),
+			models.RunStatusSkipped,
+			"evaluate",
+			"",
+		},
+		{
+			"generate error",
+			fakeCollector{err: errors.New("db down")},
+			true,
+			goodReport(smbRcpt("ok")),
+			models.RunStatusFailed,
+			"",
+			"db down",
+		},
+		{
+			"all exports failed",
+			fakeCollector{data: data},
+			true,
+			badExport,
+			models.RunStatusFailed,
+			"",
+			"all exports failed",
+		},
+		{
+			"no recipients",
+			fakeCollector{data: data},
+			true,
+			goodReport(),
+			models.RunStatusFailed,
+			"",
+			"empty targets list",
+		},
+		{
+			"all sends failed",
+			fakeCollector{data: data},
+			true,
+			goodReport(smbRcpt("bad")),
+			models.RunStatusFailed,
+			"",
+			"upload failed",
+		},
+		{
+			"partial",
+			fakeCollector{data: data},
+			true,
+			goodReport(smbRcpt("ok"), smbRcpt("bad")),
+			models.RunStatusPartial,
+			"",
+			"upload failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, rec := newRunOrch(t, tt.coll, tt.approve)
+
+			chatID := int64(7)
+			o.generateAndDeliver(context.Background(), tt.report, models.RunKindManual, &chatID)
+
+			runs := rec.wait(t, 1)
+			if len(runs) != 1 {
+				t.Fatalf("got %d records, want exactly 1", len(runs))
+			}
+
+			r := runs[0]
+			if r.Status != tt.wantStatus || r.Reason != tt.wantReason {
+				t.Fatalf(
+					"status/reason = %s/%q, want %s/%q",
+					r.Status,
+					r.Reason,
+					tt.wantStatus,
+					tt.wantReason,
+				)
+			}
+
+			if tt.wantErr == "" && r.Error != "" || !strings.Contains(r.Error, tt.wantErr) {
+				t.Fatalf("error = %q, want it to contain %q", r.Error, tt.wantErr)
+			}
+
+			if r.ReportName != "r1" || r.Kind != models.RunKindManual || r.ChatID != &chatID {
+				t.Fatalf("unexpected run fields: %+v", r)
+			}
+
+			if r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) {
+				t.Fatalf("bad timestamps: %+v", r)
+			}
+		})
+	}
+}
+
+// TestOrchestrator_Run_PassesKindAndChat проверяет, что run() сопоставляет
+// каналы событий типам запуска, а для ЛК пробрасывает ChatID получателя.
+func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
+	rcpt := smbRcpt("ok")
+	rcpt.Chat = &models.Chat{ChatID: 42}
+
+	tests := []struct {
+		name     string
+		send     func(o *Orchestrator)
+		wantKind models.RunKind
+		wantChat *int64
+	}{
+		{
+			"cron",
+			func(o *Orchestrator) { o.EventC <- models.Event{Name: "ev"} },
+			models.RunKindCron,
+			nil,
+		},
+		{"manual", func(o *Orchestrator) {
+			o.SpecialEventC <- models.SpecialEventForLK{Event: models.Event{Name: "ev", Type: models.EventTypeGenReport}}
+		}, models.RunKindManual, nil},
+		{"lk", func(o *Orchestrator) {
+			o.SpecialEventC <- models.SpecialEventForLK{
+				Event:     models.Event{Name: "ev", Type: models.EventTypeGenReportForTG},
+				Recipient: rcpt,
+			}
+		}, models.RunKindLK, new(int64(42))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, rec := newRunOrch(
+				t,
+				fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+				true,
+			)
+			o.EventC = make(chan models.Event)
+			o.SpecialEventC = make(chan models.SpecialEventForLK)
+			o.rL = fakeLoader{report: goodReport(smbRcpt("ok"))}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+
+			go o.run(ctx)
+			tt.send(o)
+
+			r := rec.wait(t, 1)[0]
+			if r.Kind != tt.wantKind {
+				t.Fatalf("kind = %s, want %s", r.Kind, tt.wantKind)
+			}
+
+			if (r.ChatID == nil) != (tt.wantChat == nil) ||
+				r.ChatID != nil && *r.ChatID != *tt.wantChat {
+				t.Fatalf("chat id = %v, want %v", r.ChatID, tt.wantChat)
+			}
+		})
 	}
 }

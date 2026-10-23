@@ -17,6 +17,7 @@ import (
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
 	"support_bot/internal/processor/lua"
+	"support_bot/internal/runlog"
 	"time"
 
 	apihttp "support_bot/internal/api/http"
@@ -31,10 +32,10 @@ import (
 
 type Config struct {
 	Log            logger.LogConfig                    `yaml:"log"             comment:"Настройки логгирования"`
-	MetabaseDomain string                              `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
-	AppMetrica     appmetrica.Config                   `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
-	Jira           jira.Config                         `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
-	Lua            lua.Config                          `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
+	MetabaseDomain string                              `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                                                  env:"METABASE_DOMAIN"`
+	AppMetrica     appmetrica.Config                   `yaml:"appmetrica"                                                                                                                                                                                                                  env:"APP_METRICA"`
+	Jira           jira.Config                         `yaml:"jira"                                                                                                                                                                                                                        env:"JIRA"`
+	Lua            lua.Config                          `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                                                         env:"LUA"`
 	Database       postgres.Config                     `yaml:"database"        comment:"Настройки подключения к Postgres"`
 	Databases      map[string]pgcollector.Config       `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
 	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."`
@@ -46,6 +47,8 @@ type Config struct {
 	SMTP           smtp.Config                         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
 	MaxBot         maxbot.Config                       `yaml:"max"             comment:"Настройка Max бота"`
 	HTTP           apihttp.Config                      `yaml:"http"            comment:"Настройки публичного HTTP API."`
+	Alerts         runlog.AlertsConfig                 `yaml:"alerts"          comment:"Уведомления администраторов о сбоях отчётов."`
+	Runs           runlog.Config                       `yaml:"runs"            comment:"Журнал запусков отчётов."`
 }
 
 type timeout struct {

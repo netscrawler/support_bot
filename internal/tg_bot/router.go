@@ -52,6 +52,7 @@ func NewRouter(
 	admin.HandleCallbackQuery(adminH.LoadReportPage, th.CallbackDataContains("admin_report_page"))
 	admin.HandleCallbackQuery(adminH.ResendSelectReport, th.CallbackDataContains("report_resend"))
 	admin.HandleCallbackQuery(adminH.GenerateSelectedReport, th.CallbackDataContains("report_get"))
+	admin.HandleCallbackQuery(adminH.ListRuns, th.CallbackDataContains("report_runs"))
 	admin.HandleCallbackQuery(adminH.LoadReportPage, th.CallbackDataContains("back_to_report_list"))
 	admin.HandleCallbackQuery(adminH.ManageUsers, th.CallbackDataEqual("manage_users"))
 	admin.HandleCallbackQuery(adminH.ListUsers, th.CallbackDataEqual("list_user"))
