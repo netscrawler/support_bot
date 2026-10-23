@@ -92,3 +92,19 @@ func TestReportJSON_IgnoreEvaluateNotSerialized(t *testing.T) {
 		t.Fatalf("IgnoreEvaluate попал в JSON: %s", b)
 	}
 }
+
+func TestReportJSON_Dedup(t *testing.T) {
+	var rep models.Report
+	if err := json.Unmarshal([]byte(`{"name":"a"}`), &rep); err != nil || rep.Dedup {
+		t.Fatalf("без dedup: Dedup = %v, err = %v, want false", rep.Dedup, err)
+	}
+
+	if err := json.Unmarshal([]byte(`{"name":"a","dedup":true}`), &rep); err != nil || !rep.Dedup {
+		t.Fatalf("dedup:true: Dedup = %v, err = %v, want true", rep.Dedup, err)
+	}
+
+	b, err := json.Marshal(rep)
+	if err != nil || !strings.Contains(string(b), `"dedup":true`) {
+		t.Errorf("Marshal = %s, err = %v, want содержит \"dedup\":true", b, err)
+	}
+}

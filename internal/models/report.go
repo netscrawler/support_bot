@@ -22,7 +22,9 @@ type Report struct {
 	Evaluation   string      `json:"evaluation"`
 	Active       bool        `json:"active"`
 	AccessFromLK bool        `json:"access_from_lk"`
-	Crons        []Cron      `json:"crons,omitempty"`
+	// Не слать повтор по cron с теми же данными; изменчивое время класть в лист _meta.
+	Dedup bool   `json:"dedup,omitempty"`
+	Crons []Cron `json:"crons,omitempty"`
 
 	// Пробный запуск админа: экспорт идёт даже при ложном evaluate; в БД/JSON не хранится.
 	IgnoreEvaluate bool `json:"-"`

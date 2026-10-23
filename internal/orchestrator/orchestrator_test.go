@@ -207,6 +207,19 @@ func TestOrchestrator_ProcessGenReportEvent_BoundsInFlightGenerations(t *testing
 type fakeRecorder struct {
 	mu   sync.Mutex
 	runs []models.Run
+
+	prevHash  string // ответ LastSuccessHash
+	prevOK    bool
+	hashCalls int
+}
+
+func (f *fakeRecorder) LastSuccessHash(_ context.Context, _ string) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.hashCalls++
+
+	return f.prevHash, f.prevOK
 }
 
 func (f *fakeRecorder) Record(_ context.Context, run models.Run) {
@@ -429,6 +442,84 @@ func TestOrchestrator_GenerateAndDeliver_RecordsRun(t *testing.T) {
 
 			if r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) {
 				t.Fatalf("bad timestamps: %+v", r)
+			}
+		})
+	}
+}
+
+// TestOrchestrator_GenerateAndDeliver_Dedup проверяет пропуск дубля только для cron
+// с report.Dedup и запись DataHash.
+func TestOrchestrator_GenerateAndDeliver_Dedup(t *testing.T) {
+	data := models.Dataset{"q1": {{"col": "val"}}}
+	same := data.Hash()
+
+	tests := []struct {
+		name       string
+		dedup      bool
+		kind       models.RunKind
+		prevHash   string
+		prevOK     bool
+		wantStatus models.RunStatus
+		wantReason string
+		wantHash   string
+		wantCalls  int
+	}{
+		{
+			"cron same hash", true, models.RunKindCron, same, true,
+			models.RunStatusSkipped, "duplicate", same, 1,
+		},
+		{
+			"cron other hash", true, models.RunKindCron, "other", true,
+			models.RunStatusSuccess, "", same, 1,
+		},
+		{
+			"cron no previous", true, models.RunKindCron, "", false,
+			models.RunStatusSuccess, "", same, 1,
+		},
+		{
+			"manual same hash", true, models.RunKindManual, same, true,
+			models.RunStatusSuccess, "", same, 0,
+		},
+		{
+			"dedup off", false, models.RunKindCron, same, true,
+			models.RunStatusSuccess, "", same, 0,
+		},
+		{
+			"lk no hash", true, models.RunKindLK, same, true,
+			models.RunStatusSuccess, "", "", 0,
+		},
+		{
+			"test no hash", true, models.RunKindTest, same, true,
+			models.RunStatusSuccess, "", "", 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, rec := newRunOrch(t, fakeCollector{data: data}, true)
+			rec.prevHash, rec.prevOK = tt.prevHash, tt.prevOK
+
+			report := goodReport(smbRcpt("ok"))
+			report.Dedup = tt.dedup
+
+			o.generateAndDeliver(context.Background(), report, tt.kind, nil)
+
+			r := rec.wait(t, 1)[0]
+			if r.Status != tt.wantStatus || r.Reason != tt.wantReason {
+				t.Fatalf("status/reason = %s/%q, want %s/%q",
+					r.Status, r.Reason, tt.wantStatus, tt.wantReason)
+			}
+
+			if r.DataHash != tt.wantHash {
+				t.Fatalf("DataHash = %q, want %q", r.DataHash, tt.wantHash)
+			}
+
+			rec.mu.Lock()
+			calls := rec.hashCalls
+			rec.mu.Unlock()
+
+			if calls != tt.wantCalls {
+				t.Fatalf("LastSuccessHash calls = %d, want %d", calls, tt.wantCalls)
 			}
 		})
 	}

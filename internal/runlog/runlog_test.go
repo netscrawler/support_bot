@@ -21,6 +21,8 @@ type fakeStore struct {
 	runs       []models.Run
 	lastCalls  int
 	insertErr  error
+	hash       string
+	hashErr    error
 	deleteCall chan time.Time
 }
 
@@ -47,6 +49,10 @@ func (s *fakeStore) LastStatus(_ context.Context, name string) (models.RunStatus
 	return "", false, nil
 }
 
+func (s *fakeStore) LastSuccessHash(_ context.Context, _ string) (string, bool, error) {
+	return s.hash, s.hash != "", s.hashErr
+}
+
 func (s *fakeStore) DeleteOlderThan(_ context.Context, before time.Time) (int64, error) {
 	s.deleteCall <- before
 	return 0, nil
@@ -71,6 +77,20 @@ func setup() (*Recorder, *fakeStore, *fakeAlerter) {
 
 func run(kind models.RunKind, status models.RunStatus, errText string) models.Run {
 	return models.Run{ReportName: "r1", Kind: kind, Status: status, Error: errText}
+}
+
+func TestLastSuccessHash(t *testing.T) {
+	r, st, _ := setup()
+
+	st.hash = "h"
+	h, ok := r.LastSuccessHash(t.Context(), "r1")
+	assert.True(t, ok)
+	assert.Equal(t, "h", h)
+
+	st.hashErr = errors.New("db down")
+	h, ok = r.LastSuccessHash(t.Context(), "r1")
+	assert.False(t, ok)
+	assert.Empty(t, h)
 }
 
 func TestFirstFailureAlerts(t *testing.T) {

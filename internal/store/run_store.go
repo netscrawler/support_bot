@@ -39,6 +39,7 @@ func (s *RunStore) Insert(ctx context.Context, r models.Run) error {
 		ChatID:     r.ChatID,
 		StartedAt:  pgtype.Timestamptz{Time: r.StartedAt, Valid: true},
 		FinishedAt: pgtype.Timestamptz{Time: r.FinishedAt, Valid: true},
+		DataHash:   nilIfEmpty(r.DataHash),
 	})
 }
 
@@ -57,6 +58,28 @@ func (s *RunStore) LastStatus(
 	}
 
 	return models.RunStatus(st), true, nil
+}
+
+// LastSuccessHash — data_hash последнего успешного cron/manual запуска; ok=false, если запусков
+// или хэша нет.
+func (s *RunStore) LastSuccessHash(
+	ctx context.Context,
+	reportName string,
+) (string, bool, error) {
+	h, err := s.q.LastReportRunSuccessHash(ctx, reportName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+
+	if err != nil {
+		return "", false, err
+	}
+
+	if h == nil || *h == "" {
+		return "", false, nil
+	}
+
+	return *h, true, nil
 }
 
 func (s *RunStore) List(ctx context.Context, reportName string, limit int) ([]models.Run, error) {

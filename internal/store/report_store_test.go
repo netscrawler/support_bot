@@ -30,7 +30,7 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -39,11 +39,12 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 				"title",
 				"active",
 				"access_from_lk",
+				"dedup",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, &pipelineID, new("1 == 1")))
+			AddRow(int32(1), "r1", "Report One", true, true, true, &pipelineID, new("1 == 1")))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
@@ -129,6 +130,9 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 		t.Fatalf("GetByID() error = %v", err)
 	}
 
+	if !report.Dedup {
+		t.Errorf("Dedup = false, want true")
+	}
 	if len(report.Crons) != 1 {
 		t.Errorf(
 			"Crons = %v, want 1 entry (this was silently dropped by the orchestrator's old loader)",
@@ -213,7 +217,7 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -222,11 +226,12 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 				"title",
 				"active",
 				"access_from_lk",
+				"dedup",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, &pipelineID, new("1 == 1")))
+			AddRow(int32(1), "r1", "Report One", true, true, true, &pipelineID, new("1 == 1")))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
@@ -427,7 +432,7 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 		WithArgs("1 == 1").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true).
+		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true, false).
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 	pool.ExpectCommit()
 
@@ -444,6 +449,40 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 	}
 	if id != 100 {
 		t.Errorf("Create() id = %d, want 100", id)
+	}
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// dedup=true из модели уходит в insert отчёта.
+func TestReportStore_Create_PassesDedup(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectBegin()
+	pool.ExpectQuery("select exists").
+		WithArgs("r").
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+	pool.ExpectQuery("select id from evaluate").WithArgs("").WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into evaluate").
+		WithArgs("").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
+	pool.ExpectQuery("insert into reports").
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, true).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
+	pool.ExpectCommit()
+
+	if _, err := execTxOnMock(
+		t,
+		pool,
+		NewReportStore(nil, slog.New(slog.DiscardHandler)),
+		models.Report{Name: "r", Title: "R", Active: true, Dedup: true},
+	); err != nil {
+		t.Fatalf("Create() error = %v", err)
 	}
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
@@ -471,7 +510,7 @@ func TestReportStore_Create_QueryTextPassedToFindAndInsert(t *testing.T) {
 		WithArgs("").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("r", "R", int64(10), (*int64)(nil), false, true).
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, false).
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	for i, query := range []*string{&q1, &q2} {
@@ -603,7 +642,7 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 
 	pool.ExpectQuery("insert into reports").
-		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true).
+		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true, false).
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	// Карточка: не найдена -> создаётся с промаршаленными card.Params.

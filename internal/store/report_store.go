@@ -49,6 +49,7 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 			row.Title,
 			row.Active,
 			row.AccessFromLk,
+			row.Dedup,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -85,6 +86,7 @@ func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
 			row.Title,
 			row.Active,
 			row.AccessFromLk,
+			row.Dedup,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -118,6 +120,7 @@ func (s *ReportStore) GetByID(ctx context.Context, id int64) (*models.Report, er
 		row.Title,
 		row.Active,
 		row.AccessFromLk,
+		row.Dedup,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -136,6 +139,7 @@ func (s *ReportStore) GetByName(ctx context.Context, name string) (*models.Repor
 		row.Title,
 		row.Active,
 		row.AccessFromLk,
+		row.Dedup,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -159,6 +163,7 @@ func (s *ReportStore) LoadByEvent(
 			row.Title,
 			row.Active,
 			row.AccessFromLk,
+			row.Dedup,
 			row.PipelineID,
 			derefStr(row.Evaluation),
 		)
@@ -176,6 +181,7 @@ func (s *ReportStore) LoadByEvent(
 		row.Title,
 		row.Active,
 		row.AccessFromLk,
+		row.Dedup,
 		row.PipelineID,
 		derefStr(row.Evaluation),
 	)
@@ -270,7 +276,7 @@ func (s *ReportStore) assemble(
 	ctx context.Context,
 	id int64,
 	name, title string,
-	active, accessFromLK bool,
+	active, accessFromLK, dedup bool,
 	pipelineID *int64,
 	evaluation string,
 ) (*models.Report, error) {
@@ -316,6 +322,7 @@ func (s *ReportStore) assemble(
 		Evaluation:   evaluation,
 		Active:       active,
 		AccessFromLK: accessFromLK,
+		Dedup:        dedup,
 		Crons:        mapCronRows(cronRows),
 	}, nil
 }
@@ -502,6 +509,7 @@ func (s *ReportStore) createWithPool(
 			PipelineID:   pipelineID,
 			AccessFromLk: rep.AccessFromLK,
 			Active:       rep.Active,
+			Dedup:        rep.Dedup,
 		})
 		if err != nil {
 			return fmt.Errorf("create report: %w", err)

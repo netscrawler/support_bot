@@ -32,7 +32,7 @@ func TestRunStore_Insert_TruncatesErrorByRunes(t *testing.T) {
 	now := time.Now()
 
 	pool.ExpectExec("insert into report_runs").
-		WithArgs("r", "cron", "failed", (*string)(nil), &want, (*int64)(nil), pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WithArgs("r", "cron", "failed", (*string)(nil), &want, (*int64)(nil), pgxmock.AnyArg(), pgxmock.AnyArg(), (*string)(nil)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	err := s.Insert(context.Background(), models.Run{
@@ -52,7 +52,7 @@ func TestRunStore_Insert_EmptyStringsAreNil(t *testing.T) {
 	now := time.Now()
 
 	pool.ExpectExec("insert into report_runs").
-		WithArgs("r", "manual", "success", (*string)(nil), (*string)(nil), (*int64)(nil), pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WithArgs("r", "manual", "success", (*string)(nil), (*string)(nil), (*int64)(nil), pgxmock.AnyArg(), pgxmock.AnyArg(), (*string)(nil)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	err := s.Insert(context.Background(), models.Run{
@@ -83,6 +83,39 @@ func TestRunStore_LastStatus(t *testing.T) {
 	st, ok, err = s.LastStatus(context.Background(), "r")
 	if err != nil || !ok || st != models.RunStatusPartial {
 		t.Fatalf("row: got (%q, %v, %v), want (partial, true, nil)", st, ok, err)
+	}
+}
+
+func TestRunStore_LastSuccessHash(t *testing.T) {
+	s, pool := newRunStoreForTest(t)
+	h := "abc"
+
+	tests := []struct {
+		name   string
+		rows   *pgxmock.Rows
+		err    error
+		want   string
+		wantOK bool
+	}{
+		{"hash", pgxmock.NewRows([]string{"data_hash"}).AddRow(&h), nil, "abc", true},
+		{"no rows", nil, pgx.ErrNoRows, "", false},
+		{"null", pgxmock.NewRows([]string{"data_hash"}).AddRow((*string)(nil)), nil, "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := pool.ExpectQuery("select data_hash from report_runs").WithArgs("r")
+			if tt.err != nil {
+				q.WillReturnError(tt.err)
+			} else {
+				q.WillReturnRows(tt.rows)
+			}
+
+			got, ok, err := s.LastSuccessHash(context.Background(), "r")
+			if err != nil || ok != tt.wantOK || got != tt.want {
+				t.Fatalf("got (%q, %v, %v), want (%q, %v, nil)", got, ok, err, tt.want, tt.wantOK)
+			}
+		})
 	}
 }
 

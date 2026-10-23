@@ -159,6 +159,33 @@ ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/deploy-docker.ym
 ### Шаблоны
 Используются стандартные `text/template` и `html/template` с функциями **Sprig** и кастомными фильтрами форматирования.
 
+### Дедупликация (`dedup`)
+Флаг `"dedup": true` в JSON отчёта (по умолчанию выключен) не даёт отчёту на частом cron слать одно и то же. Запуск по cron не отправляется, если данные совпадают с последним успешным запуском `cron` или `manual`. В «🧾 Запуски» такой запуск виден как `skipped` / `duplicate`.
+
+- Сравниваются все листы датасета после pipeline, кроме `_meta`. Порядок ключей в строке не важен, порядок строк важен.
+- Изменчивое значение (время генерации и т.п.) кладите в лист `_meta`, иначе каждый запуск будет «новым».
+- Ручной запуск, пробный запуск админа и получение из ЛК отправляются всегда; успешный ручной запуск становится точкой сравнения.
+
+Пример: алерты проверяются раз в 5 минут, сообщение приходит только когда набор горящих алертов изменился.
+
+```json
+{
+  "name": "firing_alerts",
+  "title": "Горящие алерты",
+  "queries": [
+    {"card_uuid": "ops", "title": "firing", "params": {"state": "Alerting"}, "type": "grafana_alerts", "query": "active"}
+  ],
+  "recipients": [
+    {"name": "ops chat", "type": "tg", "chat": {"chat_id": -1001234567890, "type": "supergroup", "is_active": true, "ch_type": "tg"}}
+  ],
+  "exports": [{"format": "xlsx", "file_name": "alerts.xlsx"}],
+  "evaluation": "size(report[\"firing\"]) > 0",
+  "active": true,
+  "dedup": true,
+  "crons": [{"name": "every 5 min", "cron": "*/5 * * * *", "is_active": true, "event_type": 0}]
+}
+```
+
 ## Live preview шаблонов
 
 Инструмент `cmd/live-server` позволяет верстать шаблоны в реальном времени.

@@ -32,6 +32,7 @@ type SentMsgSaver interface {
 // RunRecorder записывает итог запуска отчёта в журнал (internal/runlog).
 type RunRecorder interface {
 	Record(ctx context.Context, run models.Run)
+	LastSuccessHash(ctx context.Context, report string) (string, bool)
 }
 
 type Orchestrator struct {
@@ -257,6 +258,27 @@ func (o *Orchestrator) generateAndDeliver(
 
 		// Пробный запуск доставляется и при ложном условии.
 		run.Reason = "evaluate_false"
+	}
+
+	if kind != models.RunKindTest && kind != models.RunKindLK {
+		hash := dataset.Hash()
+		run.DataHash = hash
+
+		if hash == "" {
+			o.log.WarnContext(ctx, "dataset не маршалится, дедупликация не применяется",
+				slog.String("report", report.Name))
+		}
+
+		if report.Dedup && kind == models.RunKindCron && hash != "" {
+			if prev, ok := o.runs.LastSuccessHash(ctx, report.Name); ok && prev == hash {
+				o.log.InfoContext(ctx, "данные не изменились, отправка пропущена",
+					slog.String("report", report.Name))
+
+				run.Status, run.Reason = models.RunStatusSkipped, "duplicate"
+
+				return
+			}
+		}
 	}
 
 	delivered, err := o.deliver(ctx, report, dataset, data)

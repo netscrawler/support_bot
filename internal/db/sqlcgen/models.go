@@ -137,6 +137,7 @@ type Report struct {
 	EvalID       int64
 	AccessFromLk bool
 	PipelineID   *int64
+	Dedup        bool
 }
 
 type ReportCron struct {
@@ -159,6 +160,7 @@ type ReportRun struct {
 	ChatID     *int64
 	StartedAt  pgtype.Timestamptz
 	FinishedAt pgtype.Timestamptz
+	DataHash   *string
 }
 
 type ReportTemplate struct {

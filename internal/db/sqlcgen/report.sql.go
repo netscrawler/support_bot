@@ -160,8 +160,8 @@ func (q *Queries) CreateRecipient(ctx context.Context, arg CreateRecipientParams
 }
 
 const createReport = `-- name: CreateReport :one
-insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active)
-values ($1, $2, $3, $4, $5, $6)
+insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active, dedup)
+values ($1, $2, $3, $4, $5, $6, $7)
 returning id
 `
 
@@ -172,6 +172,7 @@ type CreateReportParams struct {
 	PipelineID   *int64
 	AccessFromLk bool
 	Active       bool
+	Dedup        bool
 }
 
 func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (int32, error) {
@@ -182,6 +183,7 @@ func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (int
 		arg.PipelineID,
 		arg.AccessFromLk,
 		arg.Active,
+		arg.Dedup,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -290,7 +292,7 @@ func (q *Queries) FindTemplateIDByTitleAndType(ctx context.Context, arg FindTemp
 }
 
 const getActiveReportRowByName = `-- name: GetActiveReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
@@ -303,6 +305,7 @@ type GetActiveReportRowByNameRow struct {
 	Title        string
 	Active       bool
 	AccessFromLk bool
+	Dedup        bool
 	PipelineID   *int64
 	Evaluation   *string
 }
@@ -316,6 +319,7 @@ func (q *Queries) GetActiveReportRowByName(ctx context.Context, name string) (Ge
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -323,7 +327,7 @@ func (q *Queries) GetActiveReportRowByName(ctx context.Context, name string) (Ge
 }
 
 const getAnyReportRowByName = `-- name: GetAnyReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1
@@ -336,6 +340,7 @@ type GetAnyReportRowByNameRow struct {
 	Title        string
 	Active       bool
 	AccessFromLk bool
+	Dedup        bool
 	PipelineID   *int64
 	Evaluation   *string
 }
@@ -349,6 +354,7 @@ func (q *Queries) GetAnyReportRowByName(ctx context.Context, name string) (GetAn
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -378,7 +384,7 @@ func (q *Queries) GetReportIDByPublicID(ctx context.Context, publicID pgtype.UUI
 }
 
 const getReportRowByID = `-- name: GetReportRowByID :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.id = $1::bigint
@@ -391,6 +397,7 @@ type GetReportRowByIDRow struct {
 	Title        string
 	Active       bool
 	AccessFromLk bool
+	Dedup        bool
 	PipelineID   *int64
 	Evaluation   *string
 }
@@ -404,6 +411,7 @@ func (q *Queries) GetReportRowByID(ctx context.Context, dollar_1 int64) (GetRepo
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -488,7 +496,7 @@ func (q *Queries) LinkTemplateToReport(ctx context.Context, arg LinkTemplateToRe
 }
 
 const listActiveReportRows = `-- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.active = true
@@ -500,6 +508,7 @@ type ListActiveReportRowsRow struct {
 	Title        string
 	Active       bool
 	AccessFromLk bool
+	Dedup        bool
 	PipelineID   *int64
 	Evaluation   *string
 }
@@ -519,6 +528,7 @@ func (q *Queries) ListActiveReportRows(ctx context.Context) ([]ListActiveReportR
 			&i.Title,
 			&i.Active,
 			&i.AccessFromLk,
+			&i.Dedup,
 			&i.PipelineID,
 			&i.Evaluation,
 		); err != nil {
@@ -780,7 +790,7 @@ func (q *Queries) ListReportLinkedCrons(ctx context.Context, name string) ([]Lis
 }
 
 const listReportRows = `-- name: ListReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 `
@@ -791,6 +801,7 @@ type ListReportRowsRow struct {
 	Title        string
 	Active       bool
 	AccessFromLk bool
+	Dedup        bool
 	PipelineID   *int64
 	Evaluation   *string
 }
@@ -810,6 +821,7 @@ func (q *Queries) ListReportRows(ctx context.Context) ([]ListReportRowsRow, erro
 			&i.Title,
 			&i.Active,
 			&i.AccessFromLk,
+			&i.Dedup,
 			&i.PipelineID,
 			&i.Evaluation,
 		); err != nil {

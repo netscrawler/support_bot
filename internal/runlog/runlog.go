@@ -19,6 +19,7 @@ const (
 type Store interface {
 	Insert(ctx context.Context, run models.Run) error
 	LastStatus(ctx context.Context, reportName string) (models.RunStatus, bool, error)
+	LastSuccessHash(ctx context.Context, reportName string) (string, bool, error)
 	DeleteOlderThan(ctx context.Context, before time.Time) (int64, error)
 }
 
@@ -100,6 +101,26 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 			err,
 		)
 	}
+}
+
+// LastSuccessHash — хэш данных последнего успешного запуска. Ошибка store → ("", false):
+// лучше дубль, чем потеря отправки.
+func (r *Recorder) LastSuccessHash(ctx context.Context, report string) (string, bool) {
+	h, ok, err := r.store.LastSuccessHash(ctx, report)
+	if err != nil {
+		r.log.WarnContext(
+			ctx,
+			"runlog: чтение хэша прошлого запуска",
+			"report",
+			report,
+			"error",
+			err,
+		)
+
+		return "", false
+	}
+
+	return h, ok
 }
 
 // truncate режет по рунам (до экранирования), чтобы не порвать UTF-8 и HTML-сущности.

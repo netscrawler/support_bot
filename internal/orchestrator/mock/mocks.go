@@ -219,6 +219,72 @@ func (_m *MockRunRecorder) EXPECT() *MockRunRecorder_Expecter {
 	return &MockRunRecorder_Expecter{mock: &_m.Mock}
 }
 
+// LastSuccessHash provides a mock function for the type MockRunRecorder
+func (_mock *MockRunRecorder) LastSuccessHash(ctx context.Context, report string) (string, bool) {
+	ret := _mock.Called(ctx, report)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LastSuccessHash")
+	}
+
+	var r0 string
+	var r1 bool
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, bool)); ok {
+		return returnFunc(ctx, report)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, report)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) bool); ok {
+		r1 = returnFunc(ctx, report)
+	} else {
+		r1 = ret.Get(1).(bool)
+	}
+	return r0, r1
+}
+
+// MockRunRecorder_LastSuccessHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LastSuccessHash'
+type MockRunRecorder_LastSuccessHash_Call struct {
+	*mock.Call
+}
+
+// LastSuccessHash is a helper method to define mock.On call
+//   - ctx context.Context
+//   - report string
+func (_e *MockRunRecorder_Expecter) LastSuccessHash(ctx any, report any) *MockRunRecorder_LastSuccessHash_Call {
+	return &MockRunRecorder_LastSuccessHash_Call{Call: _e.mock.On("LastSuccessHash", ctx, report)}
+}
+
+func (_c *MockRunRecorder_LastSuccessHash_Call) Run(run func(ctx context.Context, report string)) *MockRunRecorder_LastSuccessHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRunRecorder_LastSuccessHash_Call) Return(s string, b bool) *MockRunRecorder_LastSuccessHash_Call {
+	_c.Call.Return(s, b)
+	return _c
+}
+
+func (_c *MockRunRecorder_LastSuccessHash_Call) RunAndReturn(run func(ctx context.Context, report string) (string, bool)) *MockRunRecorder_LastSuccessHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Record provides a mock function for the type MockRunRecorder
 func (_mock *MockRunRecorder) Record(ctx context.Context, run models.Run) {
 	_mock.Called(ctx, run)

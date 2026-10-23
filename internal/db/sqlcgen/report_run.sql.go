@@ -25,8 +25,8 @@ func (q *Queries) DeleteReportRunsBefore(ctx context.Context, startedAt pgtype.T
 
 const insertReportRun = `-- name: InsertReportRun :exec
 
-insert into report_runs(report_name, kind, status, reason, error, chat_id, started_at, finished_at)
-values ($1, $2, $3, $4, $5, $6, $7, $8)
+insert into report_runs(report_name, kind, status, reason, error, chat_id, started_at, finished_at, data_hash)
+values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertReportRunParams struct {
@@ -38,6 +38,7 @@ type InsertReportRunParams struct {
 	ChatID     *int64
 	StartedAt  pgtype.Timestamptz
 	FinishedAt pgtype.Timestamptz
+	DataHash   *string
 }
 
 // report_run.sql
@@ -52,6 +53,7 @@ func (q *Queries) InsertReportRun(ctx context.Context, arg InsertReportRunParams
 		arg.ChatID,
 		arg.StartedAt,
 		arg.FinishedAt,
+		arg.DataHash,
 	)
 	return err
 }
@@ -70,6 +72,20 @@ func (q *Queries) LastReportRunStatus(ctx context.Context, reportName string) (s
 	return status, err
 }
 
+const lastReportRunSuccessHash = `-- name: LastReportRunSuccessHash :one
+select data_hash from report_runs
+where report_name = $1 and status = 'success' and kind in ('cron', 'manual')
+order by started_at desc
+limit 1
+`
+
+func (q *Queries) LastReportRunSuccessHash(ctx context.Context, reportName string) (*string, error) {
+	row := q.db.QueryRow(ctx, lastReportRunSuccessHash, reportName)
+	var data_hash *string
+	err := row.Scan(&data_hash)
+	return data_hash, err
+}
+
 const listReportRuns = `-- name: ListReportRuns :many
 select id, report_name, kind, status, reason, error, chat_id, started_at, finished_at
 from report_runs
@@ -83,15 +99,27 @@ type ListReportRunsParams struct {
 	Limit      int32
 }
 
-func (q *Queries) ListReportRuns(ctx context.Context, arg ListReportRunsParams) ([]ReportRun, error) {
+type ListReportRunsRow struct {
+	ID         int64
+	ReportName string
+	Kind       string
+	Status     string
+	Reason     *string
+	Error      *string
+	ChatID     *int64
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListReportRuns(ctx context.Context, arg ListReportRunsParams) ([]ListReportRunsRow, error) {
 	rows, err := q.db.Query(ctx, listReportRuns, arg.ReportName, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ReportRun
+	var items []ListReportRunsRow
 	for rows.Next() {
-		var i ReportRun
+		var i ListReportRunsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ReportName,
