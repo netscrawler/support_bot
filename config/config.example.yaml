@@ -29,6 +29,26 @@ databases:
         read_only: true
         statement_timeout: 30s
         max_conns: 4
+# Подключения к Grafana (для чтения Prometheus через proxy datasource). Ключ — имя, на него ссылается grafana в секции prometheus.
+# Токен — service account Grafana с минимальными правами (роль Viewer).
+grafana:
+    ops:
+        url: https://grafana.example
+        token: glsa_xxx
+        timeout: 30s
+# Источники Prometheus (коллектор типа prom). Ключ — имя источника, указывается в card_uuid запроса.
+# Токены — с минимальными правами. Переменные Grafana ($__rate_interval, ${__range}) не поддерживаются:
+# передавайте значения явными params и подставляйте через ${name}.
+prometheus:
+    # Запись напрямую
+    main:
+        url: https://prom.example
+        bearer_token: xxx # либо basic_auth: {user: u, password: p}; одновременно нельзя
+        timeout: 30s
+    # Запись через Grafana
+    main_via_grafana:
+        grafana: ops
+        datasource_uid: P1809F7CD0C75ACF3
 # Настройки Lua-процессора.
 lua:
     # Таймаут для выполнения плагина.

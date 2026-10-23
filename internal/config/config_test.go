@@ -3,6 +3,7 @@ package config_test
 import (
 	"fmt"
 	"support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/config"
 	"testing"
 
@@ -20,4 +21,26 @@ func TestLogValueMasksDatabases(t *testing.T) {
 
 	assert.NotContains(t, out, "secret")
 	assert.Equal(t, dsn, cfg.Databases["analytics"].DSN)
+}
+
+func TestLogValueMasksPrometheus(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{
+		Grafana: map[string]prometheus.GrafanaConfig{"ops": {Token: "tok-secret"}},
+		Prometheus: map[string]prometheus.Config{
+			"a": {BearerToken: "bearer-secret"},
+			"b": {BasicAuth: &prometheus.BasicAuth{User: "u", Password: "pass-secret"}},
+		},
+	}
+
+	out := fmt.Sprintf("%+v", cfg.LogValue().Any())
+
+	for _, secret := range []string{"tok-secret", "bearer-secret", "pass-secret"} {
+		assert.NotContains(t, out, secret)
+	}
+
+	assert.Equal(t, "tok-secret", cfg.Grafana["ops"].Token)
+	assert.Equal(t, "bearer-secret", cfg.Prometheus["a"].BearerToken)
+	assert.Equal(t, "pass-secret", cfg.Prometheus["b"].BasicAuth.Password)
 }

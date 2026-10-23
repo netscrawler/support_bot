@@ -8,6 +8,7 @@ import (
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	pgcoll "support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/config"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/telegram"
@@ -136,22 +137,29 @@ func newEvaluator() (*evaluator.Engine, error) {
 }
 
 func newLuaStdCollector(
+	cfg *config.Config,
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
 	pg *pgcoll.Collector,
+	prom *prometheus.Collector,
 ) *luastd.CollectPlugin {
-	// Без pg интерфейс должен быть настоящим nil, иначе collector.pg попадёт в Lua.
-	var sqlColl luastd.SQLCollector
+	// Типизированный nil-указатель в интерфейсе не nil: без источника записи в map быть не должно,
+	// иначе collector.pg / collector.prom попадёт в Lua. prom создаётся всегда, поэтому смотрим конфиг.
+	queries := map[string]luastd.QueryCollector{}
 	if pg != nil {
-		sqlColl = pg
+		queries["pg"] = pg
+	}
+
+	if len(cfg.Prometheus) > 0 {
+		queries["prom"] = prom
 	}
 
 	return luastd.NewCollector(map[string]luastd.DirectCollector{
 		"jira":       jiraColl,
 		"mb":         mb,
 		"appmetrica": appM,
-	}, sqlColl)
+	}, queries)
 }
 
 func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {

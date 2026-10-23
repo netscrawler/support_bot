@@ -22,6 +22,7 @@ import (
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 	"sync"
@@ -127,7 +128,9 @@ type config struct {
 	Jira            jira.Config       `json:"jira"`
 	AppMetrica      appmetrica.Config `json:"appmetrica"`
 
-	Databases map[string]postgres.Config `json:"databases"`
+	Databases  map[string]postgres.Config          `json:"databases"`
+	Prometheus map[string]prometheus.Config        `json:"prometheus"`
+	Grafana    map[string]prometheus.GrafanaConfig `json:"grafana"`
 }
 
 func main() {
@@ -202,6 +205,12 @@ func main() {
 		slog.Error("error watch for templates", slog.Any("error", err))
 	}
 
+	prom, err := prometheus.New(cfg.Prometheus, cfg.Grafana, log)
+	if err != nil {
+		log.Error("error create prometheus collector", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	pg, err := postgres.New(ctx, cfg.Databases, log)
 	if err != nil {
 		log.Error("error create postgres collector", slog.Any("error", err))
@@ -215,6 +224,7 @@ func main() {
 		appmetrica.NewCollector(&cfg.AppMetrica, log),
 		jira.New(cfg.Jira),
 		pg,
+		prom,
 		slog.Default(),
 	)
 

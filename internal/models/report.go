@@ -82,6 +82,7 @@ const (
 	CollectTypeAppMetrica = "appmetrica"
 	CollectTypeJIRA       = "jira"
 	CollectTypePostgres   = "pg"
+	CollectTypePrometheus = "prom"
 )
 
 type Card struct {

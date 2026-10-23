@@ -16,16 +16,21 @@ type DataFetcher interface {
 	Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
 }
 
-// SQLFetcher выполняет произвольный SQL в именованной базе.
-type SQLFetcher interface {
-	Fetch(ctx context.Context, db, sql string, params map[string]string) ([]map[string]any, error)
+// QueryFetcher выполняет запрос query в именованном источнике target.
+type QueryFetcher interface {
+	Fetch(
+		ctx context.Context,
+		target, query string,
+		params map[string]string,
+	) ([]map[string]any, error)
 }
 
 type Collector struct {
 	mb         DataFetcher
 	appMetrica DataFetcher
 	jira       DataFetcher
-	pg         SQLFetcher
+	pg         QueryFetcher
+	prom       QueryFetcher
 	log        *slog.Logger
 	parallel   chan struct{}
 }
@@ -35,7 +40,8 @@ func NewCollector(
 	mb DataFetcher,
 	appMetrica DataFetcher,
 	jira DataFetcher,
-	pg SQLFetcher,
+	pg QueryFetcher,
+	prom QueryFetcher,
 	log *slog.Logger,
 ) *Collector {
 	l := log.With(slog.Any("module", "collector"))
@@ -52,6 +58,7 @@ func NewCollector(
 		appMetrica: appMetrica,
 		jira:       jira,
 		pg:         pg,
+		prom:       prom,
 		log:        l,
 		parallel:   semaphore,
 	}
@@ -138,6 +145,10 @@ func (c *Collector) collect(
 			case models.CollectTypePostgres:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
 					return c.pg.Fetch(ctx, target, crd.Query, params)
+				}
+			case models.CollectTypePrometheus:
+				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
+					return c.prom.Fetch(ctx, target, crd.Query, params)
 				}
 			default:
 				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {

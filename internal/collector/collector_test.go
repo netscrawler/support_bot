@@ -36,7 +36,7 @@ func TestCollect(t *testing.T) {
 			{"field": "value1"},
 		}, nil)
 
-		c := collector.NewCollector(0, df, df, df, nil, l)
+		c := collector.NewCollector(0, df, df, df, nil, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -51,7 +51,7 @@ func TestCollect(t *testing.T) {
 		t.Parallel()
 		ctx := t.Context()
 
-		pg := &cmock.MockSQLFetcher{}
+		pg := &cmock.MockQueryFetcher{}
 		params := map[string]string{"a": "b"}
 		card := models.Card{
 			Title: "card1", CardUUID: "analytics", Type: models.CollectTypePostgres,
@@ -61,13 +61,36 @@ func TestCollect(t *testing.T) {
 		pg.On("Fetch", ctx, "analytics", "select 1", params).
 			Return([]map[string]any{{"field": "pg"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, pg, l)
+		c := collector.NewCollector(0, nil, nil, nil, pg, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
 		require.NoError(t, err)
 		assert.Equal(t, "pg", result["card1"][0]["field"])
 		pg.AssertExpectations(t)
+	})
+
+	t.Run("prom card", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+
+		prom := &cmock.MockQueryFetcher{}
+		params := map[string]string{"a": "b"}
+		card := models.Card{
+			Title: "card1", CardUUID: "main", Type: models.CollectTypePrometheus,
+			Query: "up", Params: params,
+		}
+
+		prom.On("Fetch", ctx, "main", "up", params).
+			Return([]map[string]any{{"field": "prom"}}, nil)
+
+		c := collector.NewCollector(0, nil, nil, nil, nil, prom, l)
+
+		result, err := c.Collect(ctx, card)
+
+		require.NoError(t, err)
+		assert.Equal(t, "prom", result["card1"][0]["field"])
+		prom.AssertExpectations(t)
 	})
 
 	t.Run("many query", func(t *testing.T) {
@@ -91,7 +114,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, nil, l)
+		c := collector.NewCollector(3, df, df, df, nil, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -130,7 +153,7 @@ func TestCollect(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
-		c := collector.NewCollector(3, df, df, df, nil, l)
+		c := collector.NewCollector(3, df, df, df, nil, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -167,7 +190,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
 
-		c := collector.NewCollector(2, df, df, df, nil, slog.Default())
+		c := collector.NewCollector(2, df, df, df, nil, nil, slog.Default())
 
 		start := time.Now()
 
@@ -261,7 +284,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, nil, slog.Default())
+		c := collector.NewCollector(3, df, df, df, nil, nil, slog.Default())
 
 		var wg sync.WaitGroup
 

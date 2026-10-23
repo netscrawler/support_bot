@@ -10,6 +10,7 @@ import (
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/pkg/logger"
@@ -28,19 +29,21 @@ import (
 )
 
 type Config struct {
-	Log            logger.LogConfig              `yaml:"log"             comment:"Настройки логгирования"`
-	MetabaseDomain string                        `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
-	AppMetrica     appmetrica.Config             `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
-	Jira           jira.Config                   `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
-	Lua            lua.Config                    `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
-	Database       postgres.Config               `yaml:"database"        comment:"Настройки подключения к Postgres"`
-	Databases      map[string]pgcollector.Config `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
-	TgBot          tgbot.Config                  `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
-	Timeout        timeout                       `yaml:"timeout"         comment:"Настройка таймаутов"`
-	SMB            smb.Config                    `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
-	SMTP           smtp.Config                   `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
-	MaxBot         maxbot.Config                 `yaml:"max"             comment:"Настройка Max бота"`
-	HTTP           apihttp.Config                `yaml:"http"            comment:"Настройки публичного HTTP API."`
+	Log            logger.LogConfig                    `yaml:"log"             comment:"Настройки логгирования"`
+	MetabaseDomain string                              `yaml:"metabase_domain" comment:"Адрес Metabase для забора данных"                                                                                                                                    env:"METABASE_DOMAIN"`
+	AppMetrica     appmetrica.Config                   `yaml:"appmetrica"                                                                                                                                                                                    env:"APP_METRICA"`
+	Jira           jira.Config                         `yaml:"jira"                                                                                                                                                                                          env:"JIRA"`
+	Lua            lua.Config                          `yaml:"lua"             comment:"Настройки Lua-процессора."                                                                                                                                           env:"LUA"`
+	Database       postgres.Config                     `yaml:"database"        comment:"Настройки подключения к Postgres"`
+	Databases      map[string]pgcollector.Config       `yaml:"databases"       comment:"Прямые подключения к Postgres для коллектора типа pg.\nКлюч — имя базы, которое указывается в card_uuid запроса."`
+	Grafana        map[string]prometheus.GrafanaConfig `yaml:"grafana"         comment:"Подключения к Grafana для запросов к Prometheus через proxy datasource.\nКлюч — имя, на которое ссылается поле grafana в секции prometheus."`
+	Prometheus     map[string]prometheus.Config        `yaml:"prometheus"      comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."`
+	TgBot          tgbot.Config                        `yaml:"telegram"        comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."`
+	Timeout        timeout                             `yaml:"timeout"         comment:"Настройка таймаутов"`
+	SMB            smb.Config                          `yaml:"smb"             comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."`
+	SMTP           smtp.Config                         `yaml:"smtp"            comment:"Настройки SMTP-сервера.\nИспользуется для отправки email-уведомлений и отчетов.\nПоддерживается аутентификация по логину и паролю."`
+	MaxBot         maxbot.Config                       `yaml:"max"             comment:"Настройка Max бота"`
+	HTTP           apihttp.Config                      `yaml:"http"            comment:"Настройки публичного HTTP API."`
 }
 
 type timeout struct {
@@ -124,6 +127,29 @@ func (c Config) LogValue() slog.Value {
 	}
 
 	c.Databases = dbs
+
+	// то же для токенов Prometheus/Grafana; BasicAuth — указатель, копируем структуру.
+	graf := make(map[string]prometheus.GrafanaConfig, len(c.Grafana))
+	for k, v := range c.Grafana {
+		v.Token = "***"
+		graf[k] = v
+	}
+
+	c.Grafana = graf
+
+	prom := make(map[string]prometheus.Config, len(c.Prometheus))
+	for k, v := range c.Prometheus {
+		v.BearerToken = "***"
+		if v.BasicAuth != nil {
+			ba := *v.BasicAuth
+			ba.Password = "***"
+			v.BasicAuth = &ba
+		}
+
+		prom[k] = v
+	}
+
+	c.Prometheus = prom
 
 	return slog.AnyValue(safeConfig(c))
 }

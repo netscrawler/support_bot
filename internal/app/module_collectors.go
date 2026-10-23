@@ -8,6 +8,7 @@ import (
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/retry"
 	"time"
@@ -24,6 +25,7 @@ var collectorsModule = fx.Module(
 		newAppMetricaCollector,
 		newJira,
 		newPostgresCollector,
+		newPrometheusCollector,
 		newCollector,
 		newRetry,
 	),
@@ -82,14 +84,22 @@ func newPostgresCollector(
 	return pg, nil
 }
 
+func newPrometheusCollector(
+	cfg *config.Config,
+	log *slog.Logger,
+) (*prometheus.Collector, error) {
+	return prometheus.New(cfg.Prometheus, cfg.Grafana, log)
+}
+
 func newCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
 	pg *postgres.Collector,
+	prom *prometheus.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
-	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, log)
+	return collector.NewCollector(collectorsParallel, mb, appM, jiraColl, pg, prom, log)
 }
 
 func newRetry(log *slog.Logger) *retry.Retry {
