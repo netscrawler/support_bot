@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
 	"maps"
 	"support_bot/internal/generator"
@@ -136,13 +137,12 @@ func (o *Orchestrator) run(ctx context.Context) {
 
 			switch event.Event.Type {
 			case models.EventTypeGenReportForTG:
-				o.processGenReportEvent(
-					ctx,
-					event.Event.Name,
-					false,
-					&event.Recipient,
-					models.RunKindLK,
-				)
+				kind := models.RunKindLK
+				if event.Test {
+					kind = models.RunKindTest
+				}
+
+				o.processGenReportEvent(ctx, event.Event.Name, false, &event.Recipient, kind)
 			case models.EventTypeGenReport:
 				o.processGenReportEvent(ctx, event.Event.Name, false, nil, models.RunKindManual)
 			default:
@@ -173,6 +173,9 @@ func (o *Orchestrator) processGenReportEvent(
 
 	for _, report := range reports {
 		var chatID *int64
+
+		// Пробный запуск админа экспортирует отчёт даже при ложном evaluate.
+		report.IgnoreEvaluate = kind == models.RunKindTest
 
 		if recipientOverride != nil {
 			report.Recipients = []models.Recipient{*recipientOverride}
@@ -240,14 +243,20 @@ func (o *Orchestrator) generateAndDeliver(
 		o.log.ErrorContext(ctx, "error create report", slog.Any("error", err))
 
 		run.Status, run.Error = models.RunStatusFailed, err.Error()
+		o.notifyTest(ctx, kind, chatID, errText(err))
 
 		return
 	}
 
 	if !approve {
-		run.Status, run.Reason = models.RunStatusSkipped, "evaluate"
+		if kind != models.RunKindTest {
+			run.Status, run.Reason = models.RunStatusSkipped, "evaluate"
 
-		return
+			return
+		}
+
+		// Пробный запуск доставляется и при ложном условии.
+		run.Reason = "evaluate_false"
 	}
 
 	delivered, err := o.deliver(ctx, report, dataset, data)
@@ -258,6 +267,43 @@ func (o *Orchestrator) generateAndDeliver(
 		if delivered > 0 {
 			run.Status = models.RunStatusPartial
 		}
+
+		o.notifyTest(ctx, kind, chatID, errText(err))
+
+		return
+	}
+
+	evalLine := "🧪 evaluate = true"
+	if !approve {
+		evalLine = "🧪 evaluate = false — по расписанию отчёт не был бы отправлен"
+	}
+
+	o.notifyTest(ctx, kind, chatID, evalLine)
+}
+
+// errText — текст ошибки для чата: до 500 символов (по рунам), с экранированием HTML.
+func errText(err error) string {
+	r := []rune(err.Error())
+	if len(r) > 500 {
+		r = r[:500]
+	}
+
+	return "❌ " + html.EscapeString(string(r))
+}
+
+// notifyTest шлёт служебную строку в чат админа при пробном запуске.
+func (o *Orchestrator) notifyTest(
+	ctx context.Context,
+	kind models.RunKind,
+	chatID *int64,
+	text string,
+) {
+	if kind != models.RunKindTest || chatID == nil {
+		return
+	}
+
+	if _, err := o.snd.Tg().SendText(ctx, models.TgChat{ChatID: *chatID}, text); err != nil {
+		o.log.WarnContext(ctx, "test run note send failed", slog.Any("error", err))
 	}
 }
 

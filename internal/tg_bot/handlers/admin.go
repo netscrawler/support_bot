@@ -237,7 +237,7 @@ func (h *AdminHandler) GenerateSelectedReport(
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateReportByName(tctx, repInf.ReportName, chat); err != nil {
+	if err := h.report.GenerateTestReportByName(tctx, repInf.ReportName, chat); err != nil {
 		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:      telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID:   query.Message.Message().MessageID,
@@ -251,7 +251,8 @@ func (h *AdminHandler) GenerateSelectedReport(
 	return editOrSend(
 		ctx,
 		query,
-		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.",
+		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут."+
+			" Это пробный запуск: условие отправки не проверяется.",
 		menu.BackMarkup,
 	)
 }

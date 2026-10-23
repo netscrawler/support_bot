@@ -271,3 +271,33 @@ func TestGenerate_ExportErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerate_IgnoreEvaluateExportsOnNegative проверяет пробный запуск:
+// при ложном условии и IgnoreEvaluate экспорт выполняется, approve остаётся false.
+func TestGenerate_IgnoreEvaluateExportsOnNegative(t *testing.T) {
+	g := &Generator{
+		clct: fakeCollector{data: models.Dataset{"q1": {{"col": "val"}}}},
+		eval: fakeEvaluator{approve: false},
+		log:  slog.New(slog.DiscardHandler),
+	}
+
+	report := models.Report{
+		Name:           "r1",
+		Evaluation:     "false",
+		IgnoreEvaluate: true,
+		Exports:        []models.Export{{Format: models.ReportFormatCsv, FileName: new("out")}},
+	}
+
+	_, res, approve, err := g.generate(context.Background(), report)
+	if err != nil {
+		t.Fatalf("generate() error = %v", err)
+	}
+
+	if approve {
+		t.Fatalf("generate() approve = true, want false")
+	}
+
+	if len(res) != 1 {
+		t.Fatalf("generate() res = %+v, want one exported file", res)
+	}
+}

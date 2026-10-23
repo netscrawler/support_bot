@@ -22,21 +22,16 @@ func (api *EventAPI) ProduceSpecialEvent(
 	name string,
 	recipient models.Recipient,
 ) {
-	ev := models.SpecialEventForLK{
-		Event: models.Event{
-			Name: name,
-			Type: models.EventTypeGenReportForTG,
-		},
-		Recipient: recipient,
-	}
+	api.produceSpecialEvent(ctx, name, recipient, false)
+}
 
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case api.OutSpC <- ev:
-		}
-	}()
+// ProduceTestEvent — то же, что ProduceSpecialEvent, но с признаком пробного запуска.
+func (api *EventAPI) ProduceTestEvent(
+	ctx context.Context,
+	name string,
+	recipient models.Recipient,
+) {
+	api.produceSpecialEvent(ctx, name, recipient, true)
 }
 
 func (api *EventAPI) ProduceGenEvent(ctx context.Context, name string) {
@@ -67,6 +62,30 @@ func (api *EventAPI) ProduceDelEvent(ctx context.Context, name string) {
 		case <-ctx.Done():
 			return
 		case api.OutC <- ev:
+		}
+	}()
+}
+
+func (api *EventAPI) produceSpecialEvent(
+	ctx context.Context,
+	name string,
+	recipient models.Recipient,
+	test bool,
+) {
+	ev := models.SpecialEventForLK{
+		Event: models.Event{
+			Name: name,
+			Type: models.EventTypeGenReportForTG,
+		},
+		Recipient: recipient,
+		Test:      test,
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case api.OutSpC <- ev:
 		}
 	}()
 }

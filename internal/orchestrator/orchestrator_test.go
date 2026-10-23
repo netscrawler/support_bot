@@ -253,6 +253,34 @@ type fakeSaver struct{}
 
 func (fakeSaver) SaveTgMsg(context.Context, string, []models.SentMessage) error { return nil }
 
+// fakeTg записывает тексты SendText.
+type fakeTg struct {
+	models.TgSender
+
+	mu    sync.Mutex
+	texts []string
+}
+
+func (f *fakeTg) SendText(
+	_ context.Context,
+	_ models.TgChat,
+	s string,
+) (*models.SentMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.texts = append(f.texts, s)
+
+	return nil, nil
+}
+
+func (f *fakeTg) got() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]string(nil), f.texts...)
+}
+
 func smbRcpt(path string) models.Recipient {
 	return models.Recipient{Type: models.SambaRecipient, RemotePath: &path}
 }
@@ -279,7 +307,7 @@ func newRunOrch(t *testing.T, coll fakeCollector, approve bool) (*Orchestrator, 
 
 	return &Orchestrator{
 		gen:         g,
-		snd:         *models.NewSenderProvider(nil, fakeSmb{}, nil, nil),
+		snd:         *models.NewSenderProvider(&fakeTg{}, fakeSmb{}, nil, nil),
 		sentMsgRepo: fakeSaver{},
 		runs:        rec,
 		genSem:      make(chan struct{}, maxInFlightGenerations),
@@ -427,6 +455,13 @@ func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
 		{"manual", func(o *Orchestrator) {
 			o.SpecialEventC <- models.SpecialEventForLK{Event: models.Event{Name: "ev", Type: models.EventTypeGenReport}}
 		}, models.RunKindManual, nil},
+		{"test", func(o *Orchestrator) {
+			o.SpecialEventC <- models.SpecialEventForLK{
+				Event:     models.Event{Name: "ev", Type: models.EventTypeGenReportForTG},
+				Recipient: rcpt,
+				Test:      true,
+			}
+		}, models.RunKindTest, new(int64(42))},
 		{"lk", func(o *Orchestrator) {
 			o.SpecialEventC <- models.SpecialEventForLK{
 				Event:     models.Event{Name: "ev", Type: models.EventTypeGenReportForTG},
@@ -460,6 +495,78 @@ func TestOrchestrator_Run_PassesKindAndChat(t *testing.T) {
 			if (r.ChatID == nil) != (tt.wantChat == nil) ||
 				r.ChatID != nil && *r.ChatID != *tt.wantChat {
 				t.Fatalf("chat id = %v, want %v", r.ChatID, tt.wantChat)
+			}
+		})
+	}
+}
+
+// TestOrchestrator_GenerateAndDeliver_TestKind проверяет пробный запуск админа:
+// доставка при ложном evaluate, служебные строки и их отсутствие для lk.
+func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
+	data := models.Dataset{"q1": {{"col": "val"}}}
+	chatID := int64(7)
+
+	tests := []struct {
+		name       string
+		coll       fakeCollector
+		kind       models.RunKind
+		wantStatus models.RunStatus
+		wantReason string
+		wantNote   string // "" — служебных строк быть не должно
+		wantEscape string
+	}{
+		{
+			"test evaluate false",
+			fakeCollector{data: data},
+			models.RunKindTest,
+			models.RunStatusSuccess, "evaluate_false", "evaluate = false", "",
+		},
+		{
+			"test collector error",
+			fakeCollector{err: errors.New("bad <b>")},
+			models.RunKindTest,
+			models.RunStatusFailed, "", "❌", "&lt;b&gt;",
+		},
+		{
+			"lk evaluate false",
+			fakeCollector{data: data},
+			models.RunKindLK,
+			models.RunStatusSkipped, "evaluate", "", "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, rec := newRunOrch(t, tt.coll, false)
+			tg := &fakeTg{}
+			o.snd = *models.NewSenderProvider(tg, fakeSmb{}, nil, nil)
+
+			report := goodReport(smbRcpt("ok"))
+			report.IgnoreEvaluate = tt.kind == models.RunKindTest
+
+			o.generateAndDeliver(context.Background(), report, tt.kind, &chatID)
+
+			r := rec.wait(t, 1)[0]
+			if r.Kind != tt.kind || r.Status != tt.wantStatus || r.Reason != tt.wantReason {
+				t.Fatalf("run = %s/%s/%q", r.Kind, r.Status, r.Reason)
+			}
+
+			texts := tg.got()
+			if tt.wantNote == "" {
+				if len(texts) != 0 {
+					t.Fatalf("unexpected notes: %v", texts)
+				}
+
+				return
+			}
+
+			if len(texts) != 1 || !strings.Contains(texts[0], tt.wantNote) ||
+				!strings.Contains(texts[0], tt.wantEscape) {
+				t.Fatalf("notes = %q, want %q / %q", texts, tt.wantNote, tt.wantEscape)
+			}
+
+			if tt.wantNote == "❌" && !strings.HasPrefix(texts[0], "❌") {
+				t.Fatalf("note = %q, want ❌ prefix", texts[0])
 			}
 		})
 	}

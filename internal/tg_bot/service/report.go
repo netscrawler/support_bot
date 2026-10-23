@@ -94,15 +94,29 @@ func (r *Report) GenerateReportByName(
 	reportName string,
 	chat *models.Chat,
 ) error {
-	rcpt := models.Recipient{
+	r.ProduceSpecialEvent(ctx, reportName, tgRecipient(chat))
+
+	return nil
+}
+
+// GenerateTestReportByName — пробный запуск отчёта админом в его чат.
+func (r *Report) GenerateTestReportByName(
+	ctx context.Context,
+	reportName string,
+	chat *models.Chat,
+) error {
+	r.ProduceTestEvent(ctx, reportName, tgRecipient(chat))
+
+	return nil
+}
+
+func tgRecipient(chat *models.Chat) models.Recipient {
+	return models.Recipient{
 		Name:                    "SpetialTGRcpt",
 		Chat:                    chat,
 		Type:                    models.TelegramRecipient,
 		NeedDeleteAfterEndOfDay: false,
 	}
-	r.ProduceSpecialEvent(ctx, reportName, rcpt)
-
-	return nil
 }
 
 func (r *Report) GenerateAndSendReportByName(

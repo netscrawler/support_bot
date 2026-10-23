@@ -23,6 +23,9 @@ type Report struct {
 	Active       bool        `json:"active"`
 	AccessFromLK bool        `json:"access_from_lk"`
 	Crons        []Cron      `json:"crons,omitempty"`
+
+	// Пробный запуск админа: экспорт идёт даже при ложном evaluate; в БД/JSON не хранится.
+	IgnoreEvaluate bool `json:"-"`
 }
 
 type Pipeline struct {

@@ -34,4 +34,7 @@ func NewEvent(name string, t int) Event {
 type SpecialEventForLK struct {
 	Event
 	Recipient
+
+	// Test — пробный запуск админа.
+	Test bool
 }

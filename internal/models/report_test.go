@@ -2,6 +2,7 @@ package models_test
 
 import (
 	"encoding/json"
+	"strings"
 	"support_bot/internal/models"
 	"testing"
 )
@@ -79,4 +80,15 @@ func TestReportJSON(t *testing.T) {
 
 	jR, _ := json.Marshal(rep)
 	t.Log(string(jR))
+}
+
+func TestReportJSON_IgnoreEvaluateNotSerialized(t *testing.T) {
+	b, err := json.Marshal(models.Report{Name: "r", IgnoreEvaluate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(strings.ToLower(string(b)), "ignore") {
+		t.Fatalf("IgnoreEvaluate попал в JSON: %s", b)
+	}
 }

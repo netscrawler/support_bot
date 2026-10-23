@@ -183,7 +183,7 @@ func (g *Generator) generate(
 		return nil, nil, false, err
 	}
 
-	if !approve {
+	if !approve && !report.IgnoreEvaluate {
 		l.InfoContext(ctx, "negative result of evaluating, don`t send report")
 
 		return data, nil, false, nil
@@ -213,10 +213,10 @@ func (g *Generator) generate(
 
 	// Частично упавшие экспорты не ошибка: доставляем то, что получилось.
 	if len(res) == 0 && len(report.Exports) > 0 {
-		return data, nil, true, fmt.Errorf("all exports failed: %w", exportErr)
+		return data, nil, approve, fmt.Errorf("all exports failed: %w", exportErr)
 	}
 
-	return data, res, true, nil
+	return data, res, approve, nil
 }
 
 func (g *Generator) worker(ctx context.Context, jobs <-chan job, id uint8) {
