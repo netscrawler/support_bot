@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 )
@@ -96,62 +97,56 @@ func (d *Dispatcher) Send(ctx context.Context, m *models.Message) (
 	sentMsg []models.SentMessage, delivered int, sendErr error,
 ) {
 	for _, r := range m.Recipients {
+		var (
+			err     error
+			channel string
+		)
+
 		switch r.Type {
 		case models.TelegramRecipient:
-			msg, err := sendTg(ctx, m, d.tg, r)
-			if err != nil {
-				sendErr = errors.Join(sendErr, err)
+			channel = "tg"
 
-				continue
-			}
+			var msg []models.SentMessage
 
-			delivered++
-
-			if r.NeedDeleteAfterEndOfDay {
+			msg, err = sendTg(ctx, m, d.tg, r)
+			if err == nil && r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
 			}
 
 		case models.EmailRecipient:
-			err := sendSMTP(ctx, m, d.smtp, r)
-			if err != nil {
-				sendErr = errors.Join(sendErr, err)
-
-				continue
-			}
-
-			delivered++
+			channel = "smtp"
+			err = sendSMTP(ctx, m, d.smtp, r)
 
 		case models.SambaRecipient:
-			err := sendSMB(ctx, m, d.smb, r)
-			if err != nil {
-				sendErr = errors.Join(sendErr, err)
-
-				continue
-			}
-
-			delivered++
+			channel = "smb"
+			err = sendSMB(ctx, m, d.smb, r)
 
 		case models.MaxRecipient:
-			msg, err := sendMax(ctx, m, d.max, r)
+			channel = "max"
+
+			var msg []models.SentMessage
+
+			msg, err = sendMax(ctx, m, d.max, r)
 			// частично отправленное сообщение нужно удалить в конце дня даже при ошибке
 			if r.NeedDeleteAfterEndOfDay {
 				sentMsg = append(sentMsg, msg...)
 			}
 
-			if err != nil {
-				sendErr = errors.Join(sendErr, err)
-
-				continue
-			}
-
-			delivered++
-
 		default:
-			sendErr = errors.Join(
-				sendErr,
-				fmt.Errorf("unsupported recipient type: %s", r.Type),
-			)
+			channel = "unknown"
+			err = fmt.Errorf("unsupported recipient type: %s", r.Type)
 		}
+
+		status := "ok"
+		if err != nil {
+			status = "failed"
+			sendErr = errors.Join(sendErr, err)
+		} else {
+			delivered++
+		}
+
+		metrics.DeliveryRecipient.WithLabelValues(channel, status, metrics.Reason(err)).
+			Inc()
 	}
 
 	return sentMsg, delivered, sendErr

@@ -11,6 +11,41 @@ import (
 	th "github.com/mymmrac/telego/telegohandler"
 )
 
+// Whitelists of metric label values: keep label cardinality bounded.
+// Longer entries go before their prefixes (updateLabels takes the first match).
+var (
+	botCommands  = []string{"start", "help", "admin", "add"}
+	botCallbacks = []string{
+		"reports_show_list",
+		"user_report_page",
+		"ignore",
+		"report_gen",
+		"user_back",
+		"admin_reports_show_list",
+		"admin_report_select",
+		"admin_report_page",
+		"report_resend",
+		"report_get",
+		"report_runs",
+		"back_to_report_list",
+		"manage_users",
+		"list_user",
+		"add_user",
+		"delete_user",
+		"remove_user",
+		"show_user",
+		"manage_chats",
+		"confirm_delete_chat",
+		"delete_chat",
+		"show_chat",
+		"manage_cron",
+		"list_cron",
+		"start_cron",
+		"stop_cron",
+		"back",
+	}
+)
+
 type Router struct {
 	bot     *telego.Bot
 	handler *th.BotHandler
@@ -25,7 +60,7 @@ func NewRouter(
 	mw *middlewares.Mw,
 ) *Router {
 	base := tHandler.BaseGroup()
-	base.Use(th.PanicRecovery())
+	base.Use(th.PanicRecovery(), metricsMiddleware)
 
 	user := base.Group(mw.UserFilter)
 	user.HandleMessage(userH.Start, th.CommandEqual("start"))

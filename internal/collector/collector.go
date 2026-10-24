@@ -169,11 +169,14 @@ func (c *Collector) collect(
 				data, err = f.Fetch(ctx, crd.CardUUID, crd.Query, crd.Params)
 			}
 
-			metrics.CollectorDuration.WithLabelValues(crd.Type).
+			rep := metrics.ReportFrom(ctx)
+
+			metrics.CollectorDuration.WithLabelValues(crd.Type, rep, crd.Title).
 				Observe(time.Since(fetchStart).Seconds())
 
 			if err != nil {
-				metrics.CollectorErrors.WithLabelValues(crd.Type).Inc()
+				metrics.CollectorErrors.WithLabelValues(crd.Type, rep, crd.Title, metrics.Reason(err)).
+					Inc()
 				c.log.ErrorContext(
 					ctx,
 					"Error while fetching data",

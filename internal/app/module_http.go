@@ -56,6 +56,8 @@ func newMetricsServer(
 		return nil
 	}
 
+	metrics.RegisterPool(db.GetConn().Stat)
+
 	srv := metrics.NewServer(cfg.Metrics.Addr, db.GetConn().Ping, log)
 
 	lc.Append(fx.Hook{

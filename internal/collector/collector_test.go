@@ -536,7 +536,7 @@ func TestCollectErrorMetric(t *testing.T) {
 		Type:     models.CollectTypePostgres,
 		Query:    "select 1",
 	}
-	c := metrics.CollectorErrors.WithLabelValues("pg")
+	c := metrics.CollectorErrors.WithLabelValues("pg", "daily", "c", "other")
 	before := testutil.ToFloat64(c)
 
 	l := slog.New(slog.DiscardHandler)
@@ -545,7 +545,7 @@ func TestCollectErrorMetric(t *testing.T) {
 		collector.Fetchers{models.CollectTypePostgres: pg},
 		l,
 	)
-	_, err := col.Collect(t.Context(), card)
+	_, err := col.Collect(metrics.WithReport(t.Context(), "daily"), card)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(c)-before, 0)

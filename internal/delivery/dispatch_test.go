@@ -7,7 +7,10 @@ import (
 	"testing"
 
 	"support_bot/internal/delivery/smtp"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 type fakeTg struct{ TgSender }
@@ -126,5 +129,52 @@ func TestDispatcherSendMaxPartial(t *testing.T) {
 	sent, delivered, err := d.Send(context.Background(), m)
 	if err == nil || delivered != 0 || len(sent) != 1 {
 		t.Fatalf("delivered=%d err=%v sent=%d", delivered, err, len(sent))
+	}
+}
+
+func TestDispatcherSendRecipientMetrics(t *testing.T) {
+	tests := []struct {
+		name                    string
+		rcpt                    models.Recipient
+		channel, status, reason string
+	}{
+		{
+			"tg nil chat",
+			models.Recipient{Type: models.TelegramRecipient},
+			"tg", "failed", "other",
+		},
+		{
+			"unsupported",
+			models.Recipient{Type: "bogus"},
+			"unknown", "failed", "other",
+		},
+		{
+			"smtp ok",
+			models.Recipient{
+				Type:  models.EmailRecipient,
+				Email: &models.EmailTemplate{Dest: []string{"a@b.c"}},
+			},
+			"smtp", "ok", "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := metrics.DeliveryRecipient.WithLabelValues(
+				tt.channel,
+				tt.status,
+				tt.reason,
+			)
+			before := testutil.ToFloat64(c)
+
+			m := models.NewMessage("r", nil, nil, tt.rcpt)
+			d := NewDispatcher(fakeTg{}, nil, fakeSMTP{}, nil)
+
+			_, _, _ = d.Send(context.Background(), m)
+
+			if got := testutil.ToFloat64(c) - before; got != 1 {
+				t.Fatalf("delta=%v, want 1", got)
+			}
+		})
 	}
 }

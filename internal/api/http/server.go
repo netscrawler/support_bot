@@ -31,6 +31,7 @@ func New(
 	// быть вызван до регистрации групп/роутов — иначе они получат пустую цепочку.
 	router.Use(
 		mw.RecoverMiddleware,
+		mw.Metrics,
 		mw.Trace,
 		mw.Gzip,
 		mw.LogRequest,

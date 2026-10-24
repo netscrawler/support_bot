@@ -51,10 +51,21 @@ func Do(
 	log *slog.Logger,
 	op string,
 	fn func(context.Context) error,
-) error {
+) (res error) {
 	if log == nil {
 		log = slog.Default()
 	}
+
+	start := time.Now()
+
+	defer func() {
+		metrics.DeliveryDuration.WithLabelValues(op).
+			Observe(time.Since(start).Seconds())
+
+		if res == nil {
+			metrics.DeliverySent.WithLabelValues(op).Inc()
+		}
+	}()
 
 	for i := 0; ; i++ {
 		err := fn(ctx)
@@ -63,7 +74,8 @@ func Do(
 		}
 
 		if p, ok := errors.AsType[permanentError](err); ok {
-			metrics.DeliveryFailures.WithLabelValues(op).Inc()
+			metrics.DeliveryFailures.WithLabelValues(op, metrics.Reason(p.err)).
+				Inc()
 
 			return p.err
 		}
@@ -78,7 +90,8 @@ func Do(
 		}
 
 		if i >= len(delays) {
-			metrics.DeliveryFailures.WithLabelValues(op).Inc()
+			metrics.DeliveryFailures.WithLabelValues(op, metrics.Reason(err)).
+				Inc()
 
 			return err
 		}

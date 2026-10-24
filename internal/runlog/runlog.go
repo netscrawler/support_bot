@@ -81,10 +81,16 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 
 	run.Error = secret.Redact(run.Error)
 
-	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status)).
+	metrics.ReportRuns.WithLabelValues(string(run.Kind), string(run.Status), run.ReportName).
 		Inc()
-	metrics.ReportRunDuration.WithLabelValues(string(run.Kind)).
+	metrics.ReportRunDuration.WithLabelValues(string(run.Kind), run.ReportName).
 		Observe(run.FinishedAt.Sub(run.StartedAt).Seconds())
+
+	// test/lk не должны маскировать падающий по cron отчёт.
+	if track && run.Status == models.RunStatusSuccess {
+		metrics.ReportLastSuccess.WithLabelValues(run.ReportName).
+			Set(float64(run.FinishedAt.Unix()))
+	}
 
 	if err := r.store.Insert(ctx, run); err != nil {
 		r.log.ErrorContext(

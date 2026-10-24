@@ -274,7 +274,7 @@ func TestRecordCountsRun(t *testing.T) {
 
 	st.insertErr = errors.New("db down") // метрика пишется и при ошибке БД
 
-	c := metrics.ReportRuns.WithLabelValues("cron", "failed")
+	c := metrics.ReportRuns.WithLabelValues("cron", "failed", "r1")
 	before := testutil.ToFloat64(c)
 
 	r.Record(
@@ -324,4 +324,33 @@ func TestRecordDuplicateIsNeutral(t *testing.T) {
 	r.Record(ctx, run(models.RunKindCron, models.RunStatusSuccess, ""))
 	require.Len(t, al.texts, 2)
 	assert.Contains(t, al.texts[1], "снова работает")
+}
+
+func TestRecordLastSuccessGauge(t *testing.T) {
+	r, _, _ := setup()
+
+	ok := run(models.RunKindCron, models.RunStatusSuccess, "")
+
+	ok.ReportName = "last-success-test"
+	ok.FinishedAt = time.Unix(1700000000, 0)
+	r.Record(t.Context(), ok)
+
+	g := metrics.ReportLastSuccess.WithLabelValues("last-success-test")
+	assert.InDelta(t, 1700000000, testutil.ToFloat64(g), 0)
+
+	part := run(models.RunKindCron, models.RunStatusPartial, "")
+
+	part.ReportName = "last-success-test"
+	part.FinishedAt = time.Unix(1700000999, 0)
+	r.Record(t.Context(), part)
+
+	assert.InDelta(t, 1700000000, testutil.ToFloat64(g), 0)
+
+	tst := run(models.RunKindTest, models.RunStatusSuccess, "")
+
+	tst.ReportName = "last-success-test"
+	tst.FinishedAt = time.Unix(1700001999, 0)
+	r.Record(t.Context(), tst)
+
+	assert.InDelta(t, 1700000000, testutil.ToFloat64(g), 0)
 }

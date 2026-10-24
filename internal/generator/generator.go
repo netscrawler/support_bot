@@ -10,6 +10,7 @@ import (
 
 	"support_bot/internal/collector"
 	"support_bot/internal/exporter"
+	"support_bot/internal/metrics"
 	"support_bot/internal/models"
 	"support_bot/internal/processor"
 )
@@ -163,7 +164,7 @@ func (g *Generator) generate(
 		queries = append(queries, q)
 	}
 
-	data, err = g.clct.Collect(ctx, queries...)
+	data, err = g.clct.Collect(metrics.WithReport(ctx, report.Name), queries...)
 	if err != nil && !errors.Is(err, collector.ErrEmtyCard) {
 		l.ErrorContext(ctx, "error while collect data", slog.Any("error", err))
 

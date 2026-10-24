@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -156,7 +157,7 @@ func TestDo_EmptyDelays(t *testing.T) {
 
 func TestDo_Metrics(t *testing.T) {
 	retries := metrics.DeliveryRetries.WithLabelValues("metrics_op")
-	failures := metrics.DeliveryFailures.WithLabelValues("metrics_op")
+	failures := metrics.DeliveryFailures.WithLabelValues("metrics_op", "other")
 	r0, f0 := testutil.ToFloat64(retries), testutil.ToFloat64(failures)
 
 	calls := 0
@@ -179,6 +180,46 @@ func TestDo_Metrics(t *testing.T) {
 	}
 
 	if d := testutil.ToFloat64(failures) - f0; d != 0 {
+		t.Fatalf("failures delta=%v", d)
+	}
+}
+
+func TestDo_SentMetric(t *testing.T) {
+	sent := metrics.DeliverySent.WithLabelValues("sent_op")
+	s0 := testutil.ToFloat64(sent)
+	calls := 0
+
+	err := Do(context.Background(), Delays{time.Millisecond}, nil, "sent_op",
+		func(context.Context) error {
+			calls++
+			if calls == 1 {
+				return errBoom
+			}
+
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if d := testutil.ToFloat64(sent) - s0; d != 1 {
+		t.Fatalf("sent delta=%v", d)
+	}
+}
+
+func TestDo_FailureReasonTimeout(t *testing.T) {
+	failures := metrics.DeliveryFailures.WithLabelValues("reason_op", "timeout")
+	f0 := testutil.ToFloat64(failures)
+
+	err := Do(context.Background(), nil, nil, "reason_op",
+		func(context.Context) error {
+			return Permanent(fmt.Errorf("x: %w", context.DeadlineExceeded))
+		})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+
+	if d := testutil.ToFloat64(failures) - f0; d != 1 {
 		t.Fatalf("failures delta=%v", d)
 	}
 }
