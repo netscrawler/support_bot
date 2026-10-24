@@ -43,8 +43,9 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 		fn := `report["sheet1"].all(r, r["total"] != 0)`
 
+		// Нет листа — ошибка оценки условия: запуск станет failed, а не тихо пропустится.
 		allow, err := eval.Evaluate(t.Context(), report, fn)
-		require.NoError(t, err)
+		require.ErrorContains(t, err, "no such key: sheet1")
 		assert.False(t, allow)
 	})
 
