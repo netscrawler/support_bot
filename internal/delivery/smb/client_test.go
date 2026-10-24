@@ -126,3 +126,18 @@ func TestUploadNilShare(t *testing.T) {
 		t.Fatal("ожидалась ошибка smb not connected")
 	}
 }
+
+func TestUploadConcurrentWithCleanup(*testing.T) {
+	s := newTestSMB(&fakeShare{})
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		_ = s.Upload(context.Background(), "dir", testData())
+	}()
+
+	s.cleanup()
+	<-done
+}

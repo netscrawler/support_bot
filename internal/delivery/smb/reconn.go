@@ -2,6 +2,7 @@ package smb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -31,7 +32,7 @@ func (smb *SMB) startMonitor(ctx context.Context) {
 				return
 
 			case <-ticker.C:
-				if _, err := smb.fs.Stat("."); err != nil {
+				if err := smb.check(); err != nil {
 					log.Warn(
 						"SMB check failed, starting reconnect",
 						slog.Any("error", err),
@@ -91,9 +92,12 @@ func (smb *SMB) connect(ctx context.Context) error {
 		return fmt.Errorf("mount error: %w", err)
 	}
 
+	smb.mu.Lock()
+
 	smb.conn = conn
 	smb.session = sess
 	smb.fs = fs
+	smb.mu.Unlock()
 
 	slog.Info("SMB connected", slog.String("share", smb.cfg.Share))
 
@@ -152,8 +156,25 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 	}
 }
 
+// check пробует шару; RLock отпускается до переподключения (cleanup берёт Lock).
+func (smb *SMB) check() error {
+	smb.mu.RLock()
+	defer smb.mu.RUnlock()
+
+	if smb.fs == nil {
+		return errors.New("smb not connected")
+	}
+
+	_, err := smb.fs.Stat(".")
+
+	return err
+}
+
 func (smb *SMB) cleanup() {
 	smb.log.Info("start closing connection")
+
+	smb.mu.Lock()
+	defer smb.mu.Unlock()
 
 	if smb.fs != nil {
 		err := smb.fs.Umount()

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/retry"
@@ -26,10 +27,10 @@ type SMB struct {
 	cfg    Config
 	delays retry.Delays
 
+	mu      sync.RWMutex // защищает conn, session, fs
 	conn    net.Conn
 	session *smb2.Session
-	// shortcut: монитор переписывает fs без блокировки, пока Upload его читает; добавить мьютекс, если поймает -race или прод.
-	fs share
+	fs      share
 
 	cancel context.CancelFunc
 
@@ -82,6 +83,9 @@ func (smb *SMB) Close() error {
 	if smb.cancel != nil {
 		smb.cancel()
 	}
+
+	smb.mu.Lock()
+	defer smb.mu.Unlock()
 
 	if smb.fs != nil {
 		err := smb.fs.Umount()
@@ -139,6 +143,9 @@ func (smb *SMB) write(
 	remotePath, name string,
 	raw []byte,
 ) error {
+	smb.mu.RLock()
+	defer smb.mu.RUnlock()
+
 	if smb.fs == nil {
 		return errors.New("smb not connected")
 	}
