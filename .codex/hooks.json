@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path'); case \"$f\" in */sqlcgen/*|*/mock/mocks.go) echo 'Сгенерированный файл: правь SQL в internal/db/queries или интерфейс и запусти task generate' >&2; exit 2;; esac"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path'); case \"$f\" in *.go) goimports -w \"$f\";; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
