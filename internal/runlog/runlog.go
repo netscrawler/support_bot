@@ -97,7 +97,10 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 		)
 	}
 
-	if !track {
+	// Дубль нейтрален: не уведомляет и не считается предыдущим запуском.
+	if !track ||
+		run.Status == models.RunStatusSkipped &&
+			run.Reason == models.RunReasonDuplicate {
 		return
 	}
 

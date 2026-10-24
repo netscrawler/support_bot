@@ -8,6 +8,7 @@ values ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 -- name: LastReportRunStatus :one
 select status from report_runs
 where report_name = $1 and kind in ('cron', 'manual')
+  and (status <> 'skipped' or reason is distinct from 'duplicate')
 order by started_at desc
 limit 1;
 

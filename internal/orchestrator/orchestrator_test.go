@@ -12,6 +12,7 @@ import (
 
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/secret"
 )
 
 type fakeCollector struct {
@@ -763,6 +764,33 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 				t.Fatalf("note = %q, want ❌ prefix", texts[0])
 			}
 		})
+	}
+}
+
+// Ошибка пробного запуска уходит админу без секретов.
+func TestOrchestrator_TestKind_RedactsSecretInError(t *testing.T) {
+	secret.Register("orch-secret-777")
+
+	chatID := int64(7)
+	o, _ := newRunOrch(
+		t,
+		fakeCollector{err: errors.New("GET /botorch-secret-777/x: boom")},
+		true,
+	)
+	tg := &fakeTg{}
+
+	o.snd = *models.NewSenderProvider(tg, fakeSmb{}, nil, nil)
+	o.generateAndDeliver(
+		context.Background(),
+		goodReport(smbRcpt("ok")),
+		models.RunKindTest,
+		&chatID,
+	)
+
+	texts := tg.got()
+	if len(texts) != 1 || strings.Contains(texts[0], "orch-secret-777") ||
+		!strings.Contains(texts[0], "***") {
+		t.Fatalf("notes = %q, want masked secret", texts)
 	}
 }
 

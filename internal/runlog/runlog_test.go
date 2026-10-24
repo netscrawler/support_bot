@@ -52,7 +52,8 @@ func (s *fakeStore) LastStatus(
 	s.lastCalls++
 	for _, r := range slices.Backward(s.runs) {
 		if r.ReportName == name &&
-			(r.Kind == models.RunKindCron || r.Kind == models.RunKindManual) {
+			(r.Kind == models.RunKindCron || r.Kind == models.RunKindManual) &&
+			(r.Status != models.RunStatusSkipped || r.Reason != models.RunReasonDuplicate) {
 			return r.Status, true, nil
 		}
 	}
@@ -303,4 +304,24 @@ func TestRecordRedactsSecrets(t *testing.T) {
 	require.Len(t, al.texts, 1)
 	assert.Contains(t, al.texts[0], "***")
 	assert.NotContains(t, al.texts[0], "tok-12345")
+}
+
+// Дубль нейтрален: на нём нет уведомлений, восстановление приходит на следующем success.
+func TestRecordDuplicateIsNeutral(t *testing.T) {
+	r, _, al := setup()
+	ctx := t.Context()
+
+	r.Record(ctx, run(models.RunKindCron, models.RunStatusSuccess, ""))
+	r.Record(ctx, run(models.RunKindCron, models.RunStatusFailed, "boom"))
+	require.Len(t, al.texts, 1)
+
+	dup := run(models.RunKindCron, models.RunStatusSkipped, "")
+
+	dup.Reason = models.RunReasonDuplicate
+	r.Record(ctx, dup)
+	require.Len(t, al.texts, 1)
+
+	r.Record(ctx, run(models.RunKindCron, models.RunStatusSuccess, ""))
+	require.Len(t, al.texts, 2)
+	assert.Contains(t, al.texts[1], "снова работает")
 }

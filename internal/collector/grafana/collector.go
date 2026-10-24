@@ -265,7 +265,12 @@ func historyRows(body []byte, code int) ([]map[string]any, error) {
 	var as []annotation
 
 	if err := json.Unmarshal(body, &as); err != nil {
-		return nil, fmt.Errorf("HTTP %d, ответ не JSON-массив: %w", code, err)
+		return nil, fmt.Errorf(
+			"HTTP %d, ответ не JSON-массив: %w: %.200s",
+			code,
+			err,
+			body,
+		)
 	}
 
 	rows := make([]map[string]any, 0, len(as))
@@ -303,7 +308,13 @@ func ruleRows(body []byte, code int, mode string) ([]map[string]any, error) {
 	case jerr == nil && r.Status != "":
 		// Prometheus-формат разбираем и при 4xx/5xx: в нём есть текст ошибки.
 		if r.Status != "success" {
-			return nil, fmt.Errorf("%s: %s", r.ErrorType, r.Error)
+			return nil, fmt.Errorf(
+				"HTTP %d: %s: %s: %.200s",
+				code,
+				r.ErrorType,
+				r.Error,
+				body,
+			)
 		}
 
 	case !ok2xx(code):

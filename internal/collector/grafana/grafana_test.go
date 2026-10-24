@@ -263,6 +263,29 @@ func TestStatusError(t *testing.T) {
 	require.ErrorContains(t, err, "не rules API")
 }
 
+func TestErrorsKeepCodeAndBody(t *testing.T) {
+	c, _ := newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+
+		_, _ = w.Write(
+			[]byte(`{"status":"error","errorType":"bad_data","error":"boom"}`),
+		)
+	})
+
+	_, err := c.Fetch(context.Background(), "g", "rules", nil)
+	require.ErrorContains(t, err, "502")
+	require.ErrorContains(t, err, "bad_data: boom")
+	require.ErrorContains(t, err, `"status":"error"`)
+
+	c, _ = newTestCollector(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<html>oops</html>`))
+	})
+
+	_, err = c.Fetch(context.Background(), "g", "history", nil)
+	require.ErrorContains(t, err, "200")
+	require.ErrorContains(t, err, "<html>oops</html>")
+}
+
 func TestUnknownGrafana(t *testing.T) {
 	c, _ := newTestCollector(t, rulesHandler)
 

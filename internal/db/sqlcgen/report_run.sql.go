@@ -61,6 +61,7 @@ func (q *Queries) InsertReportRun(ctx context.Context, arg InsertReportRunParams
 const lastReportRunStatus = `-- name: LastReportRunStatus :one
 select status from report_runs
 where report_name = $1 and kind in ('cron', 'manual')
+  and (status <> 'skipped' or reason is distinct from 'duplicate')
 order by started_at desc
 limit 1
 `

@@ -20,6 +20,11 @@ const (
 	RunStatusPartial RunStatus = "partial"
 )
 
+// RunReasonDuplicate — причина skipped: данные не изменились с прошлой успешной отправки.
+const (
+	RunReasonDuplicate = "duplicate"
+)
+
 // Run — запись журнала запусков отчётов. Пустые Reason/Error/DataHash хранятся в БД как NULL.
 type Run struct {
 	ReportName string

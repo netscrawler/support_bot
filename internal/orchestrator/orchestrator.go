@@ -11,6 +11,7 @@ import (
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/logger"
+	"support_bot/internal/pkg/secret"
 )
 
 // ponytail: семафор фиксированного размера, не связан с реальным числом
@@ -331,7 +332,7 @@ func (o *Orchestrator) generateAndDeliver(
 					slog.String("report", report.Name),
 				)
 
-				run.Status, run.Reason = models.RunStatusSkipped, "duplicate"
+				run.Status, run.Reason = models.RunStatusSkipped, models.RunReasonDuplicate
 
 				return
 			}
@@ -366,7 +367,8 @@ func (o *Orchestrator) generateAndDeliver(
 
 // errText — текст ошибки для чата: до 500 символов (по рунам), с экранированием HTML.
 func errText(err error) string {
-	r := []rune(err.Error())
+	// Redact до обрезки, иначе обрезка может разрезать секрет.
+	r := []rune(secret.Redact(err.Error()))
 	if len(r) > 500 {
 		r = r[:500]
 	}
