@@ -2,6 +2,7 @@ package httpcoll
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -188,4 +189,45 @@ func TestDecode(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestXMLDepth(t *testing.T) {
+	t.Parallel()
+
+	_, err := decode(
+		"xml",
+		"",
+		"",
+		"",
+		"",
+		[]byte(strings.Repeat("<a>", 100000)),
+	)
+	require.ErrorContains(t, err, "1000")
+
+	ok := strings.Repeat(
+		"<a>",
+		maxXMLDepth,
+	) + strings.Repeat(
+		"</a>",
+		maxXMLDepth,
+	)
+
+	_, err = decode("xml", "", "", "", "", []byte(ok))
+	require.NoError(t, err)
+}
+
+// Не параллельный: меняет maxBody.
+func TestXLSXSizeLimit(t *testing.T) {
+	body := []byte(testXLSX(t))
+
+	_, err := decode("xlsx", "", "", "", "", body)
+	require.NoError(t, err)
+
+	old := maxBody
+
+	maxBody = 100
+	t.Cleanup(func() { maxBody = old })
+
+	_, err = decode("xlsx", "", "", "", "", body)
+	require.Error(t, err)
 }

@@ -29,6 +29,9 @@ const (
 	formatXLSX   = "xlsx"
 	formatYAML   = "yaml"
 	formatText   = "text"
+
+	// maxXMLDepth ограничивает вложенность: иначе тело в пределах maxBody раздувает дерево узлов.
+	maxXMLDepth = 1000
 )
 
 // decode превращает тело ответа в строки; format "" — по Content-Type.
@@ -247,7 +250,10 @@ func decodeText(body []byte) ([]map[string]any, error) {
 }
 
 func decodeXLSX(body []byte, sheet string) ([]map[string]any, error) {
-	f, err := excelize.OpenReader(bytes.NewReader(body))
+	f, err := excelize.OpenReader(bytes.NewReader(body), excelize.Options{
+		UnzipSizeLimit:    maxBody,
+		UnzipXMLSizeLimit: maxBody,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("decode xlsx: %w", err)
 	}
@@ -366,6 +372,13 @@ func parseXML(body []byte) (*xnode, error) {
 
 		switch t := tok.(type) {
 		case xml.StartElement:
+			if len(stack) >= maxXMLDepth {
+				return nil, fmt.Errorf(
+					"xml nesting deeper than %d",
+					maxXMLDepth,
+				)
+			}
+
 			n := &xnode{name: t.Name.Local}
 
 			for _, a := range t.Attr {

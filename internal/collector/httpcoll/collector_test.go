@@ -509,3 +509,52 @@ func TestSecretHostBinding(t *testing.T) {
 		})
 	}
 }
+
+func TestSameHostRedirect(t *testing.T) {
+	t.Parallel()
+
+	via := []*http.Request{{URL: &url.URL{Scheme: "https", Host: "a.example"}}}
+
+	tests := []struct {
+		name string
+		to   url.URL
+		want error
+	}{
+		{
+			"same scheme and host",
+			url.URL{Scheme: "https", Host: "a.example"},
+			nil,
+		},
+		{
+			"https to http",
+			url.URL{Scheme: "http", Host: "a.example"},
+			http.ErrUseLastResponse,
+		},
+		{
+			"other host",
+			url.URL{Scheme: "https", Host: "b.example"},
+			http.ErrUseLastResponse,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(
+				t,
+				tt.want,
+				sameHostRedirect(&http.Request{URL: &tt.to}, via),
+			)
+		})
+	}
+
+	up := []*http.Request{{URL: &url.URL{Scheme: "http", Host: "a.example"}}}
+	require.Equal(
+		t,
+		http.ErrUseLastResponse,
+		sameHostRedirect(
+			&http.Request{URL: &url.URL{Scheme: "https", Host: "a.example"}},
+			up,
+		),
+	)
+}

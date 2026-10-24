@@ -114,6 +114,7 @@ func New(
 
 // sameHostRedirect не идёт на другой хост: net/http при этом снимает только
 // Authorization и Cookie, а секрет в auth_header ушёл бы чужому серверу.
+// Смена схемы тоже запрещена: понижение https->http выдало бы секрет открытым текстом.
 // Ответ 3xx тогда возвращается как есть и даёт ошибку статуса.
 func sameHostRedirect(req *http.Request, via []*http.Request) error {
 	const maxRedirects = 10
@@ -122,7 +123,7 @@ func sameHostRedirect(req *http.Request, via []*http.Request) error {
 		return errors.New("stopped after 10 redirects")
 	}
 
-	if req.URL.Host != via[0].URL.Host {
+	if req.URL.Host != via[0].URL.Host || req.URL.Scheme != via[0].URL.Scheme {
 		return http.ErrUseLastResponse
 	}
 
