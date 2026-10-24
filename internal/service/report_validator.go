@@ -139,7 +139,7 @@ func (r *ReportValidation) Validate(
 }
 
 // validateRecipient checks that a recipient carries the fields its delivery
-// channel (models.Message.Send) will dereference unconditionally, so a bad
+// channel (delivery.Dispatcher.Send) will dereference unconditionally, so a bad
 // report fails validation instead of panicking at send time.
 func (r *ReportValidation) validateRecipient(
 	ctx context.Context,

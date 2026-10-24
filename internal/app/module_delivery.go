@@ -5,11 +5,11 @@ import (
 	"log/slog"
 
 	"support_bot/internal/config"
+	"support_bot/internal/delivery"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/smb"
 	"support_bot/internal/delivery/smtp"
 	"support_bot/internal/delivery/telegram"
-	"support_bot/internal/models"
 
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/mymmrac/telego"
@@ -23,7 +23,7 @@ var deliveryModule = fx.Module(
 		newMaxAdaptor,
 		newSMTP,
 		newSMB,
-		newSenderProvider,
+		newDispatcher,
 	),
 )
 
@@ -72,11 +72,11 @@ func newSMB(
 	return smbS, nil
 }
 
-func newSenderProvider(
+func newDispatcher(
 	tg *telegram.ChatAdaptor,
 	smbS *smb.SMB,
 	smtpS *smtp.Sender,
 	maxAdp *maxadp.Adaptor,
-) *models.SenderProvider {
-	return models.NewSenderProvider(tg, smbS, smtpS, maxAdp)
+) *delivery.Dispatcher {
+	return delivery.NewDispatcher(tg, smbS, smtpS, maxAdp)
 }

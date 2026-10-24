@@ -46,6 +46,15 @@ type RunRecorder interface {
 	LastSuccessHash(ctx context.Context, report string) (string, bool)
 }
 
+// MessageSender доставляет сообщение получателям и шлёт служебный текст в Telegram.
+type MessageSender interface {
+	Send(
+		ctx context.Context,
+		msg *models.Message,
+	) ([]models.SentMessage, int, error)
+	TgText(ctx context.Context, chatID int64, text string) error
+}
+
 type Orchestrator struct {
 	EventC        chan models.Event
 	SpecialEventC chan models.SpecialEventForLK
@@ -55,7 +64,7 @@ type Orchestrator struct {
 	rL  ReportLoader
 	gen *generator.Generator
 
-	snd         models.SenderProvider
+	snd         MessageSender
 	sentMsgRepo SentMsgSaver
 	runs        RunRecorder
 
@@ -70,7 +79,7 @@ func New(
 	delC chan models.Event,
 	rl ReportLoader,
 	gen *generator.Generator,
-	snd models.SenderProvider,
+	snd MessageSender,
 	sentMsgRepo SentMsgSaver,
 	runs RunRecorder,
 	log *slog.Logger,
@@ -386,8 +395,7 @@ func (o *Orchestrator) notifyTest(
 		return
 	}
 
-	if _, err := o.snd.Tg().
-		SendText(ctx, models.TgChat{ChatID: *chatID}, text); err != nil {
+	if err := o.snd.TgText(ctx, *chatID, text); err != nil {
 		o.log.WarnContext(
 			ctx,
 			"test run note send failed",
@@ -432,7 +440,7 @@ func (o *Orchestrator) deliver(
 
 	msg := models.NewMessage(report.Name, res, addMeta, report.Recipients...)
 
-	resMsg, delivered, sendErr := msg.Send(ctx, o.snd)
+	resMsg, delivered, sendErr := o.snd.Send(ctx, msg)
 	if sendErr != nil {
 		l.ErrorContext(
 			ctx,

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"support_bot/internal/delivery"
 	"support_bot/internal/generator"
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/secret"
@@ -324,7 +325,7 @@ func (fakeSaver) SaveTgMsg(
 
 // fakeTg записывает тексты SendText.
 type fakeTg struct {
-	models.TgSender
+	delivery.TgSender
 
 	mu    sync.Mutex
 	texts []string
@@ -388,7 +389,7 @@ func newRunOrch(
 
 	return &Orchestrator{
 		gen:         g,
-		snd:         *models.NewSenderProvider(&fakeTg{}, fakeSmb{}, nil, nil),
+		snd:         delivery.NewDispatcher(&fakeTg{}, fakeSmb{}, nil, nil),
 		sentMsgRepo: fakeSaver{},
 		runs:        rec,
 		genSem:      make(chan struct{}, maxInFlightGenerations),
@@ -721,7 +722,7 @@ func TestOrchestrator_GenerateAndDeliver_TestKind(t *testing.T) {
 			o, rec := newRunOrch(t, tt.coll, false)
 			tg := &fakeTg{}
 
-			o.snd = *models.NewSenderProvider(tg, fakeSmb{}, nil, nil)
+			o.snd = delivery.NewDispatcher(tg, fakeSmb{}, nil, nil)
 
 			report := goodReport(smbRcpt("ok"))
 
@@ -773,7 +774,7 @@ func TestOrchestrator_TestKind_RedactsSecretInError(t *testing.T) {
 	)
 	tg := &fakeTg{}
 
-	o.snd = *models.NewSenderProvider(tg, fakeSmb{}, nil, nil)
+	o.snd = delivery.NewDispatcher(tg, fakeSmb{}, nil, nil)
 	o.generateAndDeliver(
 		context.Background(),
 		goodReport(smbRcpt("ok")),

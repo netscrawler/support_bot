@@ -13,6 +13,7 @@ import (
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
+	"support_bot/internal/delivery"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
@@ -322,7 +323,7 @@ func newOrchestrator(
 	delChan chan models.Event,
 	orchRepo *reportstore.ReportStore,
 	gen *generator.Generator,
-	snd *models.SenderProvider,
+	snd *delivery.Dispatcher,
 	delRepo *reportstore.SentMsgStore,
 	runs *runlog.Recorder,
 	log *slog.Logger,
@@ -334,7 +335,7 @@ func newOrchestrator(
 		delChan,
 		orchRepo,
 		gen,
-		*snd,
+		snd,
 		delRepo,
 		runs,
 		log,
