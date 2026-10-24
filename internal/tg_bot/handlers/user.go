@@ -2,13 +2,15 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
+
 	"support_bot/internal/models"
 	"support_bot/internal/tg_bot/menu"
 	"support_bot/internal/tg_bot/service"
-	"time"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
@@ -57,19 +59,20 @@ func showUserMenu(bot *telego.Bot, message telego.Message) error {
 	return err
 }
 
-const helpMsg = `
+const (
+	helpMsg = `
 Вот что можно сделать:
 • /start — открыть главное меню
 • Нажмите «📊 Выбрать отчёт» и выберите нужный вариант
 • После запуска отчёт будет отправлен в этот чат
 `
+)
 
 func (u *UserHandler) Start(ctx *th.Context, message telego.Message) error {
 	return showUserMenu(ctx.Bot(), message)
 }
 
 func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
-	// u.log.Info("User help command from %s", message.From.Username)
 	_, err := ctx.Bot().SendMessage(ctx.Context(), &telego.SendMessageParams{
 		ChatID: tu.ID(message.Chat.ID),
 		Text:   helpMsg,
@@ -85,7 +88,7 @@ func (u *UserHandler) Help(ctx *th.Context, message telego.Message) error {
 
 // Back returns user to main user menu when "back" callback is pressed.
 func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
-	_ = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{CallbackQueryID: query.ID})
+	answerCallback(ctx, query)
 
 	rmkp := tu.InlineKeyboard(
 		tu.InlineKeyboardCols(1, menu.ShowReports)...)
@@ -98,35 +101,39 @@ func (u *UserHandler) Back(ctx *th.Context, query telego.CallbackQuery) error {
 	)
 }
 
-func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuery) error {
+func (u *UserHandler) LoadReportsPage(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
 	data := strings.Split(query.Data, ";")
 	if len(data) != 2 {
-		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		return u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить страницу",
+			Text:            msgNoPage,
 		})
 	}
 
 	page, err := strconv.Atoi(data[1])
 	if err != nil {
-		return h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+		return u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить страницу",
+			Text:            msgNoPage,
 		})
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
 	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	rpl, err := h.report.LoadReportByPage(tctx, page)
+	rpl, err := u.report.LoadReportByPage(tctx, page)
 	if err != nil {
-		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+		_, err = u.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID: query.Message.GetMessageID(),
 			Text:      "Ошибка получения отчетов: " + err.Error(),
@@ -142,36 +149,57 @@ func (h *UserHandler) LoadReportsPage(ctx *th.Context, query telego.CallbackQuer
 	return err
 }
 
-func (h *UserHandler) IgnoreReportPage(ctx *th.Context, query telego.CallbackQuery) error {
-	err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+func (u *UserHandler) IgnoreReportPage(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	err := u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
 	})
 
 	return err
 }
 
-func (h *UserHandler) GenerateSelectedReport(
+func (u *UserHandler) GenerateSelectedReport(
 	ctx *th.Context,
 	query telego.CallbackQuery,
 ) error {
-	data := strings.Split(query.Data, ";")
-	if len(data) < 2 {
-		err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	rep, err := getReportInfoFromQuery(query)
+	if err != nil {
+		return u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: query.ID,
-			Text:            "Не удалось определить отчет",
+			Text:            msgNoReport,
 		})
-
-		return err
 	}
 
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+	err = u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 
 	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
+	uses, err := u.report.UsesPeriod(tctx, rep.ReportName)
+	if err != nil {
+		return editOrSend(
+			ctx,
+			query,
+			"Не удалось запустить отчёт. Повторите попытку позже.",
+			nil,
+		)
+	}
+
+	period, mark := periodStep(
+		rep,
+		uses,
+		fmt.Sprintf("user_report_page;%d", rep.PageFrom),
+	)
+	if mark != nil {
+		return editOrSend(ctx, query, "Выберите период отчёта.", mark)
+	}
 
 	title := query.Message.Message().Chat.FirstName
 
@@ -183,8 +211,13 @@ func (h *UserHandler) GenerateSelectedReport(
 		ChType:   models.ChatTypeTg,
 	}
 
-	if err := h.report.GenerateReportByName(tctx, data[2], chat); err != nil {
-		_, err = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+	if err := u.report.GenerateReportByName(
+		tctx,
+		rep.ReportName,
+		chat,
+		period,
+	); err != nil {
+		_, err = u.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:    telego.ChatID{ID: query.Message.GetChat().ID},
 			MessageID: query.Message.Message().MessageID,
 			Text:      "Не удалось запустить отчёт. Повторите попытку позже.",
@@ -196,13 +229,17 @@ func (h *UserHandler) GenerateSelectedReport(
 	return editOrSend(
 		ctx,
 		query,
-		"Отчёт поставлен в очередь. Результат придёт в этот чат в течение нескольких минут.",
+		"Отчёт"+periodPhrase(period)+" поставлен в очередь."+
+			" Результат придёт в этот чат в течение нескольких минут.",
 		nil,
 	)
 }
 
-func (h *UserHandler) LoadReports(ctx *th.Context, query telego.CallbackQuery) error {
-	if err := h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+func (u *UserHandler) LoadReports(
+	ctx *th.Context,
+	query telego.CallbackQuery,
+) error {
+	if err := u.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 		CallbackQueryID: query.ID,
 	}); err != nil {
 		return err
@@ -211,7 +248,7 @@ func (h *UserHandler) LoadReports(ctx *th.Context, query telego.CallbackQuery) e
 	tctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	rpl, err := h.report.LoadReportsWithPagination(tctx)
+	rpl, err := u.report.LoadReportsWithPagination(tctx)
 	if err != nil {
 		return editOrSend(ctx, query, "Ошибка получения отчетов", nil)
 	}

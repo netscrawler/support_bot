@@ -3,22 +3,27 @@ package processor_test
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/models"
-	"support_bot/internal/processor"
-	"support_bot/internal/processor/lua"
-	"support_bot/internal/processor/pipeline"
 	"testing"
 	"time"
 
+	"support_bot/internal/models"
+	"support_bot/internal/processor"
+	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
+	"support_bot/internal/processor/pipeline"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestProcessor_Process_WithLua - интеграционные тесты процессора с реальным Lua
+// TestProcessor_Process_WithLua - интеграционные тесты процессора с реальным Lua.
 func TestProcessor_Process_WithLua(t *testing.T) {
-	l := slog.New(slog.NewTextHandler(t.Output(), &slog.HandlerOptions{Level: slog.LevelDebug}))
+	l := slog.New(
+		slog.NewTextHandler(
+			t.Output(),
+			&slog.HandlerOptions{Level: slog.LevelDebug},
+		),
+	)
 
 	cfg := lua.Config{
 		ExecutionTimeout: 5 * time.Minute,
@@ -33,7 +38,11 @@ func TestProcessor_Process_WithLua(t *testing.T) {
 		},
 	}
 
-	mng := lua.NewManager(&cfg, nil, luastd.NewSTD(luastd.RateLimit{}, luastd.DatabasePlugin{}))
+	mng := lua.NewManager(
+		&cfg,
+		nil,
+		luastd.NewSTD(luastd.RateLimit{}, luastd.DatabasePlugin{}),
+	)
 	luaRunner := pipeline.NewLuaRunner(mng)
 
 	tests := []struct {
@@ -246,7 +255,10 @@ end
 					{
 						"id":        int64(1),
 						"data_json": `{"key":"value","number":42}`,
-						"parsed":    map[string]any{"key": "value", "number": int64(42)},
+						"parsed": map[string]any{
+							"key":    "value",
+							"number": int64(42),
+						},
 					},
 				},
 			},
@@ -388,9 +400,11 @@ end`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var ctx context.Context
+
 			if tt.name == "context cancellation stops pipeline" {
 				ctxCancel, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				ctx = ctxCancel
 			} else {
 				ctx = context.Background()
@@ -398,13 +412,16 @@ end`,
 
 			rg := processor.NewReg()
 			rg.Register("lua", luaRunner)
+
 			p := processor.NewProcessor(rg, l)
 
 			got, err := p.Process(ctx, tt.data, tt.pipeline)
 
 			assert.Equal(t, tt.expected, got, "unexpected result dataset")
+
 			if tt.wantErr {
 				require.Error(t, err, "expected error but got nil")
+
 				if tt.errContain != "" {
 					require.ErrorContains(
 						t,
@@ -434,6 +451,7 @@ func TestRunnerRegistry(t *testing.T) {
 		luaRunner := pipeline.NewLuaRunner(mng)
 
 		rg.Register("lua", luaRunner)
+
 		got, err := rg.Get("lua")
 
 		require.NoError(t, err)
@@ -453,6 +471,7 @@ func TestRunnerRegistry(t *testing.T) {
 		luaRunner := pipeline.NewLuaRunner(mng)
 
 		rg.Register("LuaRunner", luaRunner)
+
 		got, err := rg.Get("luarunner")
 
 		require.NoError(t, err)
@@ -482,6 +501,7 @@ func TestRunnerRegistry(t *testing.T) {
 
 		rg.Register("lua", luaRunner1)
 		rg.Register("lua", luaRunner2)
+
 		got, _ := rg.Get("lua")
 
 		require.Equal(t, luaRunner2, got)

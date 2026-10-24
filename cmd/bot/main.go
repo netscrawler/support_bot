@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
 	"support_bot/internal/cli"
 )
 
@@ -16,6 +17,7 @@ var (
 
 func main() {
 	var err error
+
 	if len(os.Args) < 2 {
 		err = cli.Run(Version, Commit, BuildTime, nil)
 	} else {
@@ -47,7 +49,8 @@ func main() {
 }
 
 func version() {
-	fmt.Printf(
+	fmt.Fprintf(
+		os.Stdout,
 		"Version: %s\nCommit: %s\nBuildTime: %s\nRuntime: %s",
 		Version,
 		Commit,

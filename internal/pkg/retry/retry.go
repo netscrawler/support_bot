@@ -4,225 +4,125 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"math/rand/v2"
 	"time"
 
-	"golang.org/x/time/rate"
+	"support_bot/internal/metrics"
+	"support_bot/internal/pkg/secret"
 )
 
-var ErrQueueFull = errors.New("Queue full")
+// Delays — паузы между попытками Do; попыток = len+1.
+type Delays []time.Duration
 
-type Task struct {
-	ID string
+type permanentError struct{ err error }
 
-	Fn func(context.Context) error
+func (e permanentError) Error() string { return e.err.Error() }
+func (e permanentError) Unwrap() error { return e.err }
 
-	Attempt int
+type afterError struct {
+	err error
+	d   time.Duration
 }
 
-func NewTask(id string, fn func(context.Context) error) Task {
-	return Task{
-		ID:      id,
-		Fn:      fn,
-		Attempt: 0,
-	}
-}
+func (e afterError) Error() string { return e.err.Error() }
+func (e afterError) Unwrap() error { return e.err }
 
-type Policy interface {
-	ShouldRetry(error) bool
-}
-
-type PolicyAlways struct{}
-
-func (PolicyAlways) ShouldRetry(err error) bool {
-	return true
-}
-
-type Backoff interface {
-	Next(attempt int) time.Duration
-}
-
-type ExponentialBackoff struct {
-	Base time.Duration
-	Max  time.Duration
-}
-
-func (b ExponentialBackoff) Next(attempt int) time.Duration {
-	delay := min(b.Base*time.Duration(1<<(attempt-1)), b.Max)
-
-	delay = time.Duration(rand.Int64N(int64(delay)))
-
-	return delay
-}
-
-type FixedBackoff struct {
-	Delay time.Duration
-}
-
-func (b FixedBackoff) Next(int) time.Duration {
-	return b.Delay
-}
-
-type Config struct {
-	QueueSize  int
-	Workers    int
-	MaxRetries int
-
-	Backoff Backoff
-	Policy  Policy
-
-	Logger *slog.Logger
-	Silent bool
-
-	RateLimit *rate.Limiter
-}
-
-type Retry struct {
-	cfg *Config
-
-	queue chan Task
-}
-
-func New(cfg Config) *Retry {
-	if cfg.QueueSize <= 0 {
-		cfg.QueueSize = 100
-	}
-
-	if cfg.Workers <= 0 {
-		cfg.Workers = 4
-	}
-
-	if cfg.MaxRetries <= 0 {
-		cfg.MaxRetries = 3
-	}
-
-	if cfg.MaxRetries > 30 {
-		cfg.MaxRetries = 30
-	}
-
-	if cfg.Backoff == nil {
-		cfg.Backoff = &FixedBackoff{
-			Delay: 5 * time.Second,
-		}
-	}
-
-	if cfg.Policy == nil {
-		cfg.Policy = PolicyAlways{}
-	}
-
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
-	}
-
-	if cfg.RateLimit == nil {
-		cfg.RateLimit = rate.NewLimiter(rate.Limit(cfg.QueueSize), cfg.MaxRetries)
-	}
-
-	return &Retry{
-		cfg: &cfg,
-
-		queue: make(chan Task, cfg.QueueSize),
-	}
-}
-
-func (r *Retry) Start(ctx context.Context) {
-	for range r.cfg.Workers {
-		go r.worker(ctx)
-	}
-}
-
-func (r *Retry) Submit(task Task) error {
-	select {
-	case r.queue <- task:
-		return nil
-	default:
-		return ErrQueueFull
-	}
-}
-
-func (r *Retry) AddRateLimit(rl *rate.Limiter) {
-	r.cfg.RateLimit = rl
-}
-
-func (r *Retry) worker(ctx context.Context) {
-	for {
-		select {
-		case task, ok := <-r.queue:
-			if !ok {
-				return
-			}
-
-			r.execute(ctx, task)
-
-		case <-ctx.Done():
-			if !r.cfg.Silent {
-				r.cfg.Logger.InfoContext(ctx, "worker stopped")
-
-				return
-			}
-		}
-	}
-}
-
-func (r *Retry) execute(ctx context.Context, task Task) {
-	if err := r.cfg.RateLimit.Wait(ctx); err != nil {
-		if !r.cfg.Silent {
-			r.cfg.Logger.InfoContext(ctx, "task failed", slog.Any("task id", task.ID))
-		}
-
-		return
-	}
-
-	err := task.Fn(ctx)
+// Permanent помечает ошибку как неповторяемую.
+func Permanent(err error) error {
 	if err == nil {
-		return
+		return nil
 	}
 
-	if task.Attempt >= r.cfg.MaxRetries {
-		if !r.cfg.Silent {
-			r.cfg.Logger.InfoContext(
-				ctx,
-				"task failed by max retries",
-				slog.Any("task id", task.ID),
-				slog.Any("retries", task.Attempt),
-				slog.Any("error", err),
-			)
-		}
+	return permanentError{err}
+}
 
-		return
+// After помечает ошибку как повторяемую через d (вместо штатной паузы).
+func After(err error, d time.Duration) error {
+	if err == nil {
+		return nil
 	}
 
-	if !r.cfg.Policy.ShouldRetry(err) {
-		if !r.cfg.Silent {
-			r.cfg.Logger.InfoContext(
-				ctx,
-				"task failed by policy",
-				slog.Any("task id", task.ID),
-				slog.Any("retries", task.Attempt),
-				slog.Any("error", err),
-			)
-		}
+	return afterError{err, d}
+}
 
-		return
+// Do вызывает fn, пока она не вернёт nil, Permanent-ошибку или не кончатся паузы.
+func Do(
+	ctx context.Context,
+	delays Delays,
+	log *slog.Logger,
+	op string,
+	fn func(context.Context) error,
+) (res error) {
+	if log == nil {
+		log = slog.Default()
 	}
 
-	task.Attempt++
+	start := time.Now()
 
-	go func() {
-		timer := time.NewTimer(r.cfg.Backoff.Next(task.Attempt))
-		defer timer.Stop()
+	defer func() {
+		metrics.DeliveryDuration.WithLabelValues(op).
+			Observe(time.Since(start).Seconds())
 
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-timer.C:
-			err := r.Submit(task)
-			if err != nil {
-				if !r.cfg.Silent {
-					r.cfg.Logger.InfoContext(ctx, "task failed (retrying)", slog.Any("error", err))
-				}
-			}
+		if res == nil {
+			metrics.DeliverySent.WithLabelValues(op).Inc()
 		}
 	}()
+
+	for i := 0; ; i++ {
+		err := fn(ctx)
+		if err == nil {
+			return nil
+		}
+
+		if p, ok := errors.AsType[permanentError](err); ok {
+			metrics.DeliveryFailures.WithLabelValues(op, metrics.Reason(p.err)).
+				Inc()
+
+			return p.err
+		}
+
+		a, isAfter := errors.AsType[afterError](err)
+		if isAfter {
+			err = a.err
+		}
+
+		if ctx.Err() != nil {
+			return err
+		}
+
+		if i >= len(delays) {
+			metrics.DeliveryFailures.WithLabelValues(op, metrics.Reason(err)).
+				Inc()
+
+			return err
+		}
+
+		d := delays[i]
+		if isAfter {
+			d = a.d
+		}
+
+		metrics.DeliveryRetries.WithLabelValues(op).Inc()
+		log.WarnContext(
+			ctx,
+			"retry",
+			"op",
+			op,
+			"attempt",
+			i+2,
+			"delay",
+			d,
+			"error",
+			secret.Redact(err.Error()),
+		)
+
+		timer := time.NewTimer(d)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+
+			return ctx.Err()
+
+		case <-timer.C:
+		}
+	}
 }

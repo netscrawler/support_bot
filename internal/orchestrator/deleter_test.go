@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/models"
 )
 
 // stubMsgDeleter — рукописная заглушка msgDeleter для тестов ветвления
@@ -66,14 +67,21 @@ func TestDeleter_DeleteOne(t *testing.T) {
 			wantMaxCalled:   true,
 		},
 		{
-			name:            "неизвестный ChType без MessageID и MessageIDStr помечает удалённым без вызова адаптеров",
-			msg:             models.SentMessage{ChType: "", MessageID: 0, MessageIDStr: nil},
+			name: "неизвестный ChType без MessageID и MessageIDStr помечает удалённым без вызова адаптеров",
+			msg: models.SentMessage{
+				ChType:       "",
+				MessageID:    0,
+				MessageIDStr: nil,
+			},
 			wantMarkDeleted: true,
 		},
 		{
-			name:            "свежая ошибка удаления не помечает сообщение удалённым",
-			msg:             models.SentMessage{ChType: models.ChatTypeTg, Time: time.Now()},
-			tgErr:           errors.New("telegram недоступен"),
+			name: "свежая ошибка удаления не помечает сообщение удалённым",
+			msg: models.SentMessage{
+				ChType: models.ChatTypeTg,
+				Time:   time.Now(),
+			},
+			tgErr:           errors.New("telegram unavailable"),
 			wantMarkDeleted: false,
 			wantTgCalled:    true,
 		},
@@ -83,7 +91,7 @@ func TestDeleter_DeleteOne(t *testing.T) {
 				ChType: models.ChatTypeTg,
 				Time:   time.Now().Add(-49 * time.Hour),
 			},
-			tgErr:           errors.New("telegram недоступен"),
+			tgErr:           errors.New("telegram unavailable"),
 			wantMarkDeleted: true,
 			wantTgCalled:    true,
 		},
@@ -93,18 +101,32 @@ func TestDeleter_DeleteOne(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tg := &stubMsgDeleter{err: tt.tgErr}
 			mx := &stubMsgDeleter{err: tt.maxErr}
-			d := &Deleter{tgDel: tg, maxDel: mx, log: slog.New(slog.DiscardHandler)}
+			d := &Deleter{
+				tgDel:  tg,
+				maxDel: mx,
+				log:    slog.New(slog.DiscardHandler),
+			}
 
 			got := d.deleteOne(context.Background(), tt.msg)
 
 			if got != tt.wantMarkDeleted {
 				t.Errorf("deleteOne() = %v, want %v", got, tt.wantMarkDeleted)
 			}
+
 			if tg.called != tt.wantTgCalled {
-				t.Errorf("tgDel.called = %v, want %v", tg.called, tt.wantTgCalled)
+				t.Errorf(
+					"tgDel.called = %v, want %v",
+					tg.called,
+					tt.wantTgCalled,
+				)
 			}
+
 			if mx.called != tt.wantMaxCalled {
-				t.Errorf("maxDel.called = %v, want %v", mx.called, tt.wantMaxCalled)
+				t.Errorf(
+					"maxDel.called = %v, want %v",
+					mx.called,
+					tt.wantMaxCalled,
+				)
 			}
 		})
 	}

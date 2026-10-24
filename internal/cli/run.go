@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/app"
 	"support_bot/internal/config"
+	"support_bot/internal/metrics"
 	"support_bot/internal/pkg/logger"
 
 	"go.uber.org/fx"
@@ -35,6 +37,8 @@ func Run(version, commit, buildTime string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setup logger: %w", err)
 	}
+
+	metrics.BuildInfo.WithLabelValues(version, commit).Set(1)
 
 	log.Info(
 		"starting with config",
@@ -67,10 +71,12 @@ func Run(version, commit, buildTime string, args []string) error {
 		// process exits immediately after this return.
 		return fmt.Errorf("create app: %w", err)
 	}
+
 	// fx.App.Run() installs OS signal handlers and blocks until shutdown.
 	// On a start-hook failure it logs via the fxevent logger and calls
 	// os.Exit(1) directly, bypassing this function's normal error-return
 	// path — this is fx's standard Run() behavior, not a bug.
 	fxApp.Run()
+
 	return nil
 }

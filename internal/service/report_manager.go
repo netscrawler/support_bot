@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+
 	"support_bot/internal/models"
 )
 
 type ReportStore interface {
+	// Load возвращает все собранные отчёты; если часть отчётов собрать не
+	// удалось, результат частичный, а ошибка перечисляет несобранные отчёты.
 	Load(ctx context.Context) ([]models.Report, error)
 	Create(ctx context.Context, report models.Report) (int64, error)
 }
@@ -21,7 +24,11 @@ type ReportManager struct {
 	log   *slog.Logger
 }
 
-func NewReportManager(store ReportStore, val *ReportValidation, log *slog.Logger) *ReportManager {
+func NewReportManager(
+	store ReportStore,
+	val *ReportValidation,
+	log *slog.Logger,
+) *ReportManager {
 	return &ReportManager{
 		store: store,
 		val:   val,
@@ -37,8 +44,13 @@ func (m *ReportManager) Load(ctx context.Context) ([]models.Report, error) {
 
 func (m *ReportManager) Create(ctx context.Context, repr io.Reader) error {
 	var report models.Report
+
 	if err := json.NewDecoder(repr).Decode(&report); err != nil {
-		m.log.ErrorContext(ctx, "Failed to unmarshal JSON", slog.Any("error", err))
+		m.log.ErrorContext(
+			ctx,
+			"Failed to unmarshal JSON",
+			slog.Any("error", err),
+		)
 
 		return err
 	}
@@ -57,7 +69,11 @@ func (m *ReportManager) Create(ctx context.Context, repr io.Reader) error {
 		return fmt.Errorf("create report: %w", err)
 	}
 
-	m.log.InfoContext(ctx, "Report successfully created", slog.String("name", report.Name))
+	m.log.InfoContext(
+		ctx,
+		"Report successfully created",
+		slog.String("name", report.Name),
+	)
 
 	return nil
 }

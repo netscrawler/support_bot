@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"html/template"
 	"maps"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
 
@@ -16,10 +17,10 @@ type Exporter struct {
 	name     string
 }
 
-func New(data any, template string, name string) *Exporter {
+func New(data any, tmpl, name string) *Exporter {
 	return &Exporter{
 		data:     data,
-		template: template,
+		template: tmpl,
 		name:     name,
 	}
 }
@@ -36,8 +37,9 @@ func (e *Exporter) Export() (*models.Data, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, e.data); err != nil {
-		return nil, err
+
+	if execErr := t.Execute(&buf, e.data); execErr != nil {
+		return nil, execErr
 	}
 
 	fd, err := models.NewFileData(&buf, e.name+".html")

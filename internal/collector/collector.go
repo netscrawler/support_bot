@@ -5,37 +5,64 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/models"
 	"sync"
 	"time"
+
+	"support_bot/internal/metrics"
+	"support_bot/internal/models"
 )
 
-const defaultParallelCollectors = 32
+const (
+	defaultParallelCollectors = 32
+)
 
 type DataFetcher interface {
-	Fetch(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
+	Fetch(
+		ctx context.Context,
+		target string,
+		params map[string]string,
+	) ([]map[string]any, error)
 }
 
-// SQLFetcher выполняет произвольный SQL в именованной базе.
-type SQLFetcher interface {
-	Fetch(ctx context.Context, db, sql string, params map[string]string) ([]map[string]any, error)
+// QueryFetcher выполняет запрос query в именованном источнике target.
+type QueryFetcher interface {
+	Fetch(
+		ctx context.Context,
+		target, query string,
+		params map[string]string,
+	) ([]map[string]any, error)
 }
+
+// CardFetcher получает карточку целиком (options, secret).
+type CardFetcher interface {
+	FetchCard(ctx context.Context, card models.Card) ([]map[string]any, error)
+}
+
+// Fetchers — реестр источников по типу карточки.
+type Fetchers map[string]QueryFetcher
+
+type ignoreQuery struct{ f DataFetcher }
+
+func (q ignoreQuery) Fetch(
+	ctx context.Context,
+	target, _ string,
+	params map[string]string,
+) ([]map[string]any, error) {
+	return q.f.Fetch(ctx, target, params)
+}
+
+// IgnoreQuery приводит источник без query к QueryFetcher.
+func IgnoreQuery(f DataFetcher) QueryFetcher { return ignoreQuery{f} }
 
 type Collector struct {
-	mb         DataFetcher
-	appMetrica DataFetcher
-	jira       DataFetcher
-	pg         SQLFetcher
-	log        *slog.Logger
-	parallel   chan struct{}
+	fetchers Fetchers
+	log      *slog.Logger
+	parallel chan struct{}
 }
 
 func NewCollector(
 	parallel uint8,
-	mb DataFetcher,
-	appMetrica DataFetcher,
-	jira DataFetcher,
-	pg SQLFetcher,
+	fetchers Fetchers,
 	log *slog.Logger,
 ) *Collector {
 	l := log.With(slog.Any("module", "collector"))
@@ -45,15 +72,11 @@ func NewCollector(
 	}
 
 	l.Info("create collector", slog.Any("parallel_query", parallel))
-	semaphore := make(chan struct{}, parallel)
 
 	return &Collector{
-		mb:         mb,
-		appMetrica: appMetrica,
-		jira:       jira,
-		pg:         pg,
-		log:        l,
-		parallel:   semaphore,
+		fetchers: fetchers,
+		log:      l,
+		parallel: make(chan struct{}, parallel),
 	}
 }
 
@@ -90,14 +113,24 @@ func (c *Collector) Collect(
 	close(errChan)
 
 	for r := range resChan {
-		c.log.DebugContext(ctx, "collecting data from card", slog.Any("card_name", r.Name))
+		c.log.DebugContext(
+			ctx,
+			"collecting data from card",
+			slog.Any("card_name", r.Name),
+		)
+
 		collected[r.Name] = r.Data
 	}
 
 	var collectError error
 
 	for err := range errChan {
-		c.log.DebugContext(ctx, "error while collecting data from card", slog.Any("error", err))
+		c.log.DebugContext(
+			ctx,
+			"error while collecting data from card",
+			slog.Any("error", err),
+		)
+
 		collectError = errors.Join(collectError, err)
 	}
 
@@ -126,28 +159,31 @@ func (c *Collector) collect(
 			defer wg.Done()
 			defer func() { <-c.parallel }()
 
-			var fetchFn func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
+			f := c.fetchers[crd.Type]
 
-			switch crd.Type {
-			case models.CollectTypeMetabase:
-				fetchFn = c.mb.Fetch
-			case models.CollectTypeAppMetrica:
-				fetchFn = c.appMetrica.Fetch
-			case models.CollectTypeJIRA:
-				fetchFn = c.jira.Fetch
-			case models.CollectTypePostgres:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return c.pg.Fetch(ctx, target, crd.Query, params)
-				}
-			default:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return nil, fmt.Errorf("unknown fetcher type")
-				}
+			fetchStart := time.Now()
 
+			var (
+				data []map[string]any
+				err  error
+			)
+
+			if f == nil {
+				err = fmt.Errorf("unknown fetcher type %s", crd.Type)
+			} else if cf, ok := f.(CardFetcher); ok {
+				data, err = cf.FetchCard(ctx, crd)
+			} else {
+				data, err = f.Fetch(ctx, crd.CardUUID, crd.Query, crd.Params)
 			}
 
-			data, err := fetchFn(ctx, crd.CardUUID, crd.Params)
+			rep := metrics.ReportFrom(ctx)
+
+			metrics.CollectorDuration.WithLabelValues(crd.Type, rep, crd.Title).
+				Observe(time.Since(fetchStart).Seconds())
+
 			if err != nil {
+				metrics.CollectorErrors.WithLabelValues(crd.Type, rep, crd.Title, metrics.Reason(err)).
+					Inc()
 				c.log.ErrorContext(
 					ctx,
 					"Error while fetching data",

@@ -38,6 +38,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "410":
+          description: Срок действия ссылки истёк или она отозвана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Внутренняя ошибка при генерации отчёта
           content:

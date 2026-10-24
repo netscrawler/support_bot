@@ -34,4 +34,10 @@ func NewEvent(name string, t int) Event {
 type SpecialEventForLK struct {
 	Event
 	Recipient
+
+	// Test — пробный запуск админа.
+	Test bool
+
+	// Period — период выгрузки; пусто — период по умолчанию отчёта.
+	Period PeriodName
 }

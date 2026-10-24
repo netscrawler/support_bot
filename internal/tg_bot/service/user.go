@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+
 	"support_bot/internal/models"
 )
 
@@ -55,39 +56,11 @@ func (u *User) IsAllowed(ctx context.Context, id int64) (string, error) {
 	return user.Role, nil
 }
 
-func (u *User) getAllUserIds(ctx context.Context) ([]int64, []int64, error) {
-	users, err := u.repo.GetAll(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var userIds, adminIds []int64
-
-	for _, user := range users {
-		if user.IsAdmin() {
-			adminIds = append(adminIds, user.TelegramID)
-
-			continue
-		}
-
-		userIds = append(userIds, user.TelegramID)
-	}
-
-	return userIds, adminIds, nil
-}
-
-func (u *User) create(ctx context.Context, user *models.User) error {
-	err := u.repo.Create(ctx, user)
-	if err != nil {
-		u.log.ErrorContext(ctx, "create user", slog.Any("error", err))
-
-		return err
-	}
-
-	return nil
-}
-
-func (u *User) CreateEmpty(ctx context.Context, username string, isAdmin bool) error {
+func (u *User) CreateEmpty(
+	ctx context.Context,
+	username string,
+	isAdmin bool,
+) error {
 	user := models.NewEmptyUser(username, isAdmin)
 
 	err := u.repo.Create(ctx, &user)
@@ -115,7 +88,11 @@ func (u *User) AddUserComplete(ctx context.Context, user *models.User) error {
 	return u.update(ctx, user)
 }
 
-func (u *User) Delete(ctx context.Context, username string, primeReq bool) error {
+func (u *User) Delete(
+	ctx context.Context,
+	username string,
+	primeReq bool,
+) error {
 	user, err := u.repo.GetByUsername(ctx, username)
 	if errors.Is(err, models.ErrNotFound) {
 		return err
@@ -141,6 +118,9 @@ func (u *User) Delete(ctx context.Context, username string, primeReq bool) error
 	return nil
 }
 
-func (u *User) GetByUsername(ctx context.Context, uname string) (*models.User, error) {
+func (u *User) GetByUsername(
+	ctx context.Context,
+	uname string,
+) (*models.User, error) {
 	return u.repo.GetByUsername(ctx, uname)
 }

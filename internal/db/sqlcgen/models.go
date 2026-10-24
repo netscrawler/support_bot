@@ -103,9 +103,11 @@ type Pipeline struct {
 }
 
 type PublicReport struct {
-	ID       int32
-	PublicID pgtype.UUID
-	ReportID int64
+	ID        int32
+	PublicID  pgtype.UUID
+	ReportID  int64
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
 }
 
 type Query struct {
@@ -115,6 +117,8 @@ type Query struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 type Recipient struct {
@@ -130,13 +134,15 @@ type Recipient struct {
 }
 
 type Report struct {
-	ID           int32
-	Name         string
-	Active       bool
-	Title        string
-	EvalID       int64
-	AccessFromLk bool
-	PipelineID   *int64
+	ID            int32
+	Name          string
+	Active        bool
+	Title         string
+	EvalID        int64
+	AccessFromLk  bool
+	PipelineID    *int64
+	Dedup         bool
+	DefaultPeriod string
 }
 
 type ReportCron struct {
@@ -147,6 +153,19 @@ type ReportCron struct {
 type ReportQuery struct {
 	ReportID int32
 	QueryID  int32
+}
+
+type ReportRun struct {
+	ID         int64
+	ReportName string
+	Kind       string
+	Status     string
+	Reason     *string
+	Error      *string
+	ChatID     *int64
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+	DataHash   *string
 }
 
 type ReportTemplate struct {
@@ -164,6 +183,13 @@ type ReportsExport struct {
 type ReportsRecipient struct {
 	ReportID    *int32
 	RecipientID *int32
+}
+
+type Secret struct {
+	Name      string
+	Value     string
+	Host      string
+	UpdatedAt pgtype.Timestamptz
 }
 
 type SentMessage struct {

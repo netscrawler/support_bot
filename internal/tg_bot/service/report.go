@@ -2,22 +2,38 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"support_bot/internal/models"
-	"support_bot/internal/sheduler"
-	"support_bot/internal/store"
 	"time"
 
 	eventcreator "support_bot/internal/event_creator"
+	"support_bot/internal/models"
+	"support_bot/internal/sheduler"
+	"support_bot/internal/store"
 
 	"github.com/robfig/cron/v3"
 )
 
 type ReportProvider interface {
 	GetByName(ctx context.Context, reportName string) (*models.Report, error)
-	LoadPaged(ctx context.Context, page int) ([]models.ReportForTgLK, int, error)
-	GetLinkedCrons(ctx context.Context, reportName string) ([]models.SheduleUnit, error)
+	LoadPaged(
+		ctx context.Context,
+		page int,
+	) ([]models.ReportForTgLK, int, error)
+	GetLinkedCrons(
+		ctx context.Context,
+		reportName string,
+	) ([]models.SheduleUnit, error)
+}
+
+// RunLister отдаёт журнал запусков отчёта (новые сначала).
+type RunLister interface {
+	List(
+		ctx context.Context,
+		reportName string,
+		limit int,
+	) ([]models.Run, error)
 }
 
 type Report struct {
@@ -25,6 +41,7 @@ type Report struct {
 	*eventcreator.EventAPI
 
 	repo ReportProvider
+	runs RunLister
 
 	mbURL string
 
@@ -35,6 +52,7 @@ func NewReportService(
 	shd *sheduler.SheduleAPI,
 	eventAPI *eventcreator.EventAPI,
 	repo ReportProvider,
+	runs RunLister,
 	mbURL string,
 	log *slog.Logger,
 ) *Report {
@@ -44,23 +62,37 @@ func NewReportService(
 		SheduleAPI: shd,
 		EventAPI:   eventAPI,
 		repo:       repo,
+		runs:       runs,
 		mbURL:      mbURL,
 		log:        l,
 	}
 }
 
-func (r *Report) LoadReportsWithPagination(ctx context.Context) (models.LoadReportRPL, error) {
+func (r *Report) ListRuns(
+	ctx context.Context,
+	reportName string,
+	limit int,
+) ([]models.Run, error) {
+	return r.runs.List(ctx, reportName, limit)
+}
+
+func (r *Report) LoadReportsWithPagination(
+	ctx context.Context,
+) (models.LoadReportRPL, error) {
 	return r.LoadReportByPage(ctx, 1)
 }
 
-func (r *Report) LoadReportByPage(ctx context.Context, page int) (models.LoadReportRPL, error) {
+func (r *Report) LoadReportByPage(
+	ctx context.Context,
+	page int,
+) (models.LoadReportRPL, error) {
 	reports, rCount, err := r.repo.LoadPaged(ctx, page)
 	if err != nil {
 		return models.LoadReportRPL{}, err
 	}
 
 	if rCount <= 0 {
-		return models.LoadReportRPL{}, fmt.Errorf("reports not found")
+		return models.LoadReportRPL{}, errors.New("reports not found")
 	}
 
 	pageCount := (rCount + store.ReportsPageSize - 1) / store.ReportsPageSize
@@ -81,16 +113,45 @@ func (r *Report) GenerateReportByName(
 	ctx context.Context,
 	reportName string,
 	chat *models.Chat,
+	period models.PeriodName,
 ) error {
-	rcpt := models.Recipient{
+	r.ProduceSpecialEvent(ctx, reportName, tgRecipient(chat), period)
+
+	return nil
+}
+
+// GenerateTestReportByName — пробный запуск отчёта админом в его чат.
+func (r *Report) GenerateTestReportByName(
+	ctx context.Context,
+	reportName string,
+	chat *models.Chat,
+	period models.PeriodName,
+) error {
+	r.ProduceTestEvent(ctx, reportName, tgRecipient(chat), period)
+
+	return nil
+}
+
+// UsesPeriod — нужно ли спрашивать период перед запуском отчёта.
+func (r *Report) UsesPeriod(
+	ctx context.Context,
+	reportName string,
+) (bool, error) {
+	rpt, err := r.repo.GetByName(ctx, reportName)
+	if err != nil {
+		return false, fmt.Errorf("%w: (%w)", models.ErrInternal, err)
+	}
+
+	return rpt.UsesPeriod(), nil
+}
+
+func tgRecipient(chat *models.Chat) models.Recipient {
+	return models.Recipient{
 		Name:                    "SpetialTGRcpt",
 		Chat:                    chat,
 		Type:                    models.TelegramRecipient,
 		NeedDeleteAfterEndOfDay: false,
 	}
-	r.ProduceSpecialEvent(ctx, reportName, rcpt)
-
-	return nil
 }
 
 func (r *Report) GenerateAndSendReportByName(
@@ -106,14 +167,20 @@ func (r *Report) GetReportInfoByName(
 ) (models.ReportInfo, error) {
 	rpt, err := r.repo.GetByName(ctx, reportName)
 	if err != nil {
-		return models.ReportInfo{}, fmt.Errorf("%w: (%w)", models.ErrInternal, err)
+		return models.ReportInfo{}, fmt.Errorf(
+			"%w: (%w)",
+			models.ErrInternal,
+			err,
+		)
 	}
 
 	var cronString, recipientString, exportString, queryString []string
 
 	crons, err := r.repo.GetLinkedCrons(ctx, reportName)
 	if err != nil {
-		cronString = []string{fmt.Sprintf("%s: (%s)", models.ErrInternal.Error(), err.Error())}
+		cronString = []string{
+			fmt.Sprintf("%s: (%s)", models.ErrInternal.Error(), err.Error()),
+		}
 	}
 
 	for _, cron := range crons {
@@ -131,7 +198,11 @@ func (r *Report) GetReportInfoByName(
 	for _, q := range rpt.Queries {
 		queryString = append(
 			queryString,
-			fmt.Sprintf("<a href=\"%s\">%s</a>", q.GetFullURL(r.mbURL), q.Title),
+			fmt.Sprintf(
+				`<a href=%q>%s</a>`,
+				q.GetFullURL(r.mbURL),
+				q.Title,
+			),
 		)
 	}
 
@@ -160,7 +231,9 @@ func (r *Report) GetReportInfoByName(
 	return rpInf, nil
 }
 
-func calculateNearestCronActivation(units []models.SheduleUnit) (time.Time, error) {
+func calculateNearestCronActivation(
+	units []models.SheduleUnit,
+) (time.Time, error) {
 	var nearest time.Time
 
 	for _, u := range units {
@@ -175,7 +248,7 @@ func calculateNearestCronActivation(units []models.SheduleUnit) (time.Time, erro
 	}
 
 	if nearest.IsZero() {
-		return time.Time{}, fmt.Errorf("error calculating next cron activation")
+		return time.Time{}, errors.New("error calculating next cron activation")
 	}
 
 	return nearest, nil

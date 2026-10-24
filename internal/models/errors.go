@@ -6,4 +6,5 @@ var (
 	ErrNotFound     = errors.New("ErrNotFound")
 	ErrInternal     = errors.New("InternalError")
 	ErrAlreadyExist = errors.New("AlreadyExist")
+	ErrLinkExpired  = errors.New("LinkExpired")
 )

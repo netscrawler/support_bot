@@ -8,12 +8,8 @@ const (
 )
 
 const (
-	pleaseSendMessage = "Пожалуйста, пришлите мне сообщение, которое вы хотите отправить."
-)
-
-const (
-	unableSendMessages = "Не удалось отправить уведомление: "
-
-	errDeleteUser             = "Ошибка удаления пользователя: "
-	errDeleteUserCauseSuicide = errDeleteUser + "нельзя удалить себя"
+	msgBack     = "⬅️ Назад"
+	msgBackMenu = "🔙 Назад"
+	msgNoPage   = "Не удалось определить страницу"
+	msgNoReport = "Не удалось определить отчет"
 )

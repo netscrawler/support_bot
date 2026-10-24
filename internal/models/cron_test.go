@@ -1,8 +1,9 @@
 package models_test
 
 import (
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,12 @@ func TestNewCron(t *testing.T) {
 		c, err := models.NewCron("* * * * *")
 
 		require.NoError(t, err)
-		assert.Equal(t, models.CronVO("* * * * *"), c, "cron must be equal to '* * * * *'")
+		assert.Equal(
+			t,
+			models.CronVO("* * * * *"),
+			c,
+			"cron must be equal to '* * * * *'",
+		)
 	})
 
 	t.Run("valid cron with minutes", func(t *testing.T) {
@@ -28,7 +34,12 @@ func TestNewCron(t *testing.T) {
 		c, err := models.NewCron("5 * * * *")
 
 		require.NoError(t, err)
-		assert.Equal(t, models.CronVO("5 * * * *"), c, "cron must be equal to '5 * * * *'")
+		assert.Equal(
+			t,
+			models.CronVO("5 * * * *"),
+			c,
+			"cron must be equal to '5 * * * *'",
+		)
 	})
 
 	t.Run("valid cron with min and hours", func(t *testing.T) {
@@ -38,7 +49,12 @@ func TestNewCron(t *testing.T) {
 		c, err := models.NewCron("5 1 * * *")
 
 		require.NoError(t, err)
-		assert.Equal(t, models.CronVO("5 1 * * *"), c, "cron must be equal to '5 1 * * *'")
+		assert.Equal(
+			t,
+			models.CronVO("5 1 * * *"),
+			c,
+			"cron must be equal to '5 1 * * *'",
+		)
 	})
 
 	t.Run("valid cron with /", func(t *testing.T) {
@@ -48,7 +64,12 @@ func TestNewCron(t *testing.T) {
 		c, err := models.NewCron("5 0/10 * * *")
 
 		require.NoError(t, err)
-		assert.Equal(t, models.CronVO("5 0/10 * * *"), c, "cron must be equal to '5 0/10 * * *'")
+		assert.Equal(
+			t,
+			models.CronVO("5 0/10 * * *"),
+			c,
+			"cron must be equal to '5 0/10 * * *'",
+		)
 	})
 
 	t.Run("invalid cron", func(t *testing.T) {

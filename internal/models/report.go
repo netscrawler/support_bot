@@ -9,6 +9,7 @@ import (
 	"html"
 	"strings"
 	"text/template"
+	"time"
 )
 
 type Report struct {
@@ -22,7 +23,27 @@ type Report struct {
 	Evaluation   string      `json:"evaluation"`
 	Active       bool        `json:"active"`
 	AccessFromLK bool        `json:"access_from_lk"`
-	Crons        []Cron      `json:"crons,omitempty"`
+	// Не слать повтор по cron с теми же данными; изменчивое время класть в лист _meta.
+	Dedup         bool       `json:"dedup,omitempty"`
+	DefaultPeriod PeriodName `json:"default_period,omitempty"`
+	Crons         []Cron     `json:"crons,omitempty"`
+
+	// Пробный запуск админа: экспорт идёт даже при ложном evaluate; в БД/JSON не хранится.
+	IgnoreEvaluate bool `json:"-"`
+
+	// Период выгрузки на этот запуск; пусто — DefaultPeriod.
+	Period PeriodName `json:"-"`
+}
+
+// UsesPeriod сообщает, есть ли в параметрах карточек обращение к period_*.
+func (r Report) UsesPeriod() bool {
+	for _, q := range r.Queries {
+		if bytes.Contains(q.RawParams, []byte("period_")) {
+			return true
+		}
+	}
+
+	return false
 }
 
 type Pipeline struct {
@@ -78,10 +99,14 @@ func (r ReportInfo) String() string {
 }
 
 const (
-	CollectTypeMetabase   = "mb"
-	CollectTypeAppMetrica = "appmetrica"
-	CollectTypeJIRA       = "jira"
-	CollectTypePostgres   = "pg"
+	CollectTypeMetabase      = "mb"
+	CollectTypeAppMetrica    = "appmetrica"
+	CollectTypeJIRA          = "jira"
+	CollectTypePostgres      = "pg"
+	CollectTypePrometheus    = "prom"
+	CollectTypeGrafanaAlerts = "grafana_alerts"
+	CollectTypeZabbix        = "zabbix"
+	CollectTypeHTTP          = "http"
 )
 
 type Card struct {
@@ -91,23 +116,33 @@ type Card struct {
 	Params    map[string]string `json:"params"`
 	Type      string            `json:"type"`
 	Query     string            `json:"query"`
+	Options   json.RawMessage   `json:"options,omitempty"`
+	Secret    string            `json:"secret,omitempty"`
 }
 
-func (c Card) ToString(baseUrl string) string {
+func (c *Card) ToString(_ string) string {
 	return ""
 }
 
-func (c Card) GetFullURL(baseUrl string) string {
-	bUrl := strings.TrimRight(baseUrl, "/")
+func (c *Card) GetFullURL(baseURL string) string {
+	bURL := strings.TrimRight(baseURL, "/")
 
-	return fmt.Sprintf("%s/public/question/%s", bUrl, c.CardUUID)
+	return fmt.Sprintf("%s/public/question/%s", bURL, c.CardUUID)
 }
 
 type Evaluator interface {
-	EvalStr(ctx context.Context, expr string) (string, error)
+	EvalStr(
+		ctx context.Context,
+		expr string,
+		from, to time.Time,
+	) (string, error)
 }
 
-func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
+func (c *Card) ResolveParams(
+	ctx context.Context,
+	eval Evaluator,
+	from, to time.Time,
+) error {
 	var params map[string]string
 
 	c.Params = make(map[string]string)
@@ -120,7 +155,7 @@ func (c *Card) ResolveParams(ctx context.Context, eval Evaluator) error {
 	var evErr error
 
 	for k, v := range params {
-		q, err := eval.EvalStr(ctx, v)
+		q, err := eval.EvalStr(ctx, v, from, to)
 		if err != nil {
 			evErr = errors.Join(evErr, err)
 		}

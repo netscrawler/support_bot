@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+
 	"support_bot/internal/db/sqlcgen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,7 +19,10 @@ func NewScriptStore(pool *pgxpool.Pool) *ScriptStore {
 }
 
 // GetByName реализует lua.PluginProvider для загрузки исходного кода скрипта.
-func (s *ScriptStore) GetByName(ctx context.Context, name string) (string, error) {
+func (s *ScriptStore) GetByName(
+	ctx context.Context,
+	name string,
+) (string, error) {
 	script, err := s.q.GetScriptByName(ctx, name)
 	if err != nil {
 		return "", fmt.Errorf("get script by name: %w", translateNoRows(err))

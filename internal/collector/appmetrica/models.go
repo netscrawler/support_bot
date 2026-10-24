@@ -4,7 +4,7 @@ import "time"
 
 type ReportDataResponse struct {
 	Query struct {
-		Ids                     []int    `json:"ids"`
+		IDs                     []int    `json:"ids"`
 		Dimensions              []string `json:"dimensions"`
 		Metrics                 []string `json:"metrics"`
 		Sort                    []string `json:"sort"`
@@ -30,7 +30,7 @@ type ReportDataResponse struct {
 		To                      string   `json:"to"`
 		FunnelPattern           string   `json:"funnel_pattern"`
 		FunnelRestriction       string   `json:"funnel_restriction"`
-		ProfileAttributeId      string   `json:"profile_attribute_id"`
+		ProfileAttributeID      string   `json:"profile_attribute_id"`
 	} `json:"query"`
 	Data []struct {
 		Dimensions []struct {
@@ -56,7 +56,7 @@ type GetMyApplicationResponse struct {
 	Applications []struct {
 		Name                                 string   `json:"name"`
 		TimeZoneName                         string   `json:"time_zone_name"`
-		OrganizationId                       int      `json:"organization_id"`
+		OrganizationID                       int      `json:"organization_id"`
 		HideAddress                          bool     `json:"hide_address"`
 		GdprAgreementAccepted                bool     `json:"gdpr_agreement_accepted"`
 		Category                             int      `json:"category,omitempty"`
@@ -68,8 +68,8 @@ type GetMyApplicationResponse struct {
 		ReattributionInactivityWindowSeconds int      `json:"reattribution_inactivity_window_seconds"`
 		ReengagementInactivityWindowSeconds  int      `json:"reengagement_inactivity_window_seconds"`
 		MetrikaCounters                      []any    `json:"metrika_counters"`
-		Id                                   int      `json:"id"`
-		Uid                                  int      `json:"uid"`
+		ID                                   int      `json:"id"`
+		UID                                  int      `json:"uid"`
 		OwnerLogin                           string   `json:"owner_login"`
 		Permission                           string   `json:"permission"`
 		Features                             []string `json:"features"`

@@ -1,3 +1,4 @@
+//nolint:errcheck // CEL overload signatures guarantee the argument types, so the assertions cannot fail
 package evaluator
 
 import (
@@ -15,11 +16,11 @@ import (
 	"github.com/google/uuid"
 )
 
-func now(args ...ref.Val) ref.Val {
+func now(_ ...ref.Val) ref.Val {
 	return types.Timestamp{Time: time.Now()}
 }
 
-func today(args ...ref.Val) ref.Val {
+func today(_ ...ref.Val) ref.Val {
 	n := time.Now()
 	t := time.Date(
 		n.Year(),
@@ -32,13 +33,13 @@ func today(args ...ref.Val) ref.Val {
 	return types.Timestamp{Time: t}
 }
 
-func yesterday(args ...ref.Val) ref.Val {
+func yesterday(_ ...ref.Val) ref.Val {
 	return types.Timestamp{
 		Time: time.Now().AddDate(0, 0, -1),
 	}
 }
 
-func tomorrow(args ...ref.Val) ref.Val {
+func tomorrow(_ ...ref.Val) ref.Val {
 	return types.Timestamp{
 		Time: time.Now().AddDate(0, 0, 1),
 	}
@@ -99,7 +100,7 @@ func unixMilli(args ...ref.Val) ref.Val {
 	return types.Int(args[0].(types.Timestamp).UnixMilli())
 }
 
-func uuidFunc(args ...ref.Val) ref.Val {
+func uuidFunc(_ ...ref.Val) ref.Val {
 	return types.String(uuid.NewString())
 }
 
@@ -118,6 +119,7 @@ func sha256Func(args ...ref.Val) ref.Val {
 
 func md5Func(args ...ref.Val) ref.Val {
 	s := string(args[0].(types.String))
+	//nolint:gosec // md5 is a user-facing CEL hash function, not a security control
 	sum := md5.Sum([]byte(s))
 
 	return types.String(hex.EncodeToString(sum[:]))

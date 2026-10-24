@@ -8,6 +8,7 @@ import (
 
 type gzipResponseWriter struct {
 	http.ResponseWriter
+
 	gw *gzip.Writer
 }
 
@@ -26,6 +27,7 @@ func (mw *MW) Gzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
+
 			return
 		}
 

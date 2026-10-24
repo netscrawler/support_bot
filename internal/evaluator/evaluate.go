@@ -7,8 +7,9 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"support_bot/internal/models"
 	"time"
+
+	"support_bot/internal/models"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
@@ -29,13 +30,15 @@ func NewEngine() (*Engine, error) {
 		return nil, fmt.Errorf("unable create cache: (%w)", err)
 	}
 
-	opts := []cel.EnvOption{
+	opts := []cel.EnvOption{ //nolint:prealloc // append below adds Builtins
 		cel.StdLib(),
 		ext.Lists(),
 		ext.Sets(),
 		ext.TwoVarComprehensions(),
 		cel.OptionalTypes(),
 		cel.Macros(cel.StandardMacros...),
+		cel.Variable("period_from", cel.TimestampType),
+		cel.Variable("period_to", cel.TimestampType),
 		cel.Variable(
 			"report",
 			cel.MapType(
@@ -60,7 +63,11 @@ func NewEngine() (*Engine, error) {
 	}, nil
 }
 
-func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error) {
+func (e *Engine) EvalStr(
+	ctx context.Context,
+	expression string,
+	from, to time.Time,
+) (string, error) {
 	if strings.HasPrefix(expression, "=") {
 		expression = expression[1:]
 	} else {
@@ -77,7 +84,10 @@ func (e *Engine) EvalStr(ctx context.Context, expression string) (string, error)
 		return expression, err
 	}
 
-	out, _, err := prg.ContextEval(ctx, map[string]any{})
+	out, _, err := prg.ContextEval(
+		ctx,
+		map[string]any{"period_from": from, "period_to": to},
+	)
 	if err != nil {
 		return expression, err
 	}
@@ -113,7 +123,10 @@ func (e *Engine) eval(
 
 	prg, err := e.getProgram(expr)
 	if err != nil {
-		return false, fmt.Errorf("error while compiling program, invalid expr: (%w)", err)
+		return false, fmt.Errorf(
+			"error while compiling program, invalid expr: (%w)",
+			err,
+		)
 	}
 
 	out, _, err := prg.ContextEval(ctx, vars)
@@ -123,11 +136,21 @@ func (e *Engine) eval(
 
 	ans, err := out.ConvertToNative(reflect.TypeFor[bool]())
 	if err != nil {
-		return false, fmt.Errorf("undefined output data: (%w), expected boll value", err)
+		return false, fmt.Errorf(
+			"undefined output data: (%w), expected boll value",
+			err,
+		)
 	}
 
-	//nolint:revive,forcetypeassert // not panic
-	return ans.(bool), nil
+	b, ok := ans.(bool)
+	if !ok {
+		return false, fmt.Errorf(
+			"unexpected output type %T, expected bool",
+			ans,
+		)
+	}
+
+	return b, nil
 }
 
 func (e *Engine) getProgram(
@@ -144,7 +167,10 @@ func (e *Engine) getProgram(
 
 	prg, err := e.env.Program(ast)
 	if err != nil {
-		return nil, fmt.Errorf("error while compiling program from ast : %w", err)
+		return nil, fmt.Errorf(
+			"error while compiling program from ast : %w",
+			err,
+		)
 	}
 
 	e.cache.Add(expr, prg)
@@ -180,20 +206,34 @@ func ResultString(v ref.Val) (string, error) {
 		return x.Format(time.RFC3339Nano), nil
 
 	case types.Duration:
-		return time.Duration(x.Duration).String(), nil
+		return x.Duration.String(), nil
 
 	case types.Null:
 		return "", nil
 
 	case traits.Lister:
-		native, _ := v.ConvertToNative(reflect.TypeFor[[]any]())
-		b, _ := json.Marshal(native)
+		native, err := v.ConvertToNative(reflect.TypeFor[[]any]())
+		if err != nil {
+			return "", fmt.Errorf("convert list: %w", err)
+		}
+
+		b, err := json.Marshal(native)
+		if err != nil {
+			return "", fmt.Errorf("marshal list: %w", err)
+		}
 
 		return string(b), nil
 
 	case traits.Mapper:
-		native, _ := v.ConvertToNative(reflect.TypeFor[map[string]any]())
-		b, _ := json.Marshal(native)
+		native, err := v.ConvertToNative(reflect.TypeFor[map[string]any]())
+		if err != nil {
+			return "", fmt.Errorf("convert map: %w", err)
+		}
+
+		b, err := json.Marshal(native)
+		if err != nil {
+			return "", fmt.Errorf("marshal map: %w", err)
+		}
 
 		return string(b), nil
 	}
@@ -203,11 +243,15 @@ func ResultString(v ref.Val) (string, error) {
 	}
 
 	if native, err := v.ConvertToNative(reflect.TypeFor[string]()); err == nil {
-		return native.(string), nil
+		if str, ok := native.(string); ok {
+			return str, nil
+		}
 	}
 
 	if native, err := v.ConvertToNative(reflect.TypeFor[[]byte]()); err == nil {
-		return string(native.([]byte)), nil
+		if bs, ok := native.([]byte); ok {
+			return string(bs), nil
+		}
 	}
 
 	if native, err := v.ConvertToNative(reflect.TypeFor[any]()); err == nil {

@@ -29,6 +29,75 @@ databases:
         read_only: true
         statement_timeout: 30s
         max_conns: 4
+# Подключения к Grafana: чтение Prometheus через proxy datasource и коллектор алертов grafana_alerts.
+# Ключ — имя, на него ссылается grafana в секции prometheus и card_uuid запроса grafana_alerts.
+# Токен — service account Grafana с минимальными правами (роль Viewer: чтение правил и аннотаций).
+# grafana_alerts: query = режим active | rules | history; params-фильтры:
+#   active/rules — folder, group, state, alertname;
+#   history — from, to (RFC3339 или epoch ms), limit (по умолчанию 10000), alertname.
+# state — точное значение из Grafana: у правил inactive/pending/firing,
+#   у экземпляров Alerting/Pending/Normal/"Alerting (NoData)" и т.п.
+grafana:
+    ops:
+        url: https://grafana.example
+        token: glsa_xxx
+        timeout: 30s
+# Источники Prometheus (коллектор типа prom). Ключ — имя источника, указывается в card_uuid запроса.
+# Токены — с минимальными правами. Переменные Grafana ($__rate_interval, ${__range}) не поддерживаются:
+# передавайте значения явными params и подставляйте через ${name}.
+prometheus:
+    # Запись напрямую
+    main:
+        url: https://prom.example
+        bearer_token: xxx # либо basic_auth: {user: u, password: p}; одновременно нельзя
+        timeout: 30s
+    # Запись через Grafana
+    main_via_grafana:
+        grafana: ops
+        datasource_uid: P1809F7CD0C75ACF3
+# Источники Zabbix (коллектор типа zabbix). Ключ — имя источника, указывается в card_uuid запроса.
+# url — корень фронтенда Zabbix, бот сам дописывает /api_jsonrpc.php. timeout по умолчанию 30s.
+# Права: отдельный пользователь Zabbix, роль с «Access to API» -> allow list `*.get`,
+# группа пользователей с read-only правами на нужные группы хостов. Бот сам тоже пропускает только методы `*.get`.
+# Запрос: q_type = 'zabbix', card_uuid = имя источника (prod), query = JSON {"method": "<сервис>.get", "params": {...}}.
+# params запроса — значения для ${name}; подстановка только внутри строковых значений JSON
+# (числа передавайте строкой: "limit": "${n}").
+# Пример problem.get (params: {"group": "15"}):
+#   {"method":"problem.get","params":{"groupids":["${group}"],"severities":[4,5],"selectHosts":["host"],"selectTags":"extend"}}
+# Пример history.get:
+#   {"method":"history.get","params":{"itemids":["${item}"],"history":0,"time_from":"${from}","sortfield":"clock","sortorder":"DESC","limit":1000}}
+#   Без limit/time_from ответ может быть огромным: бот лимит не подставляет.
+# Результат: строка на элемент result, вложенное разворачивается в колонки (hosts.0.host, tags.0.value);
+# countOutput -> одна строка {result: "42"}; значения как есть: severity кодом 0-5, clock — epoch секунды.
+# Из Lua: collector.zabbix.collect("prod", [[{"method":"host.get","params":{"countOutput":true}}]], {})
+#   возвращает rows, nil или nil, err.
+zabbix:
+    prod:
+        url: https://zabbix.example.com
+        token: <api-token>
+        timeout: 30s
+# Источники HTTP (коллектор типа http). Ключ — имя источника.
+# Карточка: type = 'http', card_uuid = имя источника, query = путь (дописывается к base_url),
+# либо card_uuid = полный URL (http/https), query = пустой или путь/query-string.
+# params карточки — значения для ${name} в query.
+# Ответ: json, ndjson, csv, xml, xlsx, yaml или text; формат определяется по Content-Type или options.format.
+# root — путь через точку к массиву (json/yaml) или путь имён элементов от корня (xml, например rss.channel.item).
+# options карточки (JSON-объект в БД, таблица в Lua): headers, format (json|ndjson|csv|xml|xlsx|yaml|text), root, delimiter, sheet (лист xlsx, по умолчанию первый),
+# auth (bearer|basic|header), auth_header, timeout. Неизвестный ключ — ошибка.
+# Секрет карточки: `ctl secret set -name <имя> -host <хост[:порт]>` (значение — из stdin; секрет уходит только на этот хост), в карточке поле secret = имя.
+# Нужен SECRETS_KEY (секция secrets ниже). Токены не кладите в options.headers: options хранится в БД открытым текстом.
+# ВНИМАНИЕ: белого списка хостов нет — карточка с card_uuid-URL из БД достучится до любого адреса,
+# включая внутренние сервисы. Карточки в БД должны писать только доверенные администраторы.
+# Из Lua: collector.http.collect("billing", "/v1/invoices", {}, {root = "data.items"})
+#   (ключ secret в options из Lua запрещён).
+http_sources:
+    billing:
+        base_url: https://billing.example.com/api
+        auth: bearer
+        token: <api-token>
+        headers:
+            Accept: application/json
+        timeout: 30s
 # Настройки Lua-процессора.
 lua:
     # Таймаут для выполнения плагина.
@@ -158,3 +227,29 @@ http:
     max_header_value_count: 0
     # HTTP server max body bytes
     max_body_bytes: 10485760
+# Уведомления администраторов о сбоях отчётов.
+alerts:
+    # Чат для уведомлений о сбоях отчётов (ID группы, например -100...). 0 — всем админам в личку.
+    chat_id: 0
+    # Тема (thread) в этом чате, необязательно.
+    thread_id: 0
+# Журнал запусков отчётов.
+runs:
+    # Сколько хранить журнал запусков отчётов.
+    retention: 720h
+# Доставка отчётов.
+delivery:
+    retry:
+        # Паузы между повторами неудавшейся отправки; попыток = пауз + 1. Пустой список — без повторов.
+        delays: [1s, 5s, 15s]
+# Сервер /metrics и /healthz.
+metrics:
+    # Включить сервер (по умолчанию выключен).
+    enabled: true
+    # Адрес сервера. Для доступа из другого контейнера нужен 0.0.0.0:9090 и закрытый снаружи порт.
+    addr: 127.0.0.1:9090
+# Шифрование секретов в БД (ctl secret).
+secrets:
+    # Ключ AES-256: base64 от 32 байт (openssl rand -base64 32). Потеря ключа = секреты не расшифровать,
+    # их придётся завести заново через `ctl secret set`.
+    key: ""

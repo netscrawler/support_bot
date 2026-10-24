@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
 	"strings"
+
 	"support_bot/internal/pkg/retry"
 )
 
@@ -38,7 +40,12 @@ func (c *Collector) Fetch(
 	target string,
 	params map[string]string,
 ) ([]map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		target,
+		http.NoBody,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +66,7 @@ func (c *Collector) Fetch(
 	}
 	defer raw.Body.Close()
 
-	c.log.Debug("parsing response", raw.Status)
+	c.log.Debug("parsing response", "status", raw.Status)
 
 	mediaType, _, err := mime.ParseMediaType(raw.Header.Get("Content-Type"))
 	if err != nil {
@@ -76,7 +83,9 @@ func (c *Collector) Fetch(
 	}
 }
 
-func (c *Collector) GetApplications(ctx context.Context) ([]SupportedApplications, error) {
+func (c *Collector) GetApplications(
+	ctx context.Context,
+) ([]SupportedApplications, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -105,19 +114,19 @@ func (c *Collector) GetApplications(ctx context.Context) ([]SupportedApplication
 	for _, v := range appResp.Applications {
 		apps = append(apps, SupportedApplications{
 			AppName: v.Name,
-			ID:      v.Id,
+			ID:      v.ID,
 		})
 	}
 
 	if len(apps) == 0 {
-		return nil, fmt.Errorf("no applications found")
+		return nil, errors.New("no applications found")
 	}
 
 	return apps, nil
 }
 
 func (c *Collector) do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "OAuth "+c.cfg.OAuthToken)
+	req.Header.Set("Authorization", "OAuth "+c.cfg.OAuthToken.Value())
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -133,7 +142,9 @@ func (c *Collector) do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (c *Collector) processJSONResponse(resp *http.Response) ([]map[string]any, error) {
+func (c *Collector) processJSONResponse(
+	resp *http.Response,
+) ([]map[string]any, error) {
 	var report ReportDataResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
@@ -167,13 +178,17 @@ func (c *Collector) processJSONResponse(resp *http.Response) ([]map[string]any, 
 	return result, nil
 }
 
-func (c *Collector) processCSVResponse(resp *http.Response) ([]map[string]any, error) {
+func (c *Collector) processCSVResponse(
+	resp *http.Response,
+) ([]map[string]any, error) {
 	reader := bufio.NewReader(resp.Body)
 
 	// Удаляем UTF-8 BOM, который часто добавляет AppMetrica
 	bom, err := reader.Peek(3)
 	if err == nil && bytes.Equal(bom, []byte{0xEF, 0xBB, 0xBF}) {
-		_, _ = reader.Discard(3)
+		if _, discardErr := reader.Discard(3); discardErr != nil {
+			return nil, fmt.Errorf("discard bom: %w", discardErr)
+		}
 	}
 
 	csvReader := csv.NewReader(reader)

@@ -7,6 +7,11 @@ sql:
       - "migrations/init.sql/002_create_report_tables.sql"
       - "migrations/init.sql/005_create_public_reports.sql"
       - "migrations/init.sql/006_add_query_text.sql"
+      - "migrations/init.sql/007_create_report_runs.sql"
+      - "migrations/init.sql/008_public_report_links_ttl.sql"
+      - "migrations/init.sql/009_report_dedup.sql"
+      - "migrations/init.sql/010_report_default_period.sql"
+      - "migrations/init.sql/011_query_options_secrets.sql"
     gen:
       go:
         package: "sqlcgen"

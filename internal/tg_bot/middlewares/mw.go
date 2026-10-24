@@ -3,6 +3,7 @@ package middlewares
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/models"
 
 	"github.com/mymmrac/telego"
@@ -40,7 +41,11 @@ func (mw Mw) AdminFilter(ctx context.Context, update telego.Update) bool {
 
 	role, err := mw.userPr.IsAllowed(ctx, userID)
 	if err != nil || role == models.Denied || role == models.UserRole {
-		mw.l.ErrorContext(ctx, "unautorized admin access attempt", slog.Any("user", userID))
+		mw.l.ErrorContext(
+			ctx,
+			"unautorized admin access attempt",
+			slog.Any("user", userID),
+		)
 
 		return false
 	}
@@ -62,12 +67,17 @@ func (mw Mw) UserFilter(ctx context.Context, update telego.Update) bool {
 
 	role, err := mw.userPr.IsAllowed(ctx, userID)
 	if err != nil || role == models.Denied {
-		mw.l.ErrorContext(ctx, "unautorized user access attempt", slog.Any("user", userID))
+		mw.l.ErrorContext(
+			ctx,
+			"unautorized user access attempt",
+			slog.Any("user", userID),
+		)
 
 		return false
 	}
 
-	return role == models.AdminRole || role == models.PrimaryAdminRole || role == models.UserRole
+	return role == models.AdminRole || role == models.PrimaryAdminRole ||
+		role == models.UserRole
 }
 
 // func (mw *Mw) UserAuthMiddleware(next telebot.HandlerFunc) telebot.HandlerFunc {

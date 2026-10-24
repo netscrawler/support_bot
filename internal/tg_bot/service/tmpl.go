@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+
 	"support_bot/internal/models"
 )
 
@@ -11,7 +12,6 @@ const (
 %s
 Ошибка: %s`
 )
-const newUserRegisteredSuccessTemplate = ``
 
 func newAddNewChatSuccessTemplate(chat models.TgChatDTO) string {
 	return fmt.Sprintf(addNewChatSuccessTemplate, chat.String())

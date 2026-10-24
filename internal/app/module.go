@@ -2,15 +2,15 @@ package app
 
 import (
 	"context"
-	"support_bot/internal/orchestrator"
-	"support_bot/internal/sheduler"
-
-	"go.uber.org/fx"
 
 	apihttp "support_bot/internal/api/http"
 	eventcreator "support_bot/internal/event_creator"
-
+	"support_bot/internal/metrics"
+	"support_bot/internal/orchestrator"
+	"support_bot/internal/sheduler"
 	tgbot "support_bot/internal/tg_bot"
+
+	"go.uber.org/fx"
 )
 
 var Module = fx.Options(
@@ -26,6 +26,7 @@ var Module = fx.Options(
 	fx.Invoke(func(
 		*tgbot.Router,
 		*apihttp.Server,
+		*metrics.Server,
 		*sheduler.Sheduler,
 		*eventcreator.EventCreator,
 		*orchestrator.Deleter,
@@ -40,6 +41,7 @@ var Module = fx.Options(
 	fx.Invoke(func(lc fx.Lifecycle, cancel context.CancelFunc) {
 		lc.Append(fx.Hook{OnStop: func(context.Context) error {
 			cancel()
+
 			return nil
 		}})
 	}),

@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"strings"
+
 	"support_bot/internal/models"
 
 	"github.com/SebastiaanKlippert/go-wkhtmltopdf"
@@ -34,8 +35,8 @@ func (e *Exporter) Export() (*models.Data, error) {
 		pdfg.AddPage(page)
 	}
 
-	if err := pdfg.Create(); err != nil {
-		return nil, err
+	if createErr := pdfg.Create(); createErr != nil {
+		return nil, createErr
 	}
 
 	fd, err := models.NewFileData(pdfg.Buffer(), e.name+".pdf")

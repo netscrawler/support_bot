@@ -3,8 +3,8 @@ package lua
 import (
 	"context"
 	"fmt"
+
 	"support_bot/internal/processor/lua/stdlib"
-	"sync"
 )
 
 type PluginProvider interface {
@@ -19,8 +19,7 @@ type PluginProvider interface {
 //   - Перезагрузка плагинов без остановки системы
 //   - Graceful shutdown всех плагинов
 type Manager struct {
-	config *Config      // конфигурация системы плагинов
-	mu     sync.RWMutex // мьютекс для потокобезопасного доступа
+	config *Config // конфигурация системы плагинов
 
 	provider PluginProvider
 
@@ -32,7 +31,11 @@ type Manager struct {
 //   - cfg: конфигурация плагинов (enable, plugins_dir, таймауты и т.д.)
 //
 // Возвращает готовый к использованию Manager с пустой картой плагинов.
-func NewManager(cfg *Config, provider PluginProvider, std *stdlib.STD) *Manager {
+func NewManager(
+	cfg *Config,
+	provider PluginProvider,
+	std *stdlib.STD,
+) *Manager {
 	return &Manager{
 		config:   cfg,
 		provider: provider,
@@ -40,7 +43,7 @@ func NewManager(cfg *Config, provider PluginProvider, std *stdlib.STD) *Manager 
 	}
 }
 
-func (m *Manager) NewPlugin(plug string) (*LuaPlugin, error) {
+func (m *Manager) NewPlugin(plug string) (*Plugin, error) {
 	// создаем конфигурацию runtime из AllowedModules
 	runtimeCfg := &RuntimeConfig{
 		AllowedModules: m.config.AllowedModules,
@@ -52,16 +55,20 @@ func (m *Manager) NewPlugin(plug string) (*LuaPlugin, error) {
 	// при этом загружается и выполняется Lua-скрипт
 	plugin, err := NewLuaPlugin(plug, runtimeCfg, m.plugSTD)
 	if err != nil {
-		return new(LuaPlugin), fmt.Errorf("failed to create plugin: %w", err)
+		return new(Plugin), fmt.Errorf("failed to create plugin: %w", err)
 	}
 
 	return plugin, nil
 }
 
-func (m *Manager) NewPluginFromName(ctx context.Context, name string) (*LuaPlugin, error) {
+func (m *Manager) NewPluginFromName(
+	ctx context.Context,
+	name string,
+) (*Plugin, error) {
 	plugStr, err := m.provider.GetByName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
+
 	return m.NewPlugin(plugStr)
 }

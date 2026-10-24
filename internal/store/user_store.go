@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
@@ -57,13 +58,23 @@ func (s *UserStore) Update(ctx context.Context, user *models.User) error {
 	return nil
 }
 
-func (s *UserStore) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+func (s *UserStore) GetByUsername(
+	ctx context.Context,
+	username string,
+) (*models.User, error) {
 	row, err := s.q.GetUserByUsername(ctx, &username)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	user := mapUserRow(row.ID, row.TelegramID, row.Username, row.FirstName, row.LastName, row.Role)
+	user := mapUserRow(
+		row.ID,
+		row.TelegramID,
+		row.Username,
+		row.FirstName,
+		row.LastName,
+		row.Role,
+	)
 
 	return &user, nil
 }
@@ -78,20 +89,37 @@ func (s *UserStore) GetAll(ctx context.Context) ([]models.User, error) {
 	for _, row := range rows {
 		users = append(
 			users,
-			mapUserRow(row.ID, row.TelegramID, row.Username, row.FirstName, row.LastName, row.Role),
+			mapUserRow(
+				row.ID,
+				row.TelegramID,
+				row.Username,
+				row.FirstName,
+				row.LastName,
+				row.Role,
+			),
 		)
 	}
 
 	return users, nil
 }
 
-func (s *UserStore) GetByTgID(ctx context.Context, id int64) (*models.User, error) {
+func (s *UserStore) GetByTgID(
+	ctx context.Context,
+	id int64,
+) (*models.User, error) {
 	row, err := s.q.GetUserByTelegramID(ctx, id)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	user := mapUserRow(row.ID, row.TelegramID, row.Username, row.FirstName, row.LastName, row.Role)
+	user := mapUserRow(
+		row.ID,
+		row.TelegramID,
+		row.Username,
+		row.FirstName,
+		row.LastName,
+		row.Role,
+	)
 
 	return &user, nil
 }
@@ -109,7 +137,14 @@ func (s *UserStore) GetAllAdmins(ctx context.Context) ([]models.User, error) {
 	for _, row := range rows {
 		users = append(
 			users,
-			mapUserRow(row.ID, row.TelegramID, row.Username, row.FirstName, row.LastName, row.Role),
+			mapUserRow(
+				row.ID,
+				row.TelegramID,
+				row.Username,
+				row.FirstName,
+				row.LastName,
+				row.Role,
+			),
 		)
 	}
 

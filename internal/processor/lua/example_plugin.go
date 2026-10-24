@@ -1,6 +1,7 @@
 package lua
 
-const ExampleLuaPlugin = `
+const (
+	ExampleLuaPlugin = `
 -- =============================================================================
 -- Skeleton Lua Plugin
 -- =============================================================================
@@ -108,3 +109,4 @@ function process(params)
     return result, nil
 end
 `
+)

@@ -6,78 +6,118 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime"
 	"net"
 	"net/smtp"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	"support_bot/internal/pkg/retry"
 )
 
 type Sender struct {
-	cfg Config
-	log *slog.Logger
+	cfg    Config
+	delays retry.Delays
+	log    *slog.Logger
 }
 
-func New(cfg Config, log *slog.Logger) *Sender {
+func New(cfg Config, delays retry.Delays, log *slog.Logger) *Sender {
 	l := log.With(slog.Any("module", "smtp_sender"))
 
 	return &Sender{
-		cfg: cfg,
-		log: l,
+		cfg:    cfg,
+		delays: delays,
+		log:    l,
 	}
 }
 
 func (s *Sender) Send(ctx context.Context, mail Mail) error {
-	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password, s.cfg.Host)
-
 	message := s.buildMessage(mail)
 
-	recipients := append(mail.Recipients, mail.Copy...)
+	recipients := slices.Concat(mail.Recipients, mail.Copy)
 	if len(recipients) == 0 {
-		return fmt.Errorf("no recipients specified")
+		return errors.New("no recipients specified")
 	}
+
+	return retry.Do(
+		ctx,
+		s.delays,
+		s.log,
+		"smtp.Send",
+		func(ctx context.Context) error {
+			return classify(s.send(ctx, message, recipients))
+		},
+	)
+}
+
+func (s *Sender) send(
+	ctx context.Context,
+	message []byte,
+	recipients []string,
+) error {
+	auth := smtp.PlainAuth("", s.cfg.Email, s.cfg.Password.Value(), s.cfg.Host)
 
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 
-	//nolint:gosec //not need
 	tlsConfig := &tls.Config{
 		ServerName: s.cfg.Host,
 	}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	conn, err := (&tls.Dialer{Config: tlsConfig}).DialContext(ctx, "tcp", addr)
 	if err != nil {
-		s.log.ErrorContext(ctx, "failed to connect to SMTP server", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to connect to SMTP server",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("connect to SMTP: %w", err)
 	}
 
 	defer func() {
-		err := conn.Close()
-		if err != nil {
-			s.log.ErrorContext(ctx, "unable close connection correctly", slog.Any("error", err))
+		closeErr := conn.Close()
+		if closeErr != nil {
+			s.log.ErrorContext(
+				ctx,
+				"unable close connection correctly",
+				slog.Any("error", closeErr),
+			)
 		}
 	}()
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		s.log.ErrorContext(ctx, "failed to create SMTP client", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to create SMTP client",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("create SMTP client: %w", err)
 	}
 
 	defer func() {
-		err := client.Quit()
-		if err != nil {
-			s.log.ErrorContext(ctx, "unable quit from client correctly", slog.Any("error", err))
+		quitErr := client.Quit()
+		if quitErr != nil {
+			s.log.ErrorContext(
+				ctx,
+				"unable quit from client correctly",
+				slog.Any("error", quitErr),
+			)
 		}
 	}()
 
 	if err = client.Auth(auth); err != nil {
-		s.log.ErrorContext(ctx, "failed to authenticate", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to authenticate",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("authenticate: %w", err)
 	}
@@ -104,24 +144,40 @@ func (s *Sender) Send(ctx context.Context, mail Mail) error {
 
 	w, err := client.Data()
 	if err != nil {
-		s.log.ErrorContext(ctx, "failed to get data writer", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to get data writer",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("get data writer: %w", err)
 	}
 
 	if _, err = w.Write(message); err != nil {
-		s.log.ErrorContext(ctx, "failed to write message", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to write message",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("write message: %w", err)
 	}
 
 	if err = w.Close(); err != nil {
-		s.log.ErrorContext(ctx, "failed to close writer", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"failed to close writer",
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("close writer: %w", err)
 	}
 
-	s.log.InfoContext(ctx, "email sent successfully", slog.Int("recipients", len(recipients)))
+	s.log.InfoContext(
+		ctx,
+		"email sent successfully",
+		slog.Int("recipients", len(recipients)),
+	)
 
 	return nil
 }
@@ -153,7 +209,11 @@ func (s *Sender) buildMessage(mail Mail) []byte {
 	boundary := "boundary-" + randomBoundary()
 
 	if len(mail.Attachments) > 0 {
-		fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary)
+		fmt.Fprintf(
+			&buf,
+			"Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n",
+			boundary,
+		)
 
 		fmt.Fprintf(&buf, "--%s\r\n", boundary)
 		buf.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
@@ -194,7 +254,11 @@ func (s *Sender) writeAttachment(
 
 	fmt.Fprintf(buf, "Content-Type: %s; name=\"%s\"\r\n", mimeType, name)
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
-	fmt.Fprintf(buf, "Content-Disposition: attachment; filename=\"%s\"\r\n\r\n", name)
+	fmt.Fprintf(
+		buf,
+		"Content-Disposition: attachment; filename=\"%s\"\r\n\r\n",
+		name,
+	)
 
 	encoded := base64.StdEncoding.EncodeToString(file.Bytes())
 
@@ -212,8 +276,5 @@ func (s *Sender) writeAttachment(
 }
 
 func randomBoundary() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-
-	return hex.EncodeToString(b)
+	return rand.Text()
 }

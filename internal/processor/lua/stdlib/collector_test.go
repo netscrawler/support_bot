@@ -3,8 +3,10 @@ package stdlib_test
 import (
 	"context"
 	"errors"
-	"support_bot/internal/processor/lua/stdlib"
 	"testing"
+
+	"support_bot/internal/models"
+	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/stretchr/testify/require"
 	lua "github.com/yuin/gopher-lua"
@@ -28,47 +30,161 @@ func (f *fakePG) Fetch(
 	return f.rows, f.err
 }
 
-func run(t *testing.T, pg stdlib.SQLCollector, script string) *lua.LState {
+func run(
+	t *testing.T,
+	queries map[string]stdlib.QueryCollector,
+	script string,
+) *lua.LState {
 	t.Helper()
 
-	L := lua.NewState()
-	t.Cleanup(L.Close)
-	stdlib.NewCollector(nil, pg).Register(L)
-	require.NoError(t, L.DoString(script))
+	l := lua.NewState()
+	t.Cleanup(l.Close)
+	stdlib.NewCollector(nil, queries).Register(l)
+	require.NoError(t, l.DoString(script))
 
-	return L
+	return l
 }
 
 func TestPGCollect(t *testing.T) {
 	t.Parallel()
 
 	t.Run("ok", func(t *testing.T) {
+		t.Parallel()
+
 		f := &fakePG{rows: []map[string]any{{"x": float64(5)}}}
-		L := run(t, f, `
+		l := run(t, map[string]stdlib.QueryCollector{"pg": f}, `
 local rows, err = collector.pg.collect("analytics", "select @x::int as x", {x = "5"})
 x, e = rows[1].x, err`)
 
 		require.Equal(t, "analytics", f.db)
 		require.Equal(t, "select @x::int as x", f.sql)
 		require.Equal(t, map[string]string{"x": "5"}, f.params)
-		require.Equal(t, lua.LNumber(5), L.GetGlobal("x"))
-		require.Equal(t, lua.LNil, L.GetGlobal("e"))
+		require.InDelta(t, 5, float64(l.GetGlobal("x").(lua.LNumber)), 0)
+		require.Equal(t, lua.LNil, l.GetGlobal("e"))
 	})
 
 	t.Run("error", func(t *testing.T) {
-		L := run(
+		t.Parallel()
+
+		l := run(
 			t,
-			&fakePG{err: errors.New("boom")},
+			map[string]stdlib.QueryCollector{
+				"pg": &fakePG{err: errors.New("boom")},
+			},
 			`rows, err = collector.pg.collect("a", "select 1")`,
 		)
 
-		require.Equal(t, lua.LNil, L.GetGlobal("rows"))
-		require.Equal(t, lua.LString("boom"), L.GetGlobal("err"))
+		require.Equal(t, lua.LNil, l.GetGlobal("rows"))
+		require.Equal(t, lua.LString("boom"), l.GetGlobal("err"))
 	})
 
 	t.Run("absent", func(t *testing.T) {
-		L := run(t, nil, `p = collector.pg`)
+		t.Parallel()
 
-		require.Equal(t, lua.LNil, L.GetGlobal("p"))
+		l := run(t, nil, `p = collector.pg; q = collector.prom`)
+
+		require.Equal(t, lua.LNil, l.GetGlobal("p"))
+		require.Equal(t, lua.LNil, l.GetGlobal("q"))
+	})
+}
+
+func TestPromCollect(t *testing.T) {
+	t.Parallel()
+
+	f := &fakePG{rows: []map[string]any{{"v": float64(1)}}}
+	q := map[string]stdlib.QueryCollector{"prom": f}
+	l := run(
+		t,
+		q,
+		`rows, err = collector.prom.collect("main", "up", {k = "v"})`,
+	)
+
+	require.Equal(t, "main", f.db)
+	require.Equal(t, "up", f.sql)
+	require.Equal(t, map[string]string{"k": "v"}, f.params)
+	require.Equal(t, lua.LNil, l.GetGlobal("err"))
+
+	f.err = errors.New("boom")
+	l = run(t, q, `rows, err = collector.prom.collect("main", "up")`)
+
+	require.Equal(t, lua.LNil, l.GetGlobal("rows"))
+	require.Equal(t, lua.LString("boom"), l.GetGlobal("err"))
+}
+
+type fakeCard struct {
+	card  models.Card
+	calls int
+}
+
+func (f *fakeCard) FetchCard(
+	_ context.Context,
+	card models.Card,
+) ([]map[string]any, error) {
+	f.card = card
+	f.calls++
+
+	return []map[string]any{{"x": float64(1)}}, nil
+}
+
+func runHTTP(t *testing.T, f *fakeCard, script string) *lua.LState {
+	t.Helper()
+
+	l := lua.NewState()
+	t.Cleanup(l.Close)
+	stdlib.NewCollector(nil, nil).WithHTTP(f).Register(l)
+	require.NoError(t, l.DoString(script))
+
+	return l
+}
+
+func TestHTTPCollect(t *testing.T) {
+	t.Parallel()
+
+	t.Run("options reach FetchCard", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		l := runHTTP(t, f, `
+rows, err = collector.http.collect("billing", "/v1/x", {a = "1"}, {format = "csv", headers = {Accept = "text/csv"}})`)
+
+		require.Equal(t, lua.LNil, l.GetGlobal("err"))
+		require.Equal(t, "billing", f.card.CardUUID)
+		require.Equal(t, "/v1/x", f.card.Query)
+		require.Equal(t, map[string]string{"a": "1"}, f.card.Params)
+		require.JSONEq(
+			t,
+			`{"format":"csv","headers":{"Accept":"text/csv"}}`,
+			string(f.card.Options),
+		)
+		require.Empty(t, f.card.Secret)
+	})
+
+	t.Run("no options", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		runHTTP(t, f, `collector.http.collect("billing", "/v1/x")`)
+
+		require.Equal(t, 1, f.calls)
+		require.Empty(t, f.card.Options)
+	})
+
+	t.Run("secret key rejected", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		l := runHTTP(
+			t,
+			f,
+			`rows, err = collector.http.collect("b", "/", {}, {secret = "s"})`,
+		)
+
+		require.Equal(t, lua.LNil, l.GetGlobal("rows"))
+		require.Equal(
+			t,
+			lua.LString("secret is not available from lua"),
+			l.GetGlobal("err"),
+		)
+		require.Zero(t, f.calls)
 	})
 }

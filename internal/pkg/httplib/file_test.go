@@ -11,9 +11,14 @@ func TestFile_SetsContentTypeFromExtension(t *testing.T) {
 
 	File(rec, "report.csv", strings.NewReader("a,b,c"))
 
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+	if ct := rec.Header().
+		Get("Content-Type"); !strings.HasPrefix(
+		ct,
+		"text/csv",
+	) {
 		t.Fatalf("got Content-Type %q, want text/csv prefix", ct)
 	}
+
 	if rec.Body.String() != "a,b,c" {
 		t.Fatalf("got body %q, want a,b,c", rec.Body.String())
 	}
@@ -24,7 +29,8 @@ func TestFile_UnknownExtension_FallsBackToOctetStream(t *testing.T) {
 
 	File(rec, "report.unknownext", strings.NewReader("data"))
 
-	if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
+	if ct := rec.Header().
+		Get("Content-Type"); ct != "application/octet-stream" {
 		t.Fatalf("got Content-Type %q, want application/octet-stream", ct)
 	}
 }
@@ -35,8 +41,12 @@ func TestFile_SetsAttachmentDisposition(t *testing.T) {
 	File(rec, "report.pdf", strings.NewReader("data"))
 
 	cd := rec.Header().Get("Content-Disposition")
-	if !strings.HasPrefix(cd, "attachment") || !strings.Contains(cd, `filename=report.pdf`) {
-		t.Fatalf("got Content-Disposition %q, want attachment with filename=report.pdf", cd)
+	if !strings.HasPrefix(cd, "attachment") ||
+		!strings.Contains(cd, `filename=report.pdf`) {
+		t.Fatalf(
+			"got Content-Disposition %q, want attachment with filename=report.pdf",
+			cd,
+		)
 	}
 }
 
@@ -50,7 +60,8 @@ func TestFile_WithContentType_OverridesDetectedType(t *testing.T) {
 		WithContentType("text/csv; charset=windows-1251"),
 	)
 
-	if ct := rec.Header().Get("Content-Type"); ct != "text/csv; charset=windows-1251" {
+	if ct := rec.Header().
+		Get("Content-Type"); ct != "text/csv; charset=windows-1251" {
 		t.Fatalf("got Content-Type %q, want text/csv; charset=windows-1251", ct)
 	}
 }

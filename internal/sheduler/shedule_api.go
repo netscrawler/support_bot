@@ -16,24 +16,13 @@ func NewSheduleAPI(c chan SheduleAPIEvent) *SheduleAPI {
 }
 
 func (sha *SheduleAPI) Start() {
-	defer func() { recover() }()
+	defer func() { recover() }() //nolint:errcheck // отправка в закрытый канал даёт панику, она ожидаема
 
 	sha.c <- eventStart
 }
 
 func (sha *SheduleAPI) Stop() {
-	defer func() { recover() }()
+	defer func() { recover() }() //nolint:errcheck // отправка в закрытый канал даёт панику, она ожидаема
 
 	sha.c <- eventStop
-}
-
-func (sha *SheduleAPI) restart() {
-	defer func() { recover() }()
-
-	sha.Stop()
-	sha.Start()
-}
-
-func (sha *SheduleAPI) stopAPI() {
-	close(sha.c)
 }

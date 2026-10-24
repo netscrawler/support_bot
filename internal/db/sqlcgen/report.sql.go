@@ -103,8 +103,25 @@ func (q *Queries) CreatePipeline(ctx context.Context, pipeline []byte) (int32, e
 	return id, err
 }
 
+const createPublicLink = `-- name: CreatePublicLink :one
+insert into public_reports (public_id, report_id, expires_at) values ($1, $2, $3) returning public_id
+`
+
+type CreatePublicLinkParams struct {
+	PublicID  pgtype.UUID
+	ReportID  int64
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreatePublicLink(ctx context.Context, arg CreatePublicLinkParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createPublicLink, arg.PublicID, arg.ReportID, arg.ExpiresAt)
+	var public_id pgtype.UUID
+	err := row.Scan(&public_id)
+	return public_id, err
+}
+
 const createQuery = `-- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id
+insert into queries(card_uuid, title, q_type, params, query, options, secret) values ($1, $2, $3, $4, $5, $6, $7) returning id
 `
 
 type CreateQueryParams struct {
@@ -113,6 +130,8 @@ type CreateQueryParams struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32, error) {
@@ -122,6 +141,8 @@ func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32
 		arg.QType,
 		arg.Params,
 		arg.Query,
+		arg.Options,
+		arg.Secret,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -160,18 +181,20 @@ func (q *Queries) CreateRecipient(ctx context.Context, arg CreateRecipientParams
 }
 
 const createReport = `-- name: CreateReport :one
-insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active)
-values ($1, $2, $3, $4, $5, $6)
+insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active, dedup, default_period)
+values ($1, $2, $3, $4, $5, $6, $7, $8)
 returning id
 `
 
 type CreateReportParams struct {
-	Name         string
-	Title        string
-	EvalID       int64
-	PipelineID   *int64
-	AccessFromLk bool
-	Active       bool
+	Name          string
+	Title         string
+	EvalID        int64
+	PipelineID    *int64
+	AccessFromLk  bool
+	Active        bool
+	Dedup         bool
+	DefaultPeriod string
 }
 
 func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (int32, error) {
@@ -182,6 +205,8 @@ func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (int
 		arg.PipelineID,
 		arg.AccessFromLk,
 		arg.Active,
+		arg.Dedup,
+		arg.DefaultPeriod,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -203,6 +228,19 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const expirePublicLink = `-- name: ExpirePublicLink :execrows
+update public_reports set expires_at = now()
+where public_id = $1 and (expires_at is null or expires_at > now())
+`
+
+func (q *Queries) ExpirePublicLink(ctx context.Context, publicID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, expirePublicLink, publicID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findCronIDByNameAndExpr = `-- name: FindCronIDByNameAndExpr :one
@@ -247,16 +285,25 @@ func (q *Queries) FindExportFormatIDByFormat(ctx context.Context, format *string
 
 const findQueryIDByUUIDAndTitle = `-- name: FindQueryIDByUUIDAndTitle :one
 select id from queries where card_uuid = $1 and title = $2 and query is not distinct from $3::text
+  and options = $4::jsonb and secret is not distinct from $5::text
 `
 
 type FindQueryIDByUUIDAndTitleParams struct {
 	CardUuid string
 	Title    string
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) FindQueryIDByUUIDAndTitle(ctx context.Context, arg FindQueryIDByUUIDAndTitleParams) (int32, error) {
-	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle, arg.CardUuid, arg.Title, arg.Query)
+	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle,
+		arg.CardUuid,
+		arg.Title,
+		arg.Query,
+		arg.Options,
+		arg.Secret,
+	)
 	var id int32
 	err := row.Scan(&id)
 	return id, err
@@ -290,7 +337,7 @@ func (q *Queries) FindTemplateIDByTitleAndType(ctx context.Context, arg FindTemp
 }
 
 const getActiveReportRowByName = `-- name: GetActiveReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
@@ -298,13 +345,15 @@ limit 1
 `
 
 type GetActiveReportRowByNameRow struct {
-	ID           int32
-	Name         string
-	Title        string
-	Active       bool
-	AccessFromLk bool
-	PipelineID   *int64
-	Evaluation   *string
+	ID            int32
+	Name          string
+	Title         string
+	Active        bool
+	AccessFromLk  bool
+	Dedup         bool
+	DefaultPeriod string
+	PipelineID    *int64
+	Evaluation    *string
 }
 
 func (q *Queries) GetActiveReportRowByName(ctx context.Context, name string) (GetActiveReportRowByNameRow, error) {
@@ -316,6 +365,8 @@ func (q *Queries) GetActiveReportRowByName(ctx context.Context, name string) (Ge
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
+		&i.DefaultPeriod,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -323,7 +374,7 @@ func (q *Queries) GetActiveReportRowByName(ctx context.Context, name string) (Ge
 }
 
 const getAnyReportRowByName = `-- name: GetAnyReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1
@@ -331,13 +382,15 @@ limit 1
 `
 
 type GetAnyReportRowByNameRow struct {
-	ID           int32
-	Name         string
-	Title        string
-	Active       bool
-	AccessFromLk bool
-	PipelineID   *int64
-	Evaluation   *string
+	ID            int32
+	Name          string
+	Title         string
+	Active        bool
+	AccessFromLk  bool
+	Dedup         bool
+	DefaultPeriod string
+	PipelineID    *int64
+	Evaluation    *string
 }
 
 func (q *Queries) GetAnyReportRowByName(ctx context.Context, name string) (GetAnyReportRowByNameRow, error) {
@@ -349,6 +402,8 @@ func (q *Queries) GetAnyReportRowByName(ctx context.Context, name string) (GetAn
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
+		&i.DefaultPeriod,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -366,19 +421,24 @@ func (q *Queries) GetPipelineByID(ctx context.Context, dollar_1 int64) ([]byte, 
 	return pipeline, err
 }
 
-const getReportIDByPublicID = `-- name: GetReportIDByPublicID :one
-select report_id from public_reports where public_id = $1 limit 1
+const getPublicLink = `-- name: GetPublicLink :one
+select report_id, expires_at from public_reports where public_id = $1
 `
 
-func (q *Queries) GetReportIDByPublicID(ctx context.Context, publicID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getReportIDByPublicID, publicID)
-	var report_id int64
-	err := row.Scan(&report_id)
-	return report_id, err
+type GetPublicLinkRow struct {
+	ReportID  int64
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetPublicLink(ctx context.Context, publicID pgtype.UUID) (GetPublicLinkRow, error) {
+	row := q.db.QueryRow(ctx, getPublicLink, publicID)
+	var i GetPublicLinkRow
+	err := row.Scan(&i.ReportID, &i.ExpiresAt)
+	return i, err
 }
 
 const getReportRowByID = `-- name: GetReportRowByID :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.id = $1::bigint
@@ -386,13 +446,15 @@ limit 1
 `
 
 type GetReportRowByIDRow struct {
-	ID           int32
-	Name         string
-	Title        string
-	Active       bool
-	AccessFromLk bool
-	PipelineID   *int64
-	Evaluation   *string
+	ID            int32
+	Name          string
+	Title         string
+	Active        bool
+	AccessFromLk  bool
+	Dedup         bool
+	DefaultPeriod string
+	PipelineID    *int64
+	Evaluation    *string
 }
 
 func (q *Queries) GetReportRowByID(ctx context.Context, dollar_1 int64) (GetReportRowByIDRow, error) {
@@ -404,6 +466,8 @@ func (q *Queries) GetReportRowByID(ctx context.Context, dollar_1 int64) (GetRepo
 		&i.Title,
 		&i.Active,
 		&i.AccessFromLk,
+		&i.Dedup,
+		&i.DefaultPeriod,
 		&i.PipelineID,
 		&i.Evaluation,
 	)
@@ -487,53 +551,8 @@ func (q *Queries) LinkTemplateToReport(ctx context.Context, arg LinkTemplateToRe
 	return err
 }
 
-const listActiveReportRows = `-- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
-from reports r
-left join evaluate e on e.id = r.eval_id
-where r.active = true
-`
-
-type ListActiveReportRowsRow struct {
-	ID           int32
-	Name         string
-	Title        string
-	Active       bool
-	AccessFromLk bool
-	PipelineID   *int64
-	Evaluation   *string
-}
-
-func (q *Queries) ListActiveReportRows(ctx context.Context) ([]ListActiveReportRowsRow, error) {
-	rows, err := q.db.Query(ctx, listActiveReportRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListActiveReportRowsRow
-	for rows.Next() {
-		var i ListActiveReportRowsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Title,
-			&i.Active,
-			&i.AccessFromLk,
-			&i.PipelineID,
-			&i.Evaluation,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCardsByReportID = `-- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params, q.query
+select q.card_uuid, q.title, q.q_type, q.params, q.query, q.options, q.secret
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint
@@ -545,6 +564,8 @@ type ListCardsByReportIDRow struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]ListCardsByReportIDRow, error) {
@@ -562,6 +583,8 @@ func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]Li
 			&i.QType,
 			&i.Params,
 			&i.Query,
+			&i.Options,
+			&i.Secret,
 		); err != nil {
 			return nil, err
 		}
@@ -651,6 +674,46 @@ func (q *Queries) ListExportsByReportID(ctx context.Context, dollar_1 int64) ([]
 			&i.TemplateType,
 			&i.TemplateText,
 			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicLinks = `-- name: ListPublicLinks :many
+select p.public_id, r.name as report_name, p.created_at, p.expires_at
+from public_reports p
+join reports r on r.id = p.report_id
+where $1::text is null or r.name = $1
+order by p.created_at desc
+`
+
+type ListPublicLinksRow struct {
+	PublicID   pgtype.UUID
+	ReportName string
+	CreatedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+}
+
+func (q *Queries) ListPublicLinks(ctx context.Context, reportName *string) ([]ListPublicLinksRow, error) {
+	rows, err := q.db.Query(ctx, listPublicLinks, reportName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicLinksRow
+	for rows.Next() {
+		var i ListPublicLinksRow
+		if err := rows.Scan(
+			&i.PublicID,
+			&i.ReportName,
+			&i.CreatedAt,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -780,19 +843,21 @@ func (q *Queries) ListReportLinkedCrons(ctx context.Context, name string) ([]Lis
 }
 
 const listReportRows = `-- name: ListReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 `
 
 type ListReportRowsRow struct {
-	ID           int32
-	Name         string
-	Title        string
-	Active       bool
-	AccessFromLk bool
-	PipelineID   *int64
-	Evaluation   *string
+	ID            int32
+	Name          string
+	Title         string
+	Active        bool
+	AccessFromLk  bool
+	Dedup         bool
+	DefaultPeriod string
+	PipelineID    *int64
+	Evaluation    *string
 }
 
 func (q *Queries) ListReportRows(ctx context.Context) ([]ListReportRowsRow, error) {
@@ -810,6 +875,8 @@ func (q *Queries) ListReportRows(ctx context.Context) ([]ListReportRowsRow, erro
 			&i.Title,
 			&i.Active,
 			&i.AccessFromLk,
+			&i.Dedup,
+			&i.DefaultPeriod,
 			&i.PipelineID,
 			&i.Evaluation,
 		); err != nil {

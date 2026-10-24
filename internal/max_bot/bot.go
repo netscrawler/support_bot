@@ -8,33 +8,47 @@ import (
 	maxcli "github.com/max-messenger/max-bot-api-client-go/v2"
 )
 
-func New(ctx context.Context, cfg Config, log *slog.Logger) (*maxcli.Api, error) {
+func New(
+	ctx context.Context,
+	cfg Config,
+	log *slog.Logger,
+) (*maxcli.Api, error) {
 	var opts []maxcli.Opt
 
 	l := log.WithGroup("max")
 
 	if cfg.BotPoll != 0 {
-		l.InfoContext(ctx, "setting bot poll to ", slog.Any("poll", cfg.BotPoll))
+		l.InfoContext(
+			ctx,
+			"setting bot poll to ",
+			slog.Any("poll", cfg.BotPoll),
+		)
+
 		opts = append(opts, maxcli.WithPollingTimeout(cfg.BotPoll))
 	}
 
-	if cfg.ApiProxy != "" {
+	if cfg.APIProxy != "" {
 		l.InfoContext(
 			ctx,
 			"api proxy from config not empty, creating bot with base url",
-			slog.Any("url", cfg.ApiProxy),
+			slog.Any("url", cfg.APIProxy),
 		)
-		opts = append(opts, maxcli.WithBaseURL(cfg.ApiProxy))
+
+		opts = append(opts, maxcli.WithBaseURL(cfg.APIProxy))
 	}
 
-	api, err := maxcli.NewApi(cfg.Token, opts...)
+	api, err := maxcli.NewApi(cfg.Token.Value(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create max api: %w", err)
 	}
 
 	info, err := api.Bots.GetMyInfo(ctx)
 	if err != nil {
-		l.ErrorContext(ctx, "creating bot: getting bot info", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"creating bot: getting bot info",
+			slog.Any("error", err),
+		)
 
 		return nil, fmt.Errorf("creating bot: get bot info: %w", err)
 	}

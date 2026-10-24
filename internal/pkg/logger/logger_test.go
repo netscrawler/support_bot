@@ -57,6 +57,7 @@ func TestSetup_ExcludeFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
+
 			opts := getOpts(tt.config)
 
 			log := getLogger(tt.config.Format, &buf, opts)
@@ -68,6 +69,7 @@ func TestSetup_ExcludeFields(t *testing.T) {
 				excluded := slices.Contains(tt.expectedExcluded, field)
 
 				var found bool
+
 				if tt.config.Format == "json" {
 					found = strings.Contains(output, "\""+field+"\":")
 				} else {
@@ -75,8 +77,13 @@ func TestSetup_ExcludeFields(t *testing.T) {
 				}
 
 				if excluded && found {
-					t.Errorf("field %s should be excluded but found in output: %s", field, output)
+					t.Errorf(
+						"field %s should be excluded but found in output: %s",
+						field,
+						output,
+					)
 				}
+
 				if !excluded && !found {
 					t.Errorf(
 						"field %s should be present but not found in output: %s",

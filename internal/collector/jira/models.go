@@ -2,7 +2,9 @@ package jira
 
 import "support_bot/internal/pkg/funcs"
 
-const MetaKey = "_meta"
+const (
+	MetaKey = "_meta"
+)
 
 type SearchRPL struct {
 	Expand     string           `json:"expand"`

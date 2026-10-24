@@ -1,10 +1,10 @@
 package lua_test
 
 import (
-	"support_bot/internal/processor/lua/stdlib"
 	"testing"
 
 	plugins "support_bot/internal/processor/lua"
+	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/stretchr/testify/require"
 )
@@ -13,6 +13,8 @@ func TestLuaPlugin_Execute(t *testing.T) {
 	t.Parallel()
 
 	t.Run("extend data", func(t *testing.T) {
+		t.Parallel()
+
 		plug := `
 -- Пример Lua плагина с использованием stdlib
 function process(params)
@@ -69,6 +71,8 @@ end
 	})
 
 	t.Run("extend data with fetch data", func(t *testing.T) {
+		t.Parallel()
+
 		plug := `
 		-- Пример Lua плагина с использованием stdlib
 function getOperatorFromNumber(number)

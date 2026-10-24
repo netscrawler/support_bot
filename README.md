@@ -44,7 +44,7 @@ Support TgBot — сервис для автоматической генера�
 1. **Scheduler** читает активные записи из таблицы `crons`.
 2. По cron-событию **EventCreator** находит связанные отчеты.
 3. **Orchestrator** загружает описание отчета, получателей, шаблоны и форматы экспорта.
-4. **Generator** собирает данные из источников, пропускает их через **Pipeline** (Lua/SQL), проверяет условия `evaluate.expr`, генерирует файлы и отправляет сообщение через **SenderProvider**.
+4. **Generator** собирает данные из источников, пропускает их через **Pipeline** (Lua/SQL), проверяет условия `evaluate.expr`, генерирует файлы и отправляет сообщение через **delivery.Dispatcher**.
 5. Результаты отправки сохраняются в БД.
 
 ## Требования
@@ -127,6 +127,17 @@ Support TgBot — сервис для автоматической генера�
 
 - `GET /api/v1/public/report/{report_id}` — скачать сгенерированный отчёт по публичному UUID.
 
+Ссылки управляются через CLI:
+
+```bash
+# ссылка на неделю (без -ttl или с -ttl 0 — бессрочная)
+sbot ctl link create -config config/local.yaml -report my_report -ttl 168h
+sbot ctl link list   -config config/local.yaml [-report my_report]
+sbot ctl link revoke -config config/local.yaml <uuid>
+```
+
+Истёкшая или отозванная ссылка отвечает `410 Gone`.
+
 Настройки сервера — секция `http` в конфиге (`host`, `port`, таймауты, лимиты на размер тела/заголовков). Эндпоинт не
 требует аутентификации — не используйте его для отчетов с чувствительными данными без дополнительной защиты на уровне
 сети/прокси.
@@ -151,6 +162,48 @@ ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/deploy-docker.ym
 ### Источники (Queries)
 Отчет может собирать данные из нескольких источников. В CEL и шаблонах данные доступны по `title` запроса.
 
+#### Период (`period_from` / `period_to`)
+В значениях `params`, начинающихся с `=` (CEL), доступны переменные `period_from` и `period_to` (timestamp): начало периода включительно, конец не включительно. В условии отчёта (`evaluation`) они недоступны — только в `params`. `${name}` в `query` подставляет значение параметра.
+
+| Период | `period_from` | `period_to` |
+|--------|---------------|-------------|
+| `today` | сегодня 00:00 | завтра 00:00 |
+| `yesterday` | вчера 00:00 | сегодня 00:00 |
+| `week` | 7 полных дней до сегодня: сегодня 00:00 − 7 дней | сегодня 00:00 |
+| `month` | 1-е число прошлого календарного месяца 00:00 | 1-е число текущего месяца 00:00 |
+
+Время считается в часовом поясе процесса.
+
+Поле отчёта `default_period` (по умолчанию `today`) задаёт период для запусков по cron и кнопки «▶️ Запустить». В боте («📤 Получить», ЛК) для отчётов, где в `params` есть `period_`, сначала показывается выбор периода (Сегодня / Вчера / Неделя / Месяц); для остальных отчётов выбор не показывается.
+
+Пример: PostgreSQL-запрос за вчерашний день.
+
+```json
+{
+  "name": "orders_daily",
+  "title": "Заказы за день",
+  "default_period": "yesterday",
+  "queries": [
+    {
+      "card_uuid": "main",
+      "title": "orders",
+      "type": "pg",
+      "query": "select id, amount from orders where created_at >= '${from}' and created_at < '${to}'",
+      "params": {"from": "=period_from", "to": "=period_to"}
+    }
+  ],
+  "recipients": [
+    {"name": "ops chat", "type": "tg", "chat": {"chat_id": -1001234567890, "type": "supergroup", "is_active": true, "ch_type": "tg"}}
+  ],
+  "exports": [{"format": "xlsx", "file_name": "orders.xlsx"}],
+  "evaluation": "size(report[\"orders\"]) > 0",
+  "active": true,
+  "crons": [{"name": "daily 09:00", "cron": "0 9 * * *", "is_active": true, "event_type": 0}]
+}
+```
+
+Миграцию `migrations/init.sql/010_report_default_period.sql` на существующей БД нужно накатить вручную (init-скрипты выполняются только при первом старте пустой БД).
+
 ### Процессоры (Pipeline)
 После сбора данные могут быть обработаны:
 - **SQL (DuckDB)**: Выполнение аналитических запросов над собранными данными.
@@ -158,6 +211,33 @@ ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/deploy-docker.ym
 
 ### Шаблоны
 Используются стандартные `text/template` и `html/template` с функциями **Sprig** и кастомными фильтрами форматирования.
+
+### Дедупликация (`dedup`)
+Флаг `"dedup": true` в JSON отчёта (по умолчанию выключен) не даёт отчёту на частом cron слать одно и то же. Запуск по cron не отправляется, если данные совпадают с последним успешным запуском `cron` или `manual`. В «🧾 Запуски» такой запуск виден как `skipped` / `duplicate`.
+
+- Сравниваются все листы датасета после pipeline, кроме `_meta`. Порядок ключей в строке не важен, порядок строк важен.
+- Изменчивое значение (время генерации и т.п.) кладите в лист `_meta`, иначе каждый запуск будет «новым».
+- Ручной запуск, пробный запуск админа и получение из ЛК отправляются всегда; успешный ручной запуск становится точкой сравнения.
+
+Пример: алерты проверяются раз в 5 минут, сообщение приходит только когда набор горящих алертов изменился.
+
+```json
+{
+  "name": "firing_alerts",
+  "title": "Горящие алерты",
+  "queries": [
+    {"card_uuid": "ops", "title": "firing", "params": {"state": "Alerting"}, "type": "grafana_alerts", "query": "active"}
+  ],
+  "recipients": [
+    {"name": "ops chat", "type": "tg", "chat": {"chat_id": -1001234567890, "type": "supergroup", "is_active": true, "ch_type": "tg"}}
+  ],
+  "exports": [{"format": "xlsx", "file_name": "alerts.xlsx"}],
+  "evaluation": "size(report[\"firing\"]) > 0",
+  "active": true,
+  "dedup": true,
+  "crons": [{"name": "every 5 min", "cron": "*/5 * * * *", "is_active": true, "event_type": 0}]
+}
+```
 
 ## Live preview шаблонов
 

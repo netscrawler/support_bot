@@ -24,14 +24,26 @@ func Help() {
 
 	fmt.Fprintf(os.Stderr, "  config     Управление конфигурацией приложения\n")
 	fmt.Fprintf(os.Stderr, "             Подкоманды:\n")
-	fmt.Fprintf(os.Stderr, "               validate  Проверка файла конфигурации на ошибки\n")
-	fmt.Fprintf(os.Stderr, "                         -config <путь>  Путь к проверяемому файлу\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"               validate  Проверка файла конфигурации на ошибки\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         -config <путь>  Путь к проверяемому файлу\n",
+	)
 	fmt.Fprintf(
 		os.Stderr,
 		"               update    Перезапись конфигурации (нормализация структуры)\n",
 	)
-	fmt.Fprintf(os.Stderr, "                         -config <путь>  Путь к обновляемому файлу\n")
-	fmt.Fprintf(os.Stderr, "               create    Генерация файла конфигурации по умолчанию\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"                         -config <путь>  Путь к обновляемому файлу\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"               create    Генерация файла конфигурации по умолчанию\n",
+	)
 	fmt.Fprintf(
 		os.Stderr,
 		"                         -out <путь>     Куда сохранить (по умолчанию в консоль)\n",
@@ -41,21 +53,39 @@ func Help() {
 		"                         -format <тип>   Формат: yaml или env (по умолчанию yaml)\n\n",
 	)
 
-	fmt.Fprintf(os.Stderr, "  ctl        Управление данными (отчетами и скриптами) в БД\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"  ctl        Управление данными (отчетами и скриптами) в БД\n",
+	)
 	fmt.Fprintf(os.Stderr, "             Подкоманды:\n")
-	fmt.Fprintf(os.Stderr, "               export    Экспорт всех отчетов из БД в JSON-файлы\n")
-	fmt.Fprintf(os.Stderr, "                         -config <путь>  Конфиг для подключения к БД\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"               export    Экспорт всех отчетов из БД в JSON-файлы\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         -config <путь>  Конфиг для подключения к БД\n",
+	)
 	fmt.Fprintf(
 		os.Stderr,
 		"                         -out <папка>    Директория для сохранения файлов\n",
 	)
-	fmt.Fprintf(os.Stderr, "               create    Создание JSON-шаблона для нового отчета\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"               create    Создание JSON-шаблона для нового отчета\n",
+	)
 	fmt.Fprintf(
 		os.Stderr,
 		"                         -out <путь>     Файл для записи (по умолчанию stdout)\n",
 	)
-	fmt.Fprintf(os.Stderr, "               apply     Загрузка отчетов из файлов в базу данных\n")
-	fmt.Fprintf(os.Stderr, "                         -config <путь>  Конфиг для подключения к БД\n")
+	fmt.Fprintf(
+		os.Stderr,
+		"               apply     Загрузка отчетов из файлов в базу данных\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         -config <путь>  Конфиг для подключения к БД\n",
+	)
 	fmt.Fprintf(
 		os.Stderr,
 		"                         -report <путь>  Путь к файлу или маска (например, 'reports/*.json')\n",
@@ -64,12 +94,53 @@ func Help() {
 		os.Stderr,
 		"               validate  Проверка структуры JSON-файлов отчетов без загрузки в БД\n",
 	)
-	fmt.Fprintf(os.Stderr, "                         -report <путь>  Путь к файлу или маска\n")
-	fmt.Fprintf(os.Stderr, "               script    Работа с Lua-скриптами (плагинами)\n")
-	fmt.Fprintf(os.Stderr, "                         create -out <путь>  Создать пример скрипта\n")
 	fmt.Fprintf(
 		os.Stderr,
-		"                         save   -config <путь> -script <путь>  Сохранить скрипт в БД\n\n",
+		"                         -report <путь>  Путь к файлу или маска\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"               script    Работа с Lua-скриптами (плагинами)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         create -out <путь>  Создать пример скрипта\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         save   -config <путь> -script <путь>  Сохранить скрипт в БД\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"               link      Публичные ссылки на отчеты\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         create -config <путь> -report <имя> [-ttl 168h]  Создать ссылку (0 — бессрочно)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         list   -config <путь> [-report <имя>]  Список ссылок\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         revoke -config <путь> <uuid>  Отозвать ссылку\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"               secret    Секреты в БД (нужен SECRETS_KEY; значение для set читается из stdin)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         set    -config <путь> -name <имя> -host <хост[:порт]>  Сохранить секрет\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         list   -config <путь>  Список секретов (имя и хост)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         delete -config <путь> -name <имя>  Удалить секрет\n\n",
 	)
 
 	fmt.Fprintf(

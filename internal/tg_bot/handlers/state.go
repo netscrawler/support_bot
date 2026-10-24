@@ -10,13 +10,6 @@ const (
 	addChatState    = "add_chat"
 	removeUserState = "remove_user"
 	removeChatState = "remove_chat"
-
-	sendNotificationState    = "send_message"
-	confirmNotificationState = "confirm_notification"
-
-	menuState = "menu"
-
-	loadReportState = "load_report"
 )
 
 type State struct {
@@ -39,45 +32,10 @@ func NewState(cleanUpTime time.Duration) *State {
 
 func (s *State) set(chatID int64, state string) {
 	s.mu.Lock()
+
 	s.s[chatID] = state
 	s.mu.Unlock()
 	s.cleanUpAfter(chatID, s.cleanUpTime)
-}
-
-func (s *State) get(chatID int64) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.s[chatID]
-}
-
-func (s *State) setMsgData(chatID int64, msg string) {
-	s.mu.Lock()
-	s.msg[chatID] = msg
-	s.mu.Unlock()
-	s.cleanUpAfter(chatID, s.cleanUpTime)
-}
-
-func (s *State) getMsgData(chatID int64) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	data, ok := s.msg[chatID]
-
-	return data, ok
-}
-
-func (s *State) delete(chatID int64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.s, chatID)
-	delete(s.msg, chatID)
-
-	if timer, exists := s.timers[chatID]; exists {
-		timer.Stop()
-		delete(s.timers, chatID)
-	}
 }
 
 // Очистка с отменой старого таймера.

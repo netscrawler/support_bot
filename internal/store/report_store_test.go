@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"support_bot/internal/db/sqlcgen"
-	"support_bot/internal/models"
+	"strings"
 	"testing"
 
+	"support_bot/internal/db/sqlcgen"
+	"support_bot/internal/models"
+
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v4"
 )
 
@@ -30,7 +33,7 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -39,17 +42,32 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 				"title",
 				"active",
 				"access_from_lk",
+				"dedup",
+				"default_period",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, &pipelineID, new("1 == 1")))
+			AddRow(
+				int32(1), "r1", "Report One", true, true, true, "yesterday",
+				&pipelineID, new("1 == 1"),
+			))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"card_uuid", "title", "q_type", "params", "query"},
-		).AddRow("uuid-1", "Card One", "mb", []byte(`{"k":"v"}`), (*string)(nil)))
+			[]string{
+				"card_uuid",
+				"title",
+				"q_type",
+				"params",
+				"query",
+				"options",
+				"secret",
+			},
+		).
+			AddRow("uuid-1", "Card One", "mb", []byte(`{"k":"v"}`), (*string)(nil), []byte(`{}`), new("tok")),
+		)
 
 	pool.ExpectQuery("select\n    rc.name").
 		WithArgs(int64(1)).
@@ -129,18 +147,28 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 		t.Fatalf("GetByID() error = %v", err)
 	}
 
+	if report.DefaultPeriod != models.PeriodYesterday {
+		t.Errorf("DefaultPeriod = %q, want yesterday", report.DefaultPeriod)
+	}
+
+	if !report.Dedup {
+		t.Errorf("Dedup = false, want true")
+	}
+
 	if len(report.Crons) != 1 {
 		t.Errorf(
 			"Crons = %v, want 1 entry (this was silently dropped by the orchestrator's old loader)",
 			report.Crons,
 		)
 	}
+
 	if report.Pipeline == nil || report.Pipeline.Name != "p1" {
 		t.Errorf(
 			"Pipeline = %v, want non-nil with Name=p1 (this was silently dropped by the orchestrator's old loader)",
 			report.Pipeline,
 		)
 	}
+
 	if len(report.Queries) != 1 || report.Queries[0].Type != "mb" {
 		t.Errorf(
 			"Queries[0].Type = %q, want %q (this field was dropped by the tg_bot loader's card row type)",
@@ -148,6 +176,7 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 			"mb",
 		)
 	}
+
 	if len(report.Queries) != 1 || len(report.Queries[0].RawParams) == 0 {
 		t.Errorf(
 			"Queries[0].RawParams empty, want %s (also dropped by the tg_bot loader)",
@@ -158,24 +187,37 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 	if len(report.Recipients) != 1 {
 		t.Fatalf("Recipients = %v, want 1 entry", report.Recipients)
 	}
+
 	recipient := report.Recipients[0]
 	if recipient.Chat == nil || recipient.Chat.ChatID != 99 {
 		t.Errorf("Recipients[0].Chat = %+v, want ChatID=99", recipient.Chat)
 	}
+
 	if recipient.Chat != nil &&
 		(recipient.Chat.Title == nil || *recipient.Chat.Title != "Chat Title") {
-		t.Errorf("Recipients[0].Chat.Title = %v, want %q", recipient.Chat.Title, "Chat Title")
+		t.Errorf(
+			"Recipients[0].Chat.Title = %v, want %q",
+			recipient.Chat.Title,
+			"Chat Title",
+		)
 	}
+
 	if recipient.Email == nil || len(recipient.Email.Dest) != 1 ||
 		recipient.Email.Dest[0] != "a@example.com" {
-		t.Errorf("Recipients[0].Email = %+v, want Dest=[a@example.com]", recipient.Email)
+		t.Errorf(
+			"Recipients[0].Email = %+v, want Dest=[a@example.com]",
+			recipient.Email,
+		)
 	}
+
 	if recipient.Type != models.RecipientType("tg") {
 		t.Errorf("Recipients[0].Type = %q, want %q", recipient.Type, "tg")
 	}
+
 	if !recipient.NeedDeleteAfterEndOfDay {
 		t.Errorf("Recipients[0].NeedDeleteAfterEndOfDay = false, want true")
 	}
+
 	if recipient.ThreadID == nil || *recipient.ThreadID != 555 {
 		t.Errorf("Recipients[0].ThreadID = %v, want 555", recipient.ThreadID)
 	}
@@ -183,16 +225,26 @@ func TestReportStore_GetByID_LoadsAllFields(t *testing.T) {
 	if len(report.Exports) != 1 {
 		t.Fatalf("Exports = %v, want 1 entry", report.Exports)
 	}
+
 	export := report.Exports[0]
 	if export.Format != "csv" {
 		t.Errorf("Exports[0].Format = %q, want %q", export.Format, "csv")
 	}
+
 	if export.Template == nil || export.Template.ID != 3 ||
 		export.Template.Title != "Template One" {
-		t.Errorf("Exports[0].Template = %+v, want ID=3 Title=%q", export.Template, "Template One")
+		t.Errorf(
+			"Exports[0].Template = %+v, want ID=3 Title=%q",
+			export.Template,
+			"Template One",
+		)
 	}
+
 	if len(export.Order["sheet1"]) != 2 || export.Order["sheet1"][0] != "col1" {
-		t.Errorf("Exports[0].Order[sheet1] = %v, want [col1 col2]", export.Order["sheet1"])
+		t.Errorf(
+			"Exports[0].Order[sheet1] = %v, want [col1 col2]",
+			export.Order["sheet1"],
+		)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {
@@ -213,7 +265,7 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 
 	pipelineID := int64(42)
 
-	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr").
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
 			[]string{
@@ -222,17 +274,31 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 				"title",
 				"active",
 				"access_from_lk",
+				"dedup",
+				"default_period",
 				"pipeline_id",
 				"evaluation",
 			},
 		).
-			AddRow(int32(1), "r1", "Report One", true, true, &pipelineID, new("1 == 1")))
+			AddRow(
+				int32(1), "r1", "Report One", true, true, true, "yesterday",
+				&pipelineID, new("1 == 1"),
+			))
 
 	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
 		WithArgs(int64(1)).
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"card_uuid", "title", "q_type", "params", "query"},
-		))
+			[]string{
+				"card_uuid",
+				"title",
+				"q_type",
+				"params",
+				"query",
+				"options",
+				"secret",
+			},
+		),
+		)
 
 	pool.ExpectQuery("select\n    rc.name").
 		WithArgs(int64(1)).
@@ -282,7 +348,10 @@ func TestReportStore_GetByID_PipelineNotFound(t *testing.T) {
 
 	_, err = s.GetByID(context.Background(), 1)
 	if !errors.Is(err, models.ErrNotFound) {
-		t.Fatalf("GetByID() error = %v, want errors.Is(err, models.ErrNotFound)", err)
+		t.Fatalf(
+			"GetByID() error = %v, want errors.Is(err, models.ErrNotFound)",
+			err,
+		)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {
@@ -353,6 +422,7 @@ func TestReportStore_LoadPaged_ClampsPage(t *testing.T) {
 			if total != int(tt.total) {
 				t.Errorf("LoadPaged() total = %d, want %d", total, tt.total)
 			}
+
 			if len(reports) != len(tt.mockRowNames) {
 				t.Fatalf(
 					"LoadPaged() returned %d reports, want %d (must not be empty for an out-of-range page)",
@@ -360,9 +430,15 @@ func TestReportStore_LoadPaged_ClampsPage(t *testing.T) {
 					len(tt.mockRowNames),
 				)
 			}
+
 			for i, name := range tt.mockRowNames {
 				if reports[i].Name != name {
-					t.Errorf("LoadPaged() reports[%d].Name = %q, want %q", i, reports[i].Name, name)
+					t.Errorf(
+						"LoadPaged() reports[%d].Name = %q, want %q",
+						i,
+						reports[i].Name,
+						name,
+					)
 				}
 			}
 
@@ -392,6 +468,7 @@ func TestReportStore_Create_AlreadyExists(t *testing.T) {
 	if !errors.Is(err, models.ErrAlreadyExist) {
 		t.Fatalf("Create() error = %v, want models.ErrAlreadyExist", err)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -406,6 +483,7 @@ func execTxOnMock(
 	rep models.Report,
 ) (int64, error) {
 	t.Helper()
+
 	return s.createWithPool(context.Background(), pool, rep)
 }
 
@@ -427,7 +505,7 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 		WithArgs("1 == 1").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true).
+		WithArgs("new-report", "New Report", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 	pool.ExpectCommit()
 
@@ -436,15 +514,57 @@ func TestReportStore_Create_NewReport_NoDependencies(t *testing.T) {
 		pool,
 		NewReportStore(nil, slog.New(slog.DiscardHandler)),
 		models.Report{
-			Name: "new-report", Title: "New Report", Evaluation: "1 == 1", Active: true,
+			Name:       "new-report",
+			Title:      "New Report",
+			Evaluation: "1 == 1",
+			Active:     true,
 		},
 	)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
+
 	if id != 100 {
 		t.Errorf("Create() id = %d, want 100", id)
 	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// dedup=true из модели уходит в insert отчёта.
+func TestReportStore_Create_PassesDedup(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectBegin()
+	pool.ExpectQuery("select exists").
+		WithArgs("r").
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+	pool.ExpectQuery("select id from evaluate").
+		WithArgs("").
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into evaluate").
+		WithArgs("").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
+	pool.ExpectQuery("insert into reports").
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, true, "today").
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
+	pool.ExpectCommit()
+
+	if _, err := execTxOnMock(
+		t,
+		pool,
+		NewReportStore(nil, slog.New(slog.DiscardHandler)),
+		models.Report{Name: "r", Title: "R", Active: true, Dedup: true},
+	); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -466,31 +586,45 @@ func TestReportStore_Create_QueryTextPassedToFindAndInsert(t *testing.T) {
 	pool.ExpectQuery("select exists").
 		WithArgs("r").
 		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
-	pool.ExpectQuery("select id from evaluate").WithArgs("").WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("select id from evaluate").
+		WithArgs("").
+		WillReturnError(pgx.ErrNoRows)
 	pool.ExpectQuery("insert into evaluate").
 		WithArgs("").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 	pool.ExpectQuery("insert into reports").
-		WithArgs("r", "R", int64(10), (*int64)(nil), false, true).
+		WithArgs("r", "R", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	for i, query := range []*string{&q1, &q2} {
 		qid := int32(20 + i)
+
 		pool.ExpectQuery("select id from queries").
-			WithArgs("db", "T", query).
+			WithArgs("db", "T", query, []byte("{}"), (*string)(nil)).
 			WillReturnError(pgx.ErrNoRows)
 		pool.ExpectQuery("insert into queries").
-			WithArgs("db", "T", "pg", params, query).
+			WithArgs("db", "T", "pg", params, query, []byte("{}"), (*string)(nil)).
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(qid))
 		pool.ExpectExec("insert into report_queries").
 			WithArgs(int32(100), qid).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	}
+
 	pool.ExpectCommit()
 
 	cards := []models.Card{
-		{CardUUID: "db", Title: "T", Type: models.CollectTypePostgres, Query: q1},
-		{CardUUID: "db", Title: "T", Type: models.CollectTypePostgres, Query: q2},
+		{
+			CardUUID: "db",
+			Title:    "T",
+			Type:     models.CollectTypePostgres,
+			Query:    q1,
+		},
+		{
+			CardUUID: "db",
+			Title:    "T",
+			Type:     models.CollectTypePostgres,
+			Query:    q2,
+		},
 	}
 	if _, err := execTxOnMock(
 		t,
@@ -500,6 +634,7 @@ func TestReportStore_Create_QueryTextPassedToFindAndInsert(t *testing.T) {
 	); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -532,8 +667,12 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 		CardUUID: "card-uuid-1",
 		Title:    "Card One",
 		Type:     "mb",
-		Params:   map[string]string{"date1": "2024-01-01", "date2": "2024-01-31"},
+		Params: map[string]string{
+			"date1": "2024-01-01",
+			"date2": "2024-01-31",
+		},
 	}
+
 	wantQueryParams, err := json.Marshal(card.Params)
 	if err != nil {
 		t.Fatalf("json.Marshal(card.Params) error = %v", err)
@@ -544,8 +683,13 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 		Format:   "csv",
 		FileName: &fileName,
 		Order:    map[string][]string{"sheet1": {"col1", "col2"}},
-		Template: &models.Template{Title: "Tmpl One", Type: "html", TemplateText: "<html></html>"},
+		Template: &models.Template{
+			Title:        "Tmpl One",
+			Type:         "html",
+			TemplateText: "<html></html>",
+		},
 	}
+
 	wantSortOrder, err := json.Marshal(export.Order)
 	if err != nil {
 		t.Fatalf("json.Marshal(export.Order) error = %v", err)
@@ -582,7 +726,10 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 	}
 
 	rep := models.Report{
-		Name: "full-report", Title: "Full Report", Evaluation: "1 == 1", Active: true,
+		Name:       "full-report",
+		Title:      "Full Report",
+		Evaluation: "1 == 1",
+		Active:     true,
 		Queries:    []models.Card{card},
 		Exports:    []models.Export{export},
 		Crons:      []models.Cron{cron},
@@ -603,15 +750,15 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(10)))
 
 	pool.ExpectQuery("insert into reports").
-		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true).
+		WithArgs("full-report", "Full Report", int64(10), (*int64)(nil), false, true, false, "today").
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(100)))
 
 	// Карточка: не найдена -> создаётся с промаршаленными card.Params.
 	pool.ExpectQuery("select id from queries").
-		WithArgs("card-uuid-1", "Card One", (*string)(nil)).
+		WithArgs("card-uuid-1", "Card One", (*string)(nil), []byte("{}"), (*string)(nil)).
 		WillReturnError(pgx.ErrNoRows)
 	pool.ExpectQuery("insert into queries").
-		WithArgs("card-uuid-1", "Card One", "mb", wantQueryParams, (*string)(nil)).
+		WithArgs("card-uuid-1", "Card One", "mb", wantQueryParams, (*string)(nil), []byte("{}"), (*string)(nil)).
 		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(21)))
 	pool.ExpectExec("insert into report_queries").
 		WithArgs(int32(100), int32(21)).
@@ -670,14 +817,184 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 
 	pool.ExpectCommit()
 
-	id, err := execTxOnMock(t, pool, NewReportStore(nil, slog.New(slog.DiscardHandler)), rep)
+	id, err := execTxOnMock(
+		t,
+		pool,
+		NewReportStore(nil, slog.New(slog.DiscardHandler)),
+		rep,
+	)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
+
 	if id != 100 {
 		t.Errorf("Create() id = %d, want 100", id)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestReportStore_Load_PartialResult проверяет, что отчёт, который не удалось
+// собрать, не теряется молча: Load возвращает собранные отчёты и ошибку с
+// именем несобранного.
+func TestReportStore_Load_PartialResult(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
+		WillReturnRows(pgxmock.NewRows(
+			[]string{
+				"id", "name", "title", "active", "access_from_lk", "dedup",
+				"default_period", "pipeline_id", "evaluation",
+			},
+		).
+			AddRow(int32(1), "broken", "Broken", true, true, true, "yesterday", (*int64)(nil), new("1 == 1")).
+			AddRow(int32(2), "ok", "Ok", true, true, true, "yesterday", (*int64)(nil), new("1 == 1")),
+		)
+
+	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
+		WithArgs(int64(1)).
+		WillReturnError(errors.New("boom"))
+
+	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows(
+			[]string{
+				"card_uuid",
+				"title",
+				"q_type",
+				"params",
+				"query",
+				"options",
+				"secret",
+			},
+		),
+		)
+
+	pool.ExpectQuery("select\n    rc.name").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"name", "config", "remote_path", "thread_id", "email_id", "type",
+			"need_delete_after_end_of_day", "dest", "copy", "subject", "body",
+			"chat_id", "chat_title", "chat_type", "chat_description",
+			"chat_is_active", "chat_ch_type",
+		}))
+
+	pool.ExpectQuery("select ef.format, re.file_name").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"format", "file_name", "template_id", "template_title",
+			"template_type", "template_text", "sort_order",
+		}))
+
+	pool.ExpectQuery("select c.cron, c.name, c.description, c.is_active, c.event_type").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"cron", "name", "description", "is_active", "event_type",
+		}))
+
+	s := NewReportStoreForTest(sqlcgen.New(pool))
+
+	got, err := s.Load(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Fatalf(
+			"Load() error = %v, want error naming report %q",
+			err,
+			"broken",
+		)
+	}
+
+	if len(got) != 1 || got[0].Name != "ok" {
+		t.Fatalf("Load() = %+v, want only report %q", got, "ok")
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestMapCardRows_OptionsAndSecret(t *testing.T) {
+	name := "tok"
+	cards := mapCardRows([]sqlcgen.ListCardsByReportIDRow{
+		{
+			CardUuid: "u",
+			Title:    "T",
+			QType:    "http",
+			Options:  []byte(`{"root":"a"}`),
+			Secret:   &name,
+		},
+		{CardUuid: "u2", Title: "T2", QType: "pg", Options: []byte(`{}`)},
+	})
+
+	if string(cards[0].Options) != `{"root":"a"}` || cards[0].Secret != "tok" {
+		t.Errorf("card 0 = %+v, want options and secret", cards[0])
+	}
+
+	if cards[1].Secret != "" {
+		t.Errorf("card 1 secret = %q, want empty", cards[1].Secret)
+	}
+}
+
+func TestReportStore_getOrCreateQuery_OptionsAndSecret(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	opts := []byte(`{"root":"a"}`)
+	secret := "tok"
+
+	pool.ExpectQuery("select id from queries").
+		WithArgs("u", "T", (*string)(nil), opts, &secret).
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into queries").
+		WithArgs("u", "T", "http", []byte("{}"), (*string)(nil), opts, &secret).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int32(7)))
+
+	id, err := (&ReportStore{}).getOrCreateQuery(
+		context.Background(),
+		sqlcgen.New(pool),
+		models.Card{
+			CardUUID: "u",
+			Title:    "T",
+			Type:     "http",
+			Options:  opts,
+			Secret:   secret,
+		},
+	)
+	if err != nil || id != 7 {
+		t.Fatalf("getOrCreateQuery() = %d, %v; want 7, nil", id, err)
+	}
+}
+
+func TestReportStore_getOrCreateQuery_SecretNotFound(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectQuery("select id from queries").
+		WithArgs("u", "T", (*string)(nil), []byte("{}"), new("nope")).
+		WillReturnError(pgx.ErrNoRows)
+	pool.ExpectQuery("insert into queries").
+		WithArgs("u", "T", "http", []byte("{}"), (*string)(nil), []byte("{}"), new("nope")).
+		WillReturnError(&pgconn.PgError{Code: "23503", ConstraintName: "queries_secret_fkey"})
+
+	_, err = (&ReportStore{}).getOrCreateQuery(
+		context.Background(), sqlcgen.New(pool),
+		models.Card{CardUUID: "u", Title: "T", Type: "http", Secret: "nope"},
+	)
+	if err == nil || err.Error() != `secret "nope" not found` {
+		t.Fatalf(
+			"getOrCreateQuery() error = %v, want secret \"nope\" not found",
+			err,
+		)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
 	"support_bot/internal/api/http/handlers"
 	"support_bot/internal/api/http/middlewares"
 	"support_bot/internal/pkg/httplib"
@@ -18,7 +19,11 @@ type Server struct {
 	log *slog.Logger
 }
 
-func New(cfg *Config, reportHandler *handlers.Handler, log *slog.Logger) *Server {
+func New(
+	cfg *Config,
+	reportHandler *handlers.Handler,
+	log *slog.Logger,
+) *Server {
 	router := httplib.NewRouter()
 	mw := middlewares.NewMiddleware(log, cfg.MaxBodyBytes)
 
@@ -26,6 +31,7 @@ func New(cfg *Config, reportHandler *handlers.Handler, log *slog.Logger) *Server
 	// быть вызван до регистрации групп/роутов — иначе они получат пустую цепочку.
 	router.Use(
 		mw.RecoverMiddleware,
+		mw.Metrics,
 		mw.Trace,
 		mw.Gzip,
 		mw.LogRequest,
@@ -63,7 +69,8 @@ func (s *Server) Router() *httplib.Router {
 }
 
 func (s *Server) Run() error {
-	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := s.srv.ListenAndServe(); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 

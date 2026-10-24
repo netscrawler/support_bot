@@ -41,6 +41,7 @@ func (mw *MW) LogRequest(next http.Handler) http.Handler {
 
 		if r.Body != nil {
 			limited := io.LimitReader(r.Body, mw.maxBodySize)
+
 			buf, err := io.ReadAll(limited)
 			if err != nil {
 				mw.log.ErrorContext(

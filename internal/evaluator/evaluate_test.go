@@ -1,8 +1,11 @@
 package evaluator_test
 
 import (
-	"support_bot/internal/evaluator"
 	"testing"
+	"time"
+
+	"support_bot/internal/evaluator"
+	"support_bot/internal/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,8 +43,9 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 		fn := `report["sheet1"].all(r, r["total"] != 0)`
 
+		// Нет листа — ошибка оценки условия: запуск станет failed, а не тихо пропустится.
 		allow, err := eval.Evaluate(t.Context(), report, fn)
-		require.NoError(t, err)
+		require.ErrorContains(t, err, "no such key: sheet1")
 		assert.False(t, allow)
 	})
 
@@ -79,6 +83,7 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 	t.Run("always expr", func(t *testing.T) {
 		t.Parallel()
+
 		ok, err := eval.Evaluate(t.Context(), nil, "[*]")
 		require.NoError(t, err)
 		assert.True(t, ok)
@@ -87,4 +92,29 @@ func TestEvaluator_Evaluate(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ok)
 	})
+}
+
+func TestEngine_EvalStr_Period(t *testing.T) {
+	t.Parallel()
+
+	eval, err := evaluator.NewEngine()
+	require.NoError(t, err)
+
+	from, to, err := models.PeriodToday.Range(time.Now())
+	require.NoError(t, err)
+
+	want, err := eval.EvalStr(t.Context(), "=today()", from, to)
+	require.NoError(t, err)
+
+	got, err := eval.EvalStr(t.Context(), "=period_from", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	got, err = eval.EvalStr(t.Context(), "=addDays(period_to, -1)", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	got, err = eval.EvalStr(t.Context(), "plain", from, to)
+	require.NoError(t, err)
+	assert.Equal(t, "plain", got)
 }

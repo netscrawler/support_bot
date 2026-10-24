@@ -26,11 +26,11 @@ const (
 )
 
 type LogConfig struct {
-	Level   string   `env:"LOG_LEVEL"   yaml:"level"   env-default:"prod"   comment:"Профиль логирования (debug - уровень DEBUG|prod - Уровень INFO|test - Уровень DEBUG + add source)"`
-	File    string   `env:"LOG_FILE"    yaml:"file"                         comment:"Путь к файлу куда писать логи(работает только если в output есть file)"`
-	Output  []string `env:"LOG_OUTPUT"  yaml:"output"  env-default:"stdout" comment:"Вывод логов: (stdout|stdin|stderr|file) поддерживает несколько"`
-	Format  string   `env:"LOG_FORMAT"  yaml:"format"  env-default:"text"   comment:"Формат в котором пишутся логи: (json|text)"`
-	Exclude []string `env:"LOG_EXCLUDE" yaml:"exclude"                      comment:"Список стандартных полей для исключения (time, level, msg, source)"`
+	Level   string   `comment:"Профиль логирования (debug - уровень DEBUG|prod - Уровень INFO|test - Уровень DEBUG + add source)"                                        env:"LOG_LEVEL"   env-default:"prod"   yaml:"level"`
+	File    string   `comment:"Путь к файлу куда писать логи(работает только если в output есть file)"                                                                   env:"LOG_FILE"    yaml:"file"`
+	Output  []string `comment:"Вывод логов: (stdout|stdin|stderr|file) поддерживает несколько"                                                                           env:"LOG_OUTPUT"  env-default:"stdout" yaml:"output"`
+	Format  string   `comment:"Формат в котором пишутся логи: (json|text)"                                                                                               env:"LOG_FORMAT"  env-default:"text"   yaml:"format"`
+	Exclude []string `comment:"Список стандартных полей для исключения (time, level, msg, source)"                                                                       env:"LOG_EXCLUDE" yaml:"exclude"`
 }
 
 func (l *LogConfig) Default() {
@@ -57,7 +57,10 @@ func (l *LogConfig) Validate() error {
 	for _, o := range l.Output {
 		valid := validateOut(o)
 		if !valid {
-			outErr = errors.Join(outErr, fmt.Errorf("invalid log format: %s", o))
+			outErr = errors.Join(
+				outErr,
+				fmt.Errorf("invalid log format: %s", o),
+			)
 		}
 	}
 
@@ -69,7 +72,10 @@ func (l *LogConfig) Validate() error {
 	}
 
 	if outErr != nil {
-		outErr = fmt.Errorf("%w available out:(file, stdout, stdin, stderr)", outErr)
+		outErr = fmt.Errorf(
+			"%w available out:(file, stdout, stdin, stderr)",
+			outErr,
+		)
 	}
 
 	return errors.Join(levelErr, formatErr, outErr)

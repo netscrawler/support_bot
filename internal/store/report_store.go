@@ -1,14 +1,19 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,7 +28,9 @@ type ReportStore struct {
 // Общий источник истины для ReportStore.LoadPaged и
 // internal/tg_bot/service.Report, которые раньше независимо дублировали
 // это же значение как две отдельные константы, рискуя разойтись.
-const ReportsPageSize = 5
+const (
+	ReportsPageSize = 5
+)
 
 func NewReportStore(pool *pgxpool.Pool, log *slog.Logger) *ReportStore {
 	return &ReportStore{
@@ -41,17 +48,10 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 
 	reports := make([]models.Report, 0, len(rows))
 
+	var errs []error
+
 	for _, row := range rows {
-		report, err := s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
+		report, err := s.assemble(ctx, row)
 		if err != nil {
 			s.log.ErrorContext(
 				ctx,
@@ -60,41 +60,7 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 				slog.Any("error", err),
 			)
 
-			continue
-		}
-
-		reports = append(reports, *report)
-	}
-
-	return reports, nil
-}
-
-func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
-	rows, err := s.q.ListActiveReportRows(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list active reports: %w", err)
-	}
-
-	reports := make([]models.Report, 0, len(rows))
-
-	for _, row := range rows {
-		report, err := s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
-		if err != nil {
-			s.log.ErrorContext(
-				ctx,
-				"error assembling report",
-				slog.Any("report_name", row.Name),
-				slog.Any("error", err),
-			)
+			errs = append(errs, fmt.Errorf("report %s: %w", row.Name, err))
 
 			continue
 		}
@@ -102,43 +68,31 @@ func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
 		reports = append(reports, *report)
 	}
 
-	return reports, nil
+	return reports, errors.Join(errs...)
 }
 
-func (s *ReportStore) GetByID(ctx context.Context, id int64) (*models.Report, error) {
+func (s *ReportStore) GetByID(
+	ctx context.Context,
+	id int64,
+) (*models.Report, error) {
 	row, err := s.q.GetReportRowByID(ctx, id)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
-func (s *ReportStore) GetByName(ctx context.Context, name string) (*models.Report, error) {
+func (s *ReportStore) GetByName(
+	ctx context.Context,
+	name string,
+) (*models.Report, error) {
 	row, err := s.q.GetAnyReportRowByName(ctx, name)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
 func (s *ReportStore) LoadByEvent(
@@ -152,16 +106,7 @@ func (s *ReportStore) LoadByEvent(
 			return nil, translateNoRows(err)
 		}
 
-		return s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
+		return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 	}
 
 	row, err := s.q.GetAnyReportRowByName(ctx, event)
@@ -169,30 +114,119 @@ func (s *ReportStore) LoadByEvent(
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
-func (s *ReportStore) GetByPublicID(ctx context.Context, publicID string) (*models.Report, error) {
+func (s *ReportStore) GetByPublicID(
+	ctx context.Context,
+	publicID string,
+) (*models.Report, error) {
 	var id pgtype.UUID
+
 	if err := id.Scan(publicID); err != nil {
 		return nil, fmt.Errorf("parse public id: %w", err)
 	}
 
-	reportID, err := s.q.GetReportIDByPublicID(ctx, id)
+	link, err := s.q.GetPublicLink(ctx, id)
 	if err != nil {
 		return nil, translateNoRows(err)
 	}
 
-	return s.GetByID(ctx, reportID)
+	if link.ExpiresAt.Valid && !link.ExpiresAt.Time.After(time.Now()) {
+		return nil, models.ErrLinkExpired
+	}
+
+	return s.GetByID(ctx, link.ReportID)
+}
+
+// CreatePublicLink создаёт ссылку на отчёт; ttl == 0 — бессрочная.
+func (s *ReportStore) CreatePublicLink(
+	ctx context.Context,
+	reportName string,
+	ttl time.Duration,
+) (string, error) {
+	row, err := s.q.GetAnyReportRowByName(ctx, reportName)
+	if err != nil {
+		return "", translateNoRows(err)
+	}
+
+	var expires pgtype.Timestamptz
+
+	if ttl > 0 {
+		expires = pgtype.Timestamptz{Time: time.Now().Add(ttl), Valid: true}
+	}
+
+	id := uuid.New()
+
+	if _, err := s.q.CreatePublicLink(ctx, sqlcgen.CreatePublicLinkParams{
+		PublicID:  pgtype.UUID{Bytes: id, Valid: true},
+		ReportID:  int64(row.ID),
+		ExpiresAt: expires,
+	}); err != nil {
+		return "", fmt.Errorf("create public link: %w", err)
+	}
+
+	return id.String(), nil
+}
+
+// ListPublicLinks возвращает ссылки, новые первыми; пустое reportName — без фильтра.
+func (s *ReportStore) ListPublicLinks(
+	ctx context.Context,
+	reportName string,
+) ([]models.PublicLink, error) {
+	var filter *string
+
+	if reportName != "" {
+		filter = &reportName
+	}
+
+	rows, err := s.q.ListPublicLinks(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("list public links: %w", err)
+	}
+
+	links := make([]models.PublicLink, 0, len(rows))
+	for _, row := range rows {
+		link := models.PublicLink{
+			ID:        uuid.UUID(row.PublicID.Bytes).String(),
+			Report:    row.ReportName,
+			CreatedAt: row.CreatedAt.Time,
+		}
+		if row.ExpiresAt.Valid {
+			link.ExpiresAt = &row.ExpiresAt.Time
+		}
+
+		links = append(links, link)
+	}
+
+	return links, nil
+}
+
+// ExpirePublicLink гасит ссылку; false, nil — ссылка уже неактивна.
+func (s *ReportStore) ExpirePublicLink(
+	ctx context.Context,
+	publicID string,
+) (bool, error) {
+	var id pgtype.UUID
+
+	if err := id.Scan(publicID); err != nil {
+		return false, fmt.Errorf("parse public id: %w", err)
+	}
+
+	n, err := s.q.ExpirePublicLink(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("expire public link: %w", err)
+	}
+
+	if n > 0 {
+		return true, nil
+	}
+
+	if _, err := s.q.GetPublicLink(ctx, id); err != nil {
+		return false, translateNoRows(err)
+	}
+
+	return false, nil
 }
 
 func (s *ReportStore) LoadPaged(
@@ -207,6 +241,7 @@ func (s *ReportStore) LoadPaged(
 	if err != nil {
 		return nil, 0, fmt.Errorf("count reports: %w", err)
 	}
+
 	if total > 0 {
 		page = min(page, (int(total)+ReportsPageSize-1)/ReportsPageSize)
 	}
@@ -225,7 +260,11 @@ func (s *ReportStore) LoadPaged(
 	for _, row := range rows {
 		reports = append(
 			reports,
-			models.ReportForTgLK{ID: int(row.ID), Name: row.Name, Title: row.Title},
+			models.ReportForTgLK{
+				ID:    int(row.ID),
+				Name:  row.Name,
+				Title: row.Title,
+			},
 		)
 	}
 
@@ -245,7 +284,10 @@ func (s *ReportStore) GetLinkedCrons(
 	for _, row := range rows {
 		crons = append(
 			crons,
-			models.SheduleUnit{Crontab: derefStr(row.Cron), Name: derefStr(row.Name)},
+			models.SheduleUnit{
+				Crontab: derefStr(row.Cron),
+				Name:    derefStr(row.Name),
+			},
 		)
 	}
 
@@ -257,7 +299,10 @@ func (s *ReportStore) GetLinkedCrons(
 // transaction, resolving each dependency by its natural key if it already
 // exists (get-or-create) rather than duplicating it. Ports
 // internal/service/report_manager.go's ReportManager.Create.
-func (s *ReportStore) Create(ctx context.Context, rep models.Report) (int64, error) {
+func (s *ReportStore) Create(
+	ctx context.Context,
+	rep models.Report,
+) (int64, error) {
 	return s.createWithPool(ctx, s.pool, rep)
 }
 
@@ -268,35 +313,32 @@ func (s *ReportStore) Create(ctx context.Context, rep models.Report) (int64, err
 // entry point above.
 func (s *ReportStore) assemble(
 	ctx context.Context,
-	id int64,
-	name, title string,
-	active, accessFromLK bool,
-	pipelineID *int64,
-	evaluation string,
+	r sqlcgen.ListReportRowsRow, // все *ReportRow*-запросы отдают одни колонки — конвертируются сюда
 ) (*models.Report, error) {
-	cardRows, err := s.q.ListCardsByReportID(ctx, id)
+	cardRows, err := s.q.ListCardsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load queries: %w", err)
 	}
 
-	recipientRows, err := s.q.ListRecipientsByReportID(ctx, id)
+	recipientRows, err := s.q.ListRecipientsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load recipients: %w", err)
 	}
 
-	exportRows, err := s.q.ListExportsByReportID(ctx, id)
+	exportRows, err := s.q.ListExportsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load exports: %w", err)
 	}
 
-	cronRows, err := s.q.ListCronsByReportID(ctx, id)
+	cronRows, err := s.q.ListCronsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load crons: %w", err)
 	}
 
 	var pipeline *models.Pipeline
-	if pipelineID != nil {
-		pipeData, err := s.q.GetPipelineByID(ctx, *pipelineID)
+
+	if r.PipelineID != nil {
+		pipeData, err := s.q.GetPipelineByID(ctx, *r.PipelineID)
 		if err != nil {
 			return nil, translateNoRows(err)
 		}
@@ -307,16 +349,18 @@ func (s *ReportStore) assemble(
 	}
 
 	return &models.Report{
-		Name:         name,
-		Title:        title,
-		Queries:      mapCardRows(cardRows),
-		Recipients:   mapRecipientRows(recipientRows),
-		Exports:      s.mapExportRows(ctx, exportRows),
-		Pipeline:     pipeline,
-		Evaluation:   evaluation,
-		Active:       active,
-		AccessFromLK: accessFromLK,
-		Crons:        mapCronRows(cronRows),
+		Name:          r.Name,
+		Title:         r.Title,
+		Queries:       mapCardRows(cardRows),
+		Recipients:    mapRecipientRows(recipientRows),
+		Exports:       s.mapExportRows(ctx, exportRows),
+		Pipeline:      pipeline,
+		Evaluation:    derefStr(r.Evaluation),
+		Active:        r.Active,
+		AccessFromLK:  r.AccessFromLk,
+		Dedup:         r.Dedup,
+		DefaultPeriod: models.PeriodName(r.DefaultPeriod),
+		Crons:         mapCronRows(cronRows),
 	}, nil
 }
 
@@ -330,17 +374,22 @@ func mapCardRows(rows []sqlcgen.ListCardsByReportIDRow) []models.Card {
 			Type:      row.QType,
 			RawParams: row.Params,
 			Query:     derefStr(row.Query),
+			Options:   row.Options,
+			Secret:    derefStr(row.Secret),
 		})
 	}
 
 	return cards
 }
 
-func mapRecipientRows(rows []sqlcgen.ListRecipientsByReportIDRow) []models.Recipient {
+func mapRecipientRows(
+	rows []sqlcgen.ListRecipientsByReportIDRow,
+) []models.Recipient {
 	recipients := make([]models.Recipient, 0, len(rows))
 
 	for _, row := range rows {
 		var chat *models.Chat
+
 		if row.ChatID != nil {
 			chat = &models.Chat{
 				ChatID:      *row.ChatID,
@@ -353,6 +402,7 @@ func mapRecipientRows(rows []sqlcgen.ListRecipientsByReportIDRow) []models.Recip
 		}
 
 		var email *models.EmailTemplate
+
 		if row.EmailID != nil {
 			email = &models.EmailTemplate{
 				Dest:    row.Dest,
@@ -393,6 +443,7 @@ func (s *ReportStore) mapExportRows(
 
 	for _, row := range rows {
 		var tmpl *models.Template
+
 		if row.TemplateID != nil {
 			tmpl = &models.Template{
 				ID:           int(*row.TemplateID),
@@ -403,6 +454,7 @@ func (s *ReportStore) mapExportRows(
 		}
 
 		var order map[string][]string
+
 		if row.SortOrder != nil {
 			if err := json.Unmarshal(row.SortOrder, &order); err != nil {
 				s.log.WarnContext(
@@ -445,6 +497,7 @@ func derefStr(s *string) string {
 	if s != nil {
 		return *s
 	}
+
 	return ""
 }
 
@@ -452,6 +505,7 @@ func derefBool(b *bool) bool {
 	if b != nil {
 		return *b
 	}
+
 	return false
 }
 
@@ -459,7 +513,9 @@ func intPtr(i *int32) *int {
 	if i == nil {
 		return nil
 	}
+
 	v := int(*i)
+
 	return &v
 }
 
@@ -477,16 +533,19 @@ func (s *ReportStore) createWithPool(
 		if err != nil {
 			return fmt.Errorf("check report exists: %w", err)
 		}
+
 		if exists {
 			return models.ErrAlreadyExist
 		}
 
 		var pipelineID *int64
+
 		if rep.Pipeline != nil {
-			id, err := s.createPipeline(ctx, q, rep.Pipeline)
-			if err != nil {
-				return fmt.Errorf("create pipeline: %w", err)
+			id, pErr := s.createPipeline(ctx, q, rep.Pipeline)
+			if pErr != nil {
+				return fmt.Errorf("create pipeline: %w", pErr)
 			}
+
 			pipelineID = &id
 		}
 
@@ -502,6 +561,10 @@ func (s *ReportStore) createWithPool(
 			PipelineID:   pipelineID,
 			AccessFromLk: rep.AccessFromLK,
 			Active:       rep.Active,
+			Dedup:        rep.Dedup,
+			DefaultPeriod: string(
+				cmp.Or(rep.DefaultPeriod, models.PeriodToday),
+			),
 		})
 		if err != nil {
 			return fmt.Errorf("create report: %w", err)
@@ -512,9 +575,13 @@ func (s *ReportStore) createWithPool(
 			if err != nil {
 				return fmt.Errorf("process query %q: %w", query.Title, err)
 			}
+
 			if err := q.LinkQueryToReport(
 				ctx,
-				sqlcgen.LinkQueryToReportParams{ReportID: reportID, QueryID: qID},
+				sqlcgen.LinkQueryToReportParams{
+					ReportID: reportID,
+					QueryID:  qID,
+				},
 			); err != nil {
 				return fmt.Errorf("link query %d: %w", qID, err)
 			}
@@ -523,7 +590,11 @@ func (s *ReportStore) createWithPool(
 		for _, export := range rep.Exports {
 			formatID, err := s.getOrCreateExportFormat(ctx, q, export.Format)
 			if err != nil {
-				return fmt.Errorf("process export format %q: %w", export.Format, err)
+				return fmt.Errorf(
+					"process export format %q: %w",
+					export.Format,
+					err,
+				)
 			}
 
 			sortOrder, err := json.Marshal(export.Order)
@@ -531,23 +602,34 @@ func (s *ReportStore) createWithPool(
 				return fmt.Errorf("marshal export order: %w", err)
 			}
 
-			if err := q.LinkExportToReport(ctx, sqlcgen.LinkExportToReportParams{
-				ReportID:  &reportID,
-				FormatID:  &formatID,
-				FileName:  export.FileName,
-				SortOrder: sortOrder,
-			}); err != nil {
+			if err := q.LinkExportToReport(
+				ctx,
+				sqlcgen.LinkExportToReportParams{
+					ReportID:  &reportID,
+					FormatID:  &formatID,
+					FileName:  export.FileName,
+					SortOrder: sortOrder,
+				},
+			); err != nil {
 				return fmt.Errorf("link export: %w", err)
 			}
 
 			if export.Template != nil {
 				tmplID, err := s.getOrCreateTemplate(ctx, q, *export.Template)
 				if err != nil {
-					return fmt.Errorf("process template %q: %w", export.Template.Title, err)
+					return fmt.Errorf(
+						"process template %q: %w",
+						export.Template.Title,
+						err,
+					)
 				}
+
 				if err := q.LinkTemplateToReport(
 					ctx,
-					sqlcgen.LinkTemplateToReportParams{ReportID: reportID, TemplateID: tmplID},
+					sqlcgen.LinkTemplateToReportParams{
+						ReportID:   reportID,
+						TemplateID: tmplID,
+					},
 				); err != nil {
 					return fmt.Errorf("link template: %w", err)
 				}
@@ -559,6 +641,7 @@ func (s *ReportStore) createWithPool(
 			if err != nil {
 				return fmt.Errorf("process cron %q: %w", cron.Name, err)
 			}
+
 			if err := q.LinkCronToReport(
 				ctx,
 				sqlcgen.LinkCronToReportParams{ReportID: reportID, CronID: cID},
@@ -570,11 +653,19 @@ func (s *ReportStore) createWithPool(
 		for _, recipient := range rep.Recipients {
 			rID, err := s.getOrCreateRecipient(ctx, q, recipient)
 			if err != nil {
-				return fmt.Errorf("process recipient %q: %w", recipient.Name, err)
+				return fmt.Errorf(
+					"process recipient %q: %w",
+					recipient.Name,
+					err,
+				)
 			}
+
 			if err := q.LinkRecipientToReport(
 				ctx,
-				sqlcgen.LinkRecipientToReportParams{ReportID: &reportID, RecipientID: &rID},
+				sqlcgen.LinkRecipientToReportParams{
+					ReportID:    &reportID,
+					RecipientID: &rID,
+				},
 			); err != nil {
 				return fmt.Errorf("link recipient %d: %w", rID, err)
 			}
@@ -595,10 +686,18 @@ func (s *ReportStore) getOrCreateEvaluation(
 	if err == nil {
 		return int64(id), nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find evaluation: %w", err)
 	}
+
 	id, err = q.CreateEvaluation(ctx, eval)
+
 	return int64(id), err
 }
 
@@ -611,7 +710,9 @@ func (s *ReportStore) createPipeline(
 	if err != nil {
 		return 0, fmt.Errorf("marshal pipeline: %w", err)
 	}
+
 	id, err := q.CreatePipeline(ctx, pipeBytes)
+
 	return int64(id), err
 }
 
@@ -622,17 +723,39 @@ func (s *ReportStore) getOrCreateQuery(
 ) (int32, error) {
 	// Пустой query хранится как NULL (старые типы mb/jira/appmetrica).
 	var query *string
+
 	if card.Query != "" {
 		query = &card.Query
 	}
 
-	id, err := q.FindQueryIDByUUIDAndTitle(ctx, sqlcgen.FindQueryIDByUUIDAndTitleParams{
-		CardUuid: card.CardUUID, Title: card.Title, Query: query,
-	})
+	options := []byte("{}")
+	if len(card.Options) > 0 {
+		options = card.Options
+	}
+
+	var secret *string
+
+	if card.Secret != "" {
+		secret = &card.Secret
+	}
+
+	id, err := q.FindQueryIDByUUIDAndTitle(
+		ctx,
+		sqlcgen.FindQueryIDByUUIDAndTitleParams{
+			CardUuid: card.CardUUID, Title: card.Title, Query: query,
+			Options: options, Secret: secret,
+		},
+	)
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find query: %w", err)
 	}
 
@@ -647,19 +770,33 @@ func (s *ReportStore) getOrCreateQuery(
 	case len(card.RawParams) > 0:
 		params = card.RawParams
 	case len(card.Params) > 0:
-		var err error
-
 		params, err = json.Marshal(card.Params)
 		if err != nil {
 			return 0, fmt.Errorf("marshal card params: %w", err)
 		}
+
 	default:
 		params = []byte("{}")
 	}
 
-	return q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
-		CardUuid: card.CardUUID, Title: card.Title, QType: card.Type, Params: params, Query: query,
+	id, err = q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
+		CardUuid: card.CardUUID,
+		Title:    card.Title,
+		QType:    card.Type,
+		Params:   params,
+		Query:    query,
+		Options:  options,
+		Secret:   secret,
 	})
+
+	var pgErr *pgconn.PgError
+
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" &&
+		pgErr.ConstraintName == "queries_secret_fkey" {
+		return 0, fmt.Errorf("secret %q not found", card.Secret)
+	}
+
+	return id, err
 }
 
 func (s *ReportStore) getOrCreateExportFormat(
@@ -671,9 +808,16 @@ func (s *ReportStore) getOrCreateExportFormat(
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find export format: %w", err)
 	}
+
 	return q.CreateExportFormat(ctx, &format)
 }
 
@@ -682,15 +826,25 @@ func (s *ReportStore) getOrCreateTemplate(
 	q *sqlcgen.Queries,
 	tmpl models.Template,
 ) (int32, error) {
-	id, err := q.FindTemplateIDByTitleAndType(ctx, sqlcgen.FindTemplateIDByTitleAndTypeParams{
-		Title: &tmpl.Title, Type: tmpl.Type,
-	})
+	id, err := q.FindTemplateIDByTitleAndType(
+		ctx,
+		sqlcgen.FindTemplateIDByTitleAndTypeParams{
+			Title: &tmpl.Title, Type: tmpl.Type,
+		},
+	)
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find template: %w", err)
 	}
+
 	return q.CreateTemplate(ctx, sqlcgen.CreateTemplateParams{
 		TemplateText: &tmpl.TemplateText, Title: &tmpl.Title, Type: tmpl.Type,
 	})
@@ -701,21 +855,33 @@ func (s *ReportStore) getOrCreateCron(
 	q *sqlcgen.Queries,
 	cron models.Cron,
 ) (int32, error) {
-	id, err := q.FindCronIDByNameAndExpr(ctx, sqlcgen.FindCronIDByNameAndExprParams{
-		Name: cron.Name, Cron: cron.Cron,
-	})
+	id, err := q.FindCronIDByNameAndExpr(
+		ctx,
+		sqlcgen.FindCronIDByNameAndExprParams{
+			Name: cron.Name, Cron: cron.Cron,
+		},
+	)
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find cron: %w", err)
 	}
+
+	eventType, err := checkedInt32(cron.EventType)
+	if err != nil {
+		return 0, fmt.Errorf("cron event type: %w", err)
+	}
+
 	return q.CreateCron(ctx, sqlcgen.CreateCronParams{
-		Cron:        cron.Cron,
-		Name:        cron.Name,
-		Description: &cron.Description,
-		IsActive:    cron.IsActive,
-		EventType:   int32(cron.EventType), //nolint:gosec // small enum value from config
+		Cron: cron.Cron, Name: cron.Name, Description: &cron.Description,
+		IsActive: cron.IsActive, EventType: eventType,
 	})
 }
 
@@ -728,9 +894,16 @@ func (s *ReportStore) getOrCreateRecipient(
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, fmt.Errorf("find recipient: %w", err)
 	}
+
 	return s.createRecipient(ctx, q, recipient)
 }
 
@@ -746,6 +919,7 @@ func (s *ReportStore) createRecipient(
 		if err != nil {
 			return 0, err
 		}
+
 		chatID = &id
 	}
 
@@ -757,12 +931,18 @@ func (s *ReportStore) createRecipient(
 		if err != nil {
 			return 0, err
 		}
+
 		emailID = &id
 	}
 
 	var threadID *int32
+
 	if recipient.ThreadID != nil {
-		v := int32(*recipient.ThreadID) //nolint:gosec // telegram thread ids fit int32
+		v, err := checkedInt32(*recipient.ThreadID)
+		if err != nil {
+			return 0, fmt.Errorf("recipient thread ID: %w", err)
+		}
+
 		threadID = &v
 	}
 
@@ -784,11 +964,22 @@ func (s *ReportStore) getOrCreateChat(
 	if err == nil {
 		return id, nil
 	}
-	if translated := translateNoRows(err); !errors.Is(translated, models.ErrNotFound) {
+
+	if translated := translateNoRows(
+		err,
+	); !errors.Is(
+		translated,
+		models.ErrNotFound,
+	) {
 		return 0, err
 	}
+
 	return q.CreateChat(ctx, sqlcgen.CreateChatParams{
-		ChatID: chat.ChatID, Title: chat.Title, Type: chat.Type,
-		Description: chat.Description, IsActive: chat.IsActive, ChType: chat.ChType,
+		ChatID:      chat.ChatID,
+		Title:       chat.Title,
+		Type:        chat.Type,
+		Description: chat.Description,
+		IsActive:    chat.IsActive,
+		ChType:      chat.ChType,
 	})
 }

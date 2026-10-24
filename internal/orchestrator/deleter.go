@@ -3,8 +3,9 @@ package orchestrator
 import (
 	"context"
 	"log/slog"
-	"support_bot/internal/models"
 	"time"
+
+	"support_bot/internal/models"
 )
 
 type msgDeleter interface {
@@ -66,6 +67,7 @@ func (d *Deleter) Start(ctx context.Context) {
 				)
 
 				return
+
 			case e, ok := <-d.evC:
 				if !ok {
 					d.log.InfoContext(ctx, "event chan closed")
@@ -76,7 +78,11 @@ func (d *Deleter) Start(ctx context.Context) {
 				d.log.InfoContext(ctx, "receiving event", slog.Any("event", e))
 
 				if e.Type != models.EventTypeDeleteSentReport {
-					d.log.ErrorContext(ctx, "unexpected event type", slog.Any("event", e))
+					d.log.ErrorContext(
+						ctx,
+						"unexpected event type",
+						slog.Any("event", e),
+					)
 				}
 
 				d.delete(ctx)
@@ -92,7 +98,11 @@ func (d *Deleter) delete(ctx context.Context) {
 
 	err := d.repo.WithLockedMsgsToDelete(ctx, d.deleteOne)
 	if err != nil {
-		d.log.ErrorContext(ctx, "failed to process messages to delete", slog.Any("err", err))
+		d.log.ErrorContext(
+			ctx,
+			"failed to process messages to delete",
+			slog.Any("err", err),
+		)
 	}
 }
 
@@ -129,13 +139,21 @@ func (d *Deleter) deleteOne(ctx context.Context, m models.SentMessage) bool {
 	// case унаследован от старой инлайновой реализации, но раньше приводил
 	// к панике).
 	if del == nil {
-		d.log.ErrorContext(ctx, "no delivery adapter for message", slog.Any("id", m.ID))
+		d.log.ErrorContext(
+			ctx,
+			"no delivery adapter for message",
+			slog.Any("id", m.ID),
+		)
 
 		return true
 	}
 
 	if err := del.DeleteMsg(ctx, m); err != nil {
-		d.log.ErrorContext(ctx, "failed to delete messages", slog.Any("err", err))
+		d.log.ErrorContext(
+			ctx,
+			"failed to delete messages",
+			slog.Any("err", err),
+		)
 
 		return time.Since(m.Time) >= 48*time.Hour
 	}
@@ -148,10 +166,18 @@ func (d *Deleter) clearDeletedMessages(ctx context.Context) {
 
 	removed, err := d.repo.RemoveDeletedMessages(ctx)
 	if err != nil {
-		d.log.ErrorContext(ctx, "failed to clear deleted messages", slog.Any("err", err))
+		d.log.ErrorContext(
+			ctx,
+			"failed to clear deleted messages",
+			slog.Any("err", err),
+		)
 	}
 
-	d.log.InfoContext(ctx, "end clear deleted messages", slog.Any("removed", removed))
+	d.log.InfoContext(
+		ctx,
+		"end clear deleted messages",
+		slog.Any("removed", removed),
+	)
 }
 
 func (d *Deleter) markLastMsgAsDeletedWithoutDelete(ctx context.Context) {
@@ -159,7 +185,11 @@ func (d *Deleter) markLastMsgAsDeletedWithoutDelete(ctx context.Context) {
 
 	err := d.repo.MarkEndOfDayMsgDeleted(ctx)
 	if err != nil {
-		d.log.ErrorContext(ctx, "mark last messages as deleted error", slog.Any("error", err))
+		d.log.ErrorContext(
+			ctx,
+			"mark last messages as deleted error",
+			slog.Any("error", err),
+		)
 	}
 
 	d.log.InfoContext(ctx, "end mark last msg as deleted")

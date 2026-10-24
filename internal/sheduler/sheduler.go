@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"support_bot/internal/metrics"
 	models2 "support_bot/internal/models"
 
 	"github.com/robfig/cron/v3"
@@ -42,12 +43,17 @@ func NewSheduler(
 
 func (s *Sheduler) Start(ctx context.Context) error {
 	s.cron.Stop()
+
 	s.cron = cron.New()
 	s.log.InfoContext(ctx, "Starting")
 
 	units, err := s.loader.LoadActive(ctx)
 	if err != nil {
-		s.log.ErrorContext(ctx, "Error while loading shedule", slog.Any("error", err))
+		s.log.ErrorContext(
+			ctx,
+			"Error while loading shedule",
+			slog.Any("error", err),
+		)
 
 		return err
 	}
@@ -61,17 +67,28 @@ func (s *Sheduler) Start(ctx context.Context) error {
 			}()
 		})
 		if err != nil {
-			s.log.ErrorContext(ctx, "Error start job", slog.Any("job", u), slog.Any("error", err))
+			s.log.ErrorContext(
+				ctx,
+				"Error start job",
+				slog.Any("job", u),
+				slog.Any("error", err),
+			)
 
 			continue
 		}
 
-		s.log.InfoContext(ctx, "Started job", slog.Any("job", u), slog.Any("entry", entry))
+		s.log.InfoContext(
+			ctx,
+			"Started job",
+			slog.Any("job", u),
+			slog.Any("entry", entry),
+		)
 	}
 
 	s.log.InfoContext(ctx, "Scheduler started")
 
 	s.cron.Start()
+	metrics.SchedulerRunning.Set(1)
 	s.startMonitor(ctx)
 
 	return nil
@@ -80,6 +97,7 @@ func (s *Sheduler) Start(ctx context.Context) error {
 func (s *Sheduler) Stop() {
 	s.log.Info("stoping sheduler")
 	s.cron.Stop()
+	metrics.SchedulerRunning.Set(0)
 }
 
 func (s *Sheduler) startMonitor(ctx context.Context) {
@@ -95,12 +113,25 @@ func (s *Sheduler) startMonitor(ctx context.Context) {
 				case eventStart:
 					s.log.DebugContext(ctx, "received start event")
 					s.Stop()
-					s.Start(ctx)
+
+					if err := s.Start(ctx); err != nil {
+						s.log.ErrorContext(
+							ctx,
+							"start on event failed",
+							slog.Any("error", err),
+						)
+					}
+
 				case eventStop:
 					s.log.DebugContext(ctx, "received stop event")
 					s.Stop()
+
 				default:
-					s.log.DebugContext(ctx, "received unknown event", slog.Any("event", ev))
+					s.log.DebugContext(
+						ctx,
+						"received unknown event",
+						slog.Any("event", ev),
+					)
 				}
 			}
 		}

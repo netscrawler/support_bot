@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
-	"support_bot/internal/models"
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 func baseReport() models.Report {
@@ -13,9 +16,6 @@ func baseReport() models.Report {
 		Evaluation: "true",
 	}
 }
-
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
 
 // TestValidateRecipient проверяет валидацию получателя отчета: для каждого
 // типа получателя (Telegram, Max, email, SMB) на входе подаются корректные и
@@ -86,7 +86,11 @@ func TestValidateRecipient(t *testing.T) {
 		},
 		{
 			"smb: путь указан — ошибки нет",
-			models.Recipient{Name: "a", Type: models.SambaRecipient, RemotePath: new("/x")},
+			models.Recipient{
+				Name:       "a",
+				Type:       models.SambaRecipient,
+				RemotePath: new("/x"),
+			},
 			false,
 		},
 		{
@@ -104,6 +108,7 @@ func TestValidateRecipient(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			report := baseReport()
+
 			report.Recipients = []models.Recipient{c.recipient}
 
 			err := v.Validate(ctx, report)
@@ -131,7 +136,11 @@ func TestValidateExport(t *testing.T) {
 			models.Export{Format: models.ReportFormatCsv, FileName: new("f")},
 			false,
 		},
-		{"csv: имя файла не указано — ошибка", models.Export{Format: models.ReportFormatCsv}, true},
+		{
+			"csv: имя файла не указано — ошибка",
+			models.Export{Format: models.ReportFormatCsv},
+			true,
+		},
 		{
 			"html: шаблон указан — ошибки нет",
 			models.Export{
@@ -163,12 +172,17 @@ func TestValidateExport(t *testing.T) {
 			},
 			false,
 		},
-		{"неподдерживаемый формат — ошибка", models.Export{Format: "carrier_pigeon"}, true},
+		{
+			"неподдерживаемый формат — ошибка",
+			models.Export{Format: "carrier_pigeon"},
+			true,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			report := baseReport()
+
 			report.Exports = []models.Export{c.export}
 
 			err := v.Validate(ctx, report)
@@ -176,5 +190,70 @@ func TestValidateExport(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, c.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateDefaultPeriod(t *testing.T) {
+	v := NewReportValidation()
+
+	for _, c := range []struct {
+		period  models.PeriodName
+		wantErr bool
+	}{{"", false}, {"yesterday", false}, {"weak", true}} {
+		r := baseReport()
+
+		r.DefaultPeriod = c.period
+
+		err := v.Validate(context.Background(), r)
+		if (err != nil) != c.wantErr {
+			t.Errorf(
+				"period %q: err = %v, wantErr %v",
+				c.period,
+				err,
+				c.wantErr,
+			)
+		}
+	}
+}
+
+func TestValidateHTTPCard(t *testing.T) {
+	v := NewReportValidation()
+
+	for _, c := range []struct {
+		name    string
+		uuid    string
+		options string
+		wantErr string // подстрока ошибки; пусто — ошибки нет
+	}{
+		{"имя источника", "billing", "", ""},
+		{"url", "https://api.example.com/v1", `{"format":"csv"}`, ""},
+		{"пустой card_uuid", "", "", "card_uuid is empty"},
+		{"ftp", "ftp://x", "", "ftp://x"},
+		{"url без host", "https://", "", "https://"},
+		{"неизвестная опция", "billing", `{"fromat":"csv"}`, "fromat"},
+		{"format вне списка", "billing", `{"format":"html"}`, "html"},
+		{"xlsx с листом", "billing", `{"format":"xlsx","sheet":"Data"}`, ""},
+		{"auth вне списка", "billing", `{"auth":"digest"}`, "digest"},
+		{"header без auth_header", "billing", `{"auth":"header"}`, ""},
+		{"header с auth_header", "billing", `{"auth":"header","auth_header":"X-Key"}`, ""},
+		{"options не объект", "billing", `[1]`, "invalid options"},
+	} {
+		r := baseReport()
+
+		r.Queries = []models.Card{{
+			Title:    "q",
+			Type:     models.CollectTypeHTTP,
+			CardUUID: c.uuid,
+			Options:  json.RawMessage(c.options),
+		}}
+
+		err := v.Validate(context.Background(), r)
+
+		switch {
+		case c.wantErr == "" && err != nil:
+			t.Errorf("%s: unexpected error: %v", c.name, err)
+		case c.wantErr != "" && (err == nil || !strings.Contains(err.Error(), c.wantErr)):
+			t.Errorf("%s: err = %v, want substring %q", c.name, err, c.wantErr)
+		}
 	}
 }

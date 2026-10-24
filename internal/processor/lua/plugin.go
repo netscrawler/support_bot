@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"support_bot/internal/models"
-	"support_bot/internal/processor/lua/stdlib"
 	"sync"
 	"time"
 
+	"support_bot/internal/models"
 	luapkg "support_bot/internal/pkg/lua"
+	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/cjoudrey/gluahttp"
 	"github.com/cjoudrey/gluaurl"
@@ -20,13 +20,13 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// LuaPlugin - обертка вокруг Lua-скрипта, реализующая интерфейс Plugin.
+// Plugin - обертка вокруг Lua-скрипта, реализующая интерфейс Plugin.
 // Каждый экземпляр содержит отдельную Lua VM для изоляции выполнения.
-type LuaPlugin struct {
+type Plugin struct {
 	pluginStr string
 
 	// Runtime и статистика
-	runtime *LuaRuntime  // безопасная среда выполнения с песочницей
+	runtime *Runtime     // безопасная среда выполнения с песочницей
 	vm      *lua.LState  // виртуальная машина Lua (прямая ссылка из runtime)
 	stdlib  *stdlib.STD  // стандартная библиотека для плагинов
 	mu      sync.RWMutex // мьютекс для потокобезопасного доступа
@@ -45,7 +45,7 @@ func NewLuaPlugin(
 	pluginStr string,
 	config *RuntimeConfig,
 	std *stdlib.STD,
-) (*LuaPlugin, error) {
+) (*Plugin, error) {
 	// создаем безопасную среду выполнения с песочницей
 	runtime, err := NewLuaRuntime(config)
 	if err != nil {
@@ -54,7 +54,7 @@ func NewLuaPlugin(
 
 	vm := runtime.GetVM()
 
-	plugin := &LuaPlugin{
+	plugin := &Plugin{
 		pluginStr: pluginStr,
 		runtime:   runtime,
 		vm:        vm,
@@ -73,6 +73,7 @@ func NewLuaPlugin(
 			err,
 		)
 	}
+
 	process := vm.GetGlobal("process")
 
 	if process.Type() != lua.LTFunction {
@@ -96,8 +97,8 @@ func NewLuaPlugin(
 //   - error: ошибка если запрос не удался
 //
 // Функция автоматически собирает статистику вызовов для мониторинга.
-func (p *LuaPlugin) Execute(
-	ctx context.Context,
+func (p *Plugin) Execute(
+	_ context.Context,
 	input models.Dataset,
 ) (models.Dataset, error) {
 	p.mu.Lock()
@@ -124,7 +125,6 @@ func (p *LuaPlugin) Execute(
 		},
 		inputValue,
 	)
-
 	if errValue != nil {
 		return nil, fmt.Errorf(
 			"plugin.process failed: %w",
@@ -156,7 +156,7 @@ func (p *LuaPlugin) Execute(
 
 // preloadModules загружает дополнительные модули в песочницу.
 // Это модули которые нужны для работы с внешними API и данными.
-func (p *LuaPlugin) preloadModules() {
+func (p *Plugin) preloadModules() {
 	pkg := p.vm.GetGlobal("package")
 	if pkg == lua.LNil {
 		tbl := p.vm.NewTable()

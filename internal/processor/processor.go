@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
+
 	"support_bot/internal/models"
 	"support_bot/internal/processor/pipeline"
-	"time"
 )
 
 type RunnerRegistry struct {
@@ -48,14 +49,15 @@ func NewProcessor(reg *RunnerRegistry, log *slog.Logger) *Processor {
 func (p *Processor) Process(
 	ctx context.Context,
 	data models.Dataset,
-	pipeline *pipeline.Pipeline,
+	pipe *pipeline.Pipeline,
 ) (models.Dataset, error) {
 	p.log.InfoContext(
 		ctx,
 		"start pipeline",
-		slog.Any("pipeline_name", pipeline.Name),
-		slog.Any("steps_count", len(pipeline.Steps)),
+		slog.Any("pipeline_name", pipe.Name),
+		slog.Any("steps_count", len(pipe.Steps)),
 	)
+
 	now := time.Now()
 
 	defer func() {
@@ -63,21 +65,27 @@ func (p *Processor) Process(
 		p.log.InfoContext(
 			ctx,
 			"finish pipeline",
-			slog.Any("pipeline_name", pipeline.Name),
+			slog.Any("pipeline_name", pipe.Name),
 			slog.Any("duration", dur),
 		)
 	}()
 
-	for _, step := range pipeline.Steps {
+	for _, step := range pipe.Steps {
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("stopped on step %s: %w", step.ID, err)
 		}
+
 		rn, err := p.reg.Get(step.Type)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get runner for step %s: %w", step.Type, err)
+			return nil, fmt.Errorf(
+				"failed to get runner for step %s: %w",
+				step.Type,
+				err,
+			)
 		}
 
 		stepStart := time.Now()
+
 		p.log.DebugContext(
 			ctx,
 			"start process step",
@@ -87,8 +95,13 @@ func (p *Processor) Process(
 
 		out, err := rn.Run(ctx, step, data)
 		if err != nil {
-			return nil, fmt.Errorf("failed pipeline on step %s: %w", step.ID, err)
+			return nil, fmt.Errorf(
+				"failed pipeline on step %s: %w",
+				step.ID,
+				err,
+			)
 		}
+
 		p.log.DebugContext(
 			ctx,
 			"stop process step",
@@ -96,6 +109,7 @@ func (p *Processor) Process(
 			slog.Any("step_type", step.Type),
 			slog.Any("duration", time.Since(stepStart)),
 		)
+
 		data = out
 	}
 

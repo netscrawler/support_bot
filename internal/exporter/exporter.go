@@ -2,6 +2,7 @@ package exporter
 
 import (
 	"fmt"
+
 	"support_bot/internal/exporter/csv"
 	"support_bot/internal/exporter/html"
 	"support_bot/internal/exporter/pdf"
@@ -23,6 +24,7 @@ func Export(
 		}
 
 		return r, nil
+
 	case models.ReportFormatXlsx:
 		r, err := xlsx.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
@@ -30,6 +32,7 @@ func Export(
 		}
 
 		return []models.Data{*r}, nil
+
 	case models.ReportFormatPng:
 		r, err := png.New(data, *exp.FileName, exp.Order).Export()
 		if err != nil {
@@ -37,8 +40,10 @@ func Export(
 		}
 
 		return r, nil
+
 	case models.ReportFormatHTML:
-		r, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
+		r, err := html.New(data, exp.Template.TemplateText, *exp.FileName).
+			Export()
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +51,8 @@ func Export(
 		return []models.Data{*r}, nil
 
 	case models.ReportFormatPdf:
-		rh, err := html.New(data, exp.Template.TemplateText, *exp.FileName).Export()
+		rh, err := html.New(data, exp.Template.TemplateText, *exp.FileName).
+			Export()
 		if err != nil {
 			return nil, err
 		}
@@ -57,13 +63,16 @@ func Export(
 		}
 
 		return []models.Data{*r}, nil
+
 	case models.ReportFormatText:
-		r, err := text.New(data, exp.Template.TemplateText, exp.Template.Type).Export()
+		r, err := text.New(data, exp.Template.TemplateText, exp.Template.Type).
+			Export()
 		if err != nil {
 			return nil, err
 		}
 
 		return []models.Data{*r}, nil
+
 	default:
 		return nil, fmt.Errorf("undefined format: %s", exp.Format)
 	}

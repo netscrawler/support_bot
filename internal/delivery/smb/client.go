@@ -2,21 +2,35 @@ package smb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
+	"sync"
+
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/retry"
 
 	"github.com/hirochachacha/go-smb2"
 )
 
-type SMB struct {
-	cfg Config
+// share — то, что нужно от *smb2.Share; позволяет подменять шару в тестах.
+type share interface {
+	WriteFile(name string, data []byte, perm os.FileMode) error
+	Stat(name string) (os.FileInfo, error)
+	Umount() error
+}
 
+type SMB struct {
+	cfg    Config
+	delays retry.Delays
+
+	mu      sync.RWMutex // защищает conn, session, fs
 	conn    net.Conn
 	session *smb2.Session
-	fs      *smb2.Share
+	fs      share
 
 	cancel context.CancelFunc
 
@@ -26,26 +40,33 @@ type SMB struct {
 func New(
 	ctx context.Context,
 	cfg Config,
+	delays retry.Delays,
 	log *slog.Logger,
 ) (*SMB, error) {
 	l := log.With(slog.Any("module", "samba_sender"))
 	r := &SMB{
-		cfg: cfg,
-		log: l,
+		cfg:    cfg,
+		delays: delays,
+		log:    l,
 	}
 
 	if !cfg.Active {
 		return r, nil
 	}
 
-	err := r.connect()
+	err := r.connect(ctx)
 	if err != nil {
-		l.ErrorContext(ctx, "Error while connect to share", slog.Any("error", err))
+		l.ErrorContext(
+			ctx,
+			"Error while connect to share",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+
 	r.cancel = cancel
 	r.startMonitor(ctx)
 
@@ -58,7 +79,13 @@ func (smb *SMB) Close() error {
 	}
 
 	smb.log.Info("start closing connection")
-	smb.cancel()
+
+	if smb.cancel != nil {
+		smb.cancel()
+	}
+
+	smb.mu.Lock()
+	defer smb.mu.Unlock()
 
 	if smb.fs != nil {
 		err := smb.fs.Umount()
@@ -94,41 +121,49 @@ func (smb *SMB) Upload(
 	data models.Data,
 ) error {
 	if !smb.cfg.Active {
-		return fmt.Errorf("smb conn inactive from config")
+		return errors.New("smb conn inactive from config")
 	}
 
 	remotePath := filepath.Join(remote, data.FileName)
+	raw := data.Data.Bytes()
 
-	f, err := smb.fs.Create(remotePath)
-	if err != nil {
-		smb.log.ErrorContext(
-			ctx,
-			"failed create remote file",
-			slog.Any("file", data.Name),
-			slog.Any("error", err),
-		)
+	return retry.Do(
+		ctx,
+		smb.delays,
+		smb.log,
+		"smb.Upload",
+		func(ctx context.Context) error {
+			return smb.write(ctx, remotePath, data.Name(), raw)
+		},
+	)
+}
 
-		return fmt.Errorf("failed to create remote file %s: %w", remotePath, err)
+func (smb *SMB) write(
+	ctx context.Context,
+	remotePath, name string,
+	raw []byte,
+) error {
+	smb.mu.RLock()
+	defer smb.mu.RUnlock()
+
+	if smb.fs == nil {
+		return errors.New("smb not connected")
 	}
 
-	_, err = f.Write(data.Data.Bytes())
-
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			smb.log.ErrorContext(ctx, "unable close file body", slog.Any("error", err))
-		}
-	}()
-
+	err := smb.fs.WriteFile(remotePath, raw, 0o644)
 	if err != nil {
 		smb.log.ErrorContext(
 			ctx,
 			"failed write remote file",
-			slog.Any("file", data.Name),
+			slog.Any("file", name),
 			slog.Any("error", err),
 		)
 
-		return fmt.Errorf("failed to write to remote file %s: %w", remotePath, err)
+		return fmt.Errorf(
+			"failed to write to remote file %s: %w",
+			remotePath,
+			err,
+		)
 	}
 
 	return nil

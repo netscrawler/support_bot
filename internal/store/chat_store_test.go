@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"support_bot/internal/db/sqlcgen"
 	"testing"
+
+	"support_bot/internal/db/sqlcgen"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
@@ -35,8 +36,18 @@ func TestChatStore_GetByTitle_ReturnsPopulatedChat(t *testing.T) {
 	pool.ExpectQuery("select id, chat_id, title, type, description, is_active, ch_type").
 		WithArgs(&title).
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"id", "chat_id", "title", "type", "description", "is_active", "ch_type"},
-		).AddRow(int32(1), int64(555), &title, "group", &description, true, "tg"))
+			[]string{
+				"id",
+				"chat_id",
+				"title",
+				"type",
+				"description",
+				"is_active",
+				"ch_type",
+			},
+		).
+			AddRow(int32(1), int64(555), &title, "group", &description, true, "tg"),
+		)
 
 	s := NewChatStoreForTest(sqlcgen.New(pool))
 
@@ -44,11 +55,19 @@ func TestChatStore_GetByTitle_ReturnsPopulatedChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByTitle() error = %v", err)
 	}
+
 	if chat == nil {
-		t.Fatal("GetByTitle() returned nil chat, want a populated *models.TgChatDTO")
+		t.Fatal(
+			"GetByTitle() returned nil chat, want a populated *models.TgChatDTO",
+		)
 	}
+
 	if chat.ChatID != 555 || chat.Title != title || chat.Type != "group" {
-		t.Errorf("GetByTitle() = %+v, want ChatID=555 Title=%q Type=group", chat, title)
+		t.Errorf(
+			"GetByTitle() = %+v, want ChatID=555 Title=%q Type=group",
+			chat,
+			title,
+		)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {
@@ -75,6 +94,7 @@ func TestChatStore_Exists_ReturnsTrueForKnownChatID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Exists() error = %v", err)
 	}
+
 	if !exists {
 		t.Error("Exists() = false, want true")
 	}
@@ -104,6 +124,7 @@ func TestChatStore_Exists_NoRowsIsFalse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Exists() error = %v, want nil", err)
 	}
+
 	if exists {
 		t.Error("Exists() = true, want false")
 	}
@@ -135,6 +156,7 @@ func TestChatStore_Exists_PropagatesQueryError(t *testing.T) {
 	if exists {
 		t.Error("Exists() = true, want false")
 	}
+
 	if !errors.Is(err, dbErr) {
 		t.Fatalf("Exists() error = %v, want wrapped %v", err, dbErr)
 	}
@@ -158,8 +180,18 @@ func TestChatStore_GetAll_FiltersInactiveChats(t *testing.T) {
 
 	pool.ExpectQuery("select id, chat_id, title, type, description, is_active, ch_type\nfrom chats\nwhere is_active = false").
 		WillReturnRows(pgxmock.NewRows(
-			[]string{"id", "chat_id", "title", "type", "description", "is_active", "ch_type"},
-		).AddRow(int32(2), int64(777), &title, "private", (*string)(nil), false, "tg"))
+			[]string{
+				"id",
+				"chat_id",
+				"title",
+				"type",
+				"description",
+				"is_active",
+				"ch_type",
+			},
+		).
+			AddRow(int32(2), int64(777), &title, "private", (*string)(nil), false, "tg"),
+		)
 
 	s := NewChatStoreForTest(sqlcgen.New(pool))
 
@@ -167,8 +199,12 @@ func TestChatStore_GetAll_FiltersInactiveChats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAll() error = %v", err)
 	}
+
 	if len(chats) != 1 || chats[0].IsActive {
-		t.Errorf("GetAll() = %+v, want exactly 1 chat with IsActive=false", chats)
+		t.Errorf(
+			"GetAll() = %+v, want exactly 1 chat with IsActive=false",
+			chats,
+		)
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {

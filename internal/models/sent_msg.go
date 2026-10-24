@@ -54,11 +54,11 @@ func NewFromTelegoMany(msgs []telego.Message) []SentMessage {
 	return retMsg
 }
 
-func NewMsgFromMax(max model.Message) *SentMessage {
+func NewMsgFromMax(msg model.Message) *SentMessage {
 	return &SentMessage{
-		MessageIDStr: &max.Body.Mid,
-		Time:         time.UnixMilli(max.Timestamp),
-		ChatID:       max.Recipient.ChatID,
+		MessageIDStr: &msg.Body.Mid,
+		Time:         time.UnixMilli(msg.Timestamp),
+		ChatID:       msg.Recipient.ChatID,
 		ThreadID:     0,
 		Title:        "max chat",
 		ChType:       ChatTypeMax,

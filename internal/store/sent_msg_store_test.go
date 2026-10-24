@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"support_bot/internal/db/sqlcgen"
-	"support_bot/internal/models"
 	"testing"
 	"time"
+
+	"support_bot/internal/db/sqlcgen"
+	"support_bot/internal/models"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -37,11 +38,13 @@ func TestSentMsgStore_WithLockedMsgsToDelete_BeginFails(t *testing.T) {
 	s := NewSentMsgStoreForTest(sqlcgen.New(pool))
 
 	called := false
+
 	err = s.withLockedMsgsToDeleteWithPool(
 		context.Background(),
 		pool,
 		func(context.Context, models.SentMessage) bool {
 			called = true
+
 			return true
 		},
 	)
@@ -49,9 +52,15 @@ func TestSentMsgStore_WithLockedMsgsToDelete_BeginFails(t *testing.T) {
 	if called {
 		t.Fatal("fn was called despite Begin failing")
 	}
+
 	if !errors.Is(err, beginErr) {
-		t.Fatalf("WithLockedMsgsToDelete() error = %v, want wrapping %v", err, beginErr)
+		t.Fatalf(
+			"WithLockedMsgsToDelete() error = %v, want wrapping %v",
+			err,
+			beginErr,
+		)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -61,7 +70,9 @@ func TestSentMsgStore_WithLockedMsgsToDelete_BeginFails(t *testing.T) {
 // что решение о пометке "удалено" принимает переданный fn для каждой строки
 // независимо: из двух загруженных сообщений помечается только то, для
 // которого fn вернул true.
-func TestSentMsgStore_WithLockedMsgsToDelete_CallbackDecidesMarkDeleted(t *testing.T) {
+func TestSentMsgStore_WithLockedMsgsToDelete_CallbackDecidesMarkDeleted(
+	t *testing.T,
+) {
 	pool, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("pgxmock.NewPool() error = %v", err)
@@ -86,25 +97,28 @@ func TestSentMsgStore_WithLockedMsgsToDelete_CallbackDecidesMarkDeleted(t *testi
 		WithArgs(int32(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	pool.ExpectCommit()
-	pool.ExpectRollback() // no-op после успешного коммита, как и в exec_tx_test.go
 
 	s := NewSentMsgStoreForTest(sqlcgen.New(pool))
 
 	var seenIDs []int64
+
 	err = s.withLockedMsgsToDeleteWithPool(
 		context.Background(),
 		pool,
 		func(_ context.Context, m models.SentMessage) bool {
 			seenIDs = append(seenIDs, m.ID)
+
 			return m.ID == 1 // помечаем удалённым только первое сообщение
 		},
 	)
 	if err != nil {
 		t.Fatalf("WithLockedMsgsToDelete() error = %v", err)
 	}
+
 	if len(seenIDs) != 2 {
 		t.Fatalf("fn called %d times, want 2", len(seenIDs))
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf(
 			"unmet expectations (MarkSentMsgDeleted must be called exactly once, for id=1): %v",
@@ -121,7 +135,9 @@ func TestSentMsgStore_WithLockedMsgsToDelete_CallbackDecidesMarkDeleted(t *testi
 // эта ошибка не должна быть проглочена (как раньше происходило из-за
 // log-and-continue в withLockedMsgsToDeleteWithPool): регресс к "помечать
 // всех безусловно" должен провалить тест.
-func TestSentMsgStore_WithLockedMsgsToDelete_CallbackFalseSkipsMarkDeleted(t *testing.T) {
+func TestSentMsgStore_WithLockedMsgsToDelete_CallbackFalseSkipsMarkDeleted(
+	t *testing.T,
+) {
 	pool, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("pgxmock.NewPool() error = %v", err)
@@ -143,27 +159,33 @@ func TestSentMsgStore_WithLockedMsgsToDelete_CallbackFalseSkipsMarkDeleted(t *te
 		)
 	// ExpectExec на MarkSentMsgDeleted намеренно не настроен.
 	pool.ExpectCommit()
-	pool.ExpectRollback() // no-op после успешного коммита, как и в exec_tx_test.go
 
 	s := NewSentMsgStoreForTest(sqlcgen.New(pool))
 
 	var seenIDs []int64
+
 	err = s.withLockedMsgsToDeleteWithPool(
 		context.Background(),
 		pool,
 		func(_ context.Context, m models.SentMessage) bool {
 			seenIDs = append(seenIDs, m.ID)
+
 			return false // ни одно сообщение не помечается удалённым
 		},
 	)
 	if err != nil {
 		t.Fatalf("WithLockedMsgsToDelete() error = %v", err)
 	}
+
 	if len(seenIDs) != 1 {
 		t.Fatalf("fn called %d times, want 1", len(seenIDs))
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet expectations (MarkSentMsgDeleted must not be called): %v", err)
+		t.Fatalf(
+			"unmet expectations (MarkSentMsgDeleted must not be called): %v",
+			err,
+		)
 	}
 }
 
@@ -188,9 +210,11 @@ func TestSentMsgStore_RemoveDeletedMessages_ReturnsRowsAffected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RemoveDeletedMessages() error = %v", err)
 	}
+
 	if removed != 3 {
 		t.Errorf("RemoveDeletedMessages() = %d, want 3", removed)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -209,14 +233,19 @@ func TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails(t *testing.T) {
 
 	pool.ExpectBeginTx(pgx.TxOptions{IsoLevel: pgx.ReadCommitted}).
 		WillReturnError(errors.New("connection pool exhausted"))
-	pool.ExpectExec("UPDATE sent_messages").WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+	pool.ExpectExec("UPDATE sent_messages").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
 	s := NewSentMsgStoreForTest(sqlcgen.New(pool))
 
 	err = s.markEndOfDayMsgDeletedWithPool(context.Background(), pool)
 	if err != nil {
-		t.Fatalf("MarkEndOfDayMsgDeleted() error = %v, want nil (fallback exec succeeded)", err)
+		t.Fatalf(
+			"MarkEndOfDayMsgDeleted() error = %v, want nil (fallback exec succeeded)",
+			err,
+		)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
@@ -225,7 +254,9 @@ func TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails(t *testing.T) {
 // TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagates
 // проверяет вторую половину того же старого теста: если и запасной запрос
 // без транзакции тоже падает, эта ошибка должна дойти до вызывающего кода.
-func TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagates(t *testing.T) {
+func TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagates(
+	t *testing.T,
+) {
 	pool, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("pgxmock.NewPool() error = %v", err)
@@ -241,8 +272,13 @@ func TestSentMsgStore_MarkEndOfDayMsgDeleted_BeginTxFails_FallbackErrorPropagate
 
 	err = s.markEndOfDayMsgDeletedWithPool(context.Background(), pool)
 	if !errors.Is(err, fallbackErr) {
-		t.Fatalf("MarkEndOfDayMsgDeleted() error = %v, want wrapping %v", err, fallbackErr)
+		t.Fatalf(
+			"MarkEndOfDayMsgDeleted() error = %v, want wrapping %v",
+			err,
+			fallbackErr,
+		)
 	}
+
 	if err := pool.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}

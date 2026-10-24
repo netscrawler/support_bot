@@ -7,42 +7,50 @@
 select exists(select 1 from reports where name = $1);
 
 -- name: GetReportRowByID :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.id = $1::bigint
 limit 1;
 
 -- name: ListReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id;
 
--- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
-from reports r
-left join evaluate e on e.id = r.eval_id
-where r.active = true;
-
 -- name: GetActiveReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1 and r.active = true
 limit 1;
 
 -- name: GetAnyReportRowByName :one
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.pipeline_id, e.expr as evaluation
+select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r
 left join evaluate e on e.id = r.eval_id
 where r.name = $1
 limit 1;
 
--- name: GetReportIDByPublicID :one
-select report_id from public_reports where public_id = $1 limit 1;
+-- name: GetPublicLink :one
+select report_id, expires_at from public_reports where public_id = $1;
+
+-- name: CreatePublicLink :one
+insert into public_reports (public_id, report_id, expires_at) values ($1, $2, $3) returning public_id;
+
+-- name: ListPublicLinks :many
+select p.public_id, r.name as report_name, p.created_at, p.expires_at
+from public_reports p
+join reports r on r.id = p.report_id
+where sqlc.narg('report_name')::text is null or r.name = sqlc.narg('report_name')
+order by p.created_at desc;
+
+-- name: ExpirePublicLink :execrows
+update public_reports set expires_at = now()
+where public_id = $1 and (expires_at is null or expires_at > now());
 
 -- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params, q.query
+select q.card_uuid, q.title, q.q_type, q.params, q.query, q.options, q.secret
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint;
@@ -115,10 +123,11 @@ insert into evaluate(expr) values ($1) returning id;
 insert into pipelines(pipeline) values ($1) returning id;
 
 -- name: FindQueryIDByUUIDAndTitle :one
-select id from queries where card_uuid = $1 and title = $2 and query is not distinct from sqlc.narg(query)::text;
+select id from queries where card_uuid = $1 and title = $2 and query is not distinct from sqlc.narg(query)::text
+  and options = sqlc.arg(options)::jsonb and secret is not distinct from sqlc.narg(secret)::text;
 
 -- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id;
+insert into queries(card_uuid, title, q_type, params, query, options, secret) values ($1, $2, $3, $4, $5, $6, $7) returning id;
 
 -- name: FindRecipientIDByName :one
 select id from recipients where name = $1;
@@ -132,8 +141,8 @@ returning id;
 insert into email_templates(dest, copy, subject, body) values ($1, $2, $3, $4) returning id;
 
 -- name: CreateReport :one
-insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active)
-values ($1, $2, $3, $4, $5, $6)
+insert into reports(name, title, eval_id, pipeline_id, access_from_lk, active, dedup, default_period)
+values ($1, $2, $3, $4, $5, $6, $7, $8)
 returning id;
 
 -- name: LinkQueryToReport :exec

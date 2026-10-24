@@ -2,6 +2,7 @@ package eventcreator
 
 import (
 	"context"
+
 	"support_bot/internal/models"
 )
 
@@ -10,7 +11,10 @@ type EventAPI struct {
 	OutSpC chan models.SpecialEventForLK
 }
 
-func NewEventAPI(outC chan models.Event, outSpC chan models.SpecialEventForLK) *EventAPI {
+func NewEventAPI(
+	outC chan models.Event,
+	outSpC chan models.SpecialEventForLK,
+) *EventAPI {
 	return &EventAPI{
 		OutC:   outC,
 		OutSpC: outSpC,
@@ -21,22 +25,19 @@ func (api *EventAPI) ProduceSpecialEvent(
 	ctx context.Context,
 	name string,
 	recipient models.Recipient,
+	period models.PeriodName,
 ) {
-	ev := models.SpecialEventForLK{
-		Event: models.Event{
-			Name: name,
-			Type: models.EventTypeGenReportForTG,
-		},
-		Recipient: recipient,
-	}
+	api.produceSpecialEvent(ctx, name, recipient, false, period)
+}
 
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case api.OutSpC <- ev:
-		}
-	}()
+// ProduceTestEvent — то же, что ProduceSpecialEvent, но с признаком пробного запуска.
+func (api *EventAPI) ProduceTestEvent(
+	ctx context.Context,
+	name string,
+	recipient models.Recipient,
+	period models.PeriodName,
+) {
+	api.produceSpecialEvent(ctx, name, recipient, true, period)
 }
 
 func (api *EventAPI) ProduceGenEvent(ctx context.Context, name string) {
@@ -67,6 +68,32 @@ func (api *EventAPI) ProduceDelEvent(ctx context.Context, name string) {
 		case <-ctx.Done():
 			return
 		case api.OutC <- ev:
+		}
+	}()
+}
+
+func (api *EventAPI) produceSpecialEvent(
+	ctx context.Context,
+	name string,
+	recipient models.Recipient,
+	test bool,
+	period models.PeriodName,
+) {
+	ev := models.SpecialEventForLK{
+		Event: models.Event{
+			Name: name,
+			Type: models.EventTypeGenReportForTG,
+		},
+		Recipient: recipient,
+		Test:      test,
+		Period:    period,
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case api.OutSpC <- ev:
 		}
 	}()
 }

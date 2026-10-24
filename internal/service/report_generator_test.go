@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
-	"support_bot/internal/models"
 	"testing"
+
+	"support_bot/internal/models"
 )
 
 type fakeReportDB struct {
@@ -12,7 +14,10 @@ type fakeReportDB struct {
 	err    error
 }
 
-func (f fakeReportDB) GetByPublicID(_ context.Context, _ string) (*models.Report, error) {
+func (f fakeReportDB) GetByPublicID(
+	_ context.Context,
+	_ string,
+) (*models.Report, error) {
 	return f.report, f.err
 }
 
@@ -21,7 +26,10 @@ type fakeReportGenerator struct {
 	err  error
 }
 
-func (f fakeReportGenerator) Generate(_ context.Context, _ models.Report) (models.Data, error) {
+func (f fakeReportGenerator) Generate(
+	_ context.Context,
+	_ models.Report,
+) (models.Data, error) {
 	return f.data, f.err
 }
 
@@ -35,7 +43,7 @@ func TestGenerateReport_NotFoundFromDB(t *testing.T) {
 	)
 
 	_, err := r.GenerateReport(context.Background(), "some-id")
-	if err != models.ErrNotFound {
+	if !errors.Is(err, models.ErrNotFound) {
 		t.Fatalf("GenerateReport() error = %v, want models.ErrNotFound", err)
 	}
 }
@@ -51,7 +59,7 @@ func TestGenerateReport_NotFoundFromGenerator(t *testing.T) {
 	)
 
 	_, err := r.GenerateReport(context.Background(), "some-id")
-	if err != models.ErrNotFound {
+	if !errors.Is(err, models.ErrNotFound) {
 		t.Fatalf("GenerateReport() error = %v, want models.ErrNotFound", err)
 	}
 }

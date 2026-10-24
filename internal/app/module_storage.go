@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/config"
 	"support_bot/internal/pkg/logger"
 	"support_bot/internal/postgres"
@@ -27,11 +28,18 @@ func newDB(
 	connCtx, cancel := context.WithTimeout(ctx, cfg.Database.DatabaseConnect)
 	defer cancel()
 
-	connCtx = logger.AppendCtx(connCtx, slog.Any("function", "connecting to database"))
+	connCtx = logger.AppendCtx(
+		connCtx,
+		slog.Any("function", "connecting to database"),
+	)
 
 	rdb, err := postgres.New(connCtx, cfg.Database, log)
 	if err != nil {
-		log.ErrorContext(connCtx, "unable to create connection", slog.Any("error", err))
+		log.ErrorContext(
+			connCtx,
+			"unable to create connection",
+			slog.Any("error", err),
+		)
 
 		return nil, err
 	}

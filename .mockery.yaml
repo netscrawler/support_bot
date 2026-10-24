@@ -25,6 +25,7 @@ packages:
       all: false
     interfaces:
       ReportLoader:
+      RunRecorder:
   support_bot/internal/tg_bot/service:
     config:
       all: false

@@ -3,9 +3,10 @@ package text
 import (
 	"bytes"
 	"maps"
+	"text/template"
+
 	"support_bot/internal/models"
 	"support_bot/internal/pkg/text"
-	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
 )
@@ -16,10 +17,10 @@ type Exporter struct {
 	eType    string
 }
 
-func New(data any, template string, eType string) *Exporter {
+func New(data any, tmpl, eType string) *Exporter {
 	return &Exporter{
 		data:     data,
-		template: template,
+		template: tmpl,
 		eType:    eType,
 	}
 }
@@ -36,6 +37,7 @@ func (e *Exporter) Export() (*models.Data, error) {
 	}
 
 	var buf bytes.Buffer
+
 	if err := t.Execute(&buf, e.data); err != nil {
 		return nil, err
 	}

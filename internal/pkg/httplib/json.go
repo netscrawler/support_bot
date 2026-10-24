@@ -21,7 +21,12 @@ func WithEscapeHTML(escape bool) JSONOption {
 }
 
 // RespondJSON writes v as a RespondJSON response with the given status code.
-func RespondJSON(w http.ResponseWriter, code int, v any, opts ...JSONOption) error {
+func RespondJSON(
+	w http.ResponseWriter,
+	code int,
+	v any,
+	opts ...JSONOption,
+) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 

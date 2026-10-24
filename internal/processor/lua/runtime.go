@@ -38,9 +38,9 @@ func DefaultRuntimeConfig() *RuntimeConfig {
 	}
 }
 
-// LuaRuntime представляет изолированную среду выполнения для Lua плагинов.
+// Runtime представляет изолированную среду выполнения для Lua плагинов.
 // Обеспечивает песочницу с ограничениями ресурсов и безопасностью.
-type LuaRuntime struct {
+type Runtime struct {
 	vm     *lua.LState    // виртуальная машина Lua
 	config *RuntimeConfig // конфигурация runtime
 
@@ -54,9 +54,9 @@ type LuaRuntime struct {
 //   - config: конфигурация runtime (nil = использовать по умолчанию)
 //
 // Возвращает:
-//   - настроенный LuaRuntime с песочницей
+//   - настроенный Runtime с песочницей
 //   - ошибку если не удалось создать VM
-func NewLuaRuntime(config *RuntimeConfig) (*LuaRuntime, error) {
+func NewLuaRuntime(config *RuntimeConfig) (*Runtime, error) {
 	if config == nil {
 		config = DefaultRuntimeConfig()
 	}
@@ -70,7 +70,7 @@ func NewLuaRuntime(config *RuntimeConfig) (*LuaRuntime, error) {
 		IncludeGoStackTrace: true,
 	})
 
-	runtime := &LuaRuntime{
+	runtime := &Runtime{
 		vm:     vm,
 		config: config,
 	}
@@ -99,7 +99,7 @@ func NewLuaRuntime(config *RuntimeConfig) (*LuaRuntime, error) {
 //   - base (без опасных функций)
 //   - table, string, math
 //   - разрешенные модули из конфига
-func (r *LuaRuntime) CreateSandbox() error {
+func (r *Runtime) CreateSandbox() error {
 	// загружаем только базовые безопасные библиотеки
 	r.loadSafeLibraries()
 
@@ -126,17 +126,17 @@ func (r *LuaRuntime) CreateSandbox() error {
 
 // GetVM возвращает внутреннюю Lua VM.
 // Используется внутри пакета для работы с виртуальной машиной.
-func (r *LuaRuntime) GetVM() *lua.LState {
+func (r *Runtime) GetVM() *lua.LState {
 	return r.vm
 }
 
 // GetConfig возвращает текущую конфигурацию runtime.
-func (r *LuaRuntime) GetConfig() *RuntimeConfig {
+func (r *Runtime) GetConfig() *RuntimeConfig {
 	return r.config
 }
 
 // Close корректно закрывает runtime и освобождает ресурсы.
-func (r *LuaRuntime) Close() {
+func (r *Runtime) Close() {
 	if r.vm != nil {
 		r.vm.Close()
 	}
@@ -149,7 +149,7 @@ func (r *LuaRuntime) Close() {
 //   - moduleName: имя модуля для проверки
 //
 // Возвращает true если модуль разрешен.
-func (r *LuaRuntime) IsModuleAllowed(moduleName string) bool {
+func (r *Runtime) IsModuleAllowed(moduleName string) bool {
 	// если белый список пустой, разрешаем все
 	if len(r.config.AllowedModules) == 0 {
 		return true
@@ -161,17 +161,17 @@ func (r *LuaRuntime) IsModuleAllowed(moduleName string) bool {
 
 // setupSafeOS настраивает безопасный os модуль.
 // Оставляет только функции работы со временем, удаляет execute, remove и т.д.
-func (r *LuaRuntime) setupSafeOS() {
+func (r *Runtime) setupSafeOS() {
 	// получаем текущий os модуль
 	osValue := r.vm.GetGlobal("os")
-	if osValue.Type() != lua.LTTable {
+	origOS, ok := osValue.(*lua.LTable)
+
+	if !ok {
 		// если os не загружен, создаем пустую таблицу
 		r.vm.SetGlobal("os", r.vm.NewTable())
 
 		return
 	}
-
-	origOS := osValue.(*lua.LTable)
 
 	// создаем новую безопасную таблицу os
 	safeOS := r.vm.NewTable()
@@ -191,7 +191,7 @@ func (r *LuaRuntime) setupSafeOS() {
 
 // loadSafeLibraries загружает только безопасные стандартные библиотеки Lua.
 // Это базовые функции, table, string и math операции.
-func (r *LuaRuntime) loadSafeLibraries() {
+func (r *Runtime) loadSafeLibraries() {
 	// загружаем базовую библиотеку
 	lua.OpenBase(r.vm)
 
@@ -211,7 +211,7 @@ func (r *LuaRuntime) loadSafeLibraries() {
 //
 // removeDangerousFunctions удаляет опасные функции из глобального namespace.
 // Эти функции могут использоваться для обхода песочницы или атак.
-func (r *LuaRuntime) removeDangerousFunctions() {
+func (r *Runtime) removeDangerousFunctions() {
 	restrict := maps.Clone(RestrictedModules)
 
 	for _, mod := range r.config.AllowedModules {
@@ -234,13 +234,16 @@ func (r *LuaRuntime) removeDangerousFunctions() {
 
 // setupSafePackage настраивает безопасный package модуль.
 // Оставляет только preload таблицу для PreloadModule.
-func (r *LuaRuntime) setupSafePackage() {
+func (r *Runtime) setupSafePackage() {
 	packageValue := r.vm.GetGlobal("package")
-	if packageValue.Type() != lua.LTTable {
+	packageTable, ok := packageValue.(*lua.LTable)
+
+	if !ok {
+		r.vm.SetGlobal("package", r.vm.NewTable())
+
 		return
 	}
 
-	packageTable := packageValue.(*lua.LTable)
 	safePackage := r.vm.NewTable()
 
 	// копируем только preload (для PreloadModule)
@@ -258,7 +261,7 @@ func (r *LuaRuntime) setupSafePackage() {
 	r.vm.SetGlobal("package", safePackage)
 }
 
-func (r *LuaRuntime) savePreload() {
+func (r *Runtime) savePreload() {
 	pkg := r.vm.GetGlobal("package")
 	if tbl, ok := pkg.(*lua.LTable); ok {
 		preload := tbl.RawGetString("preload")
@@ -272,10 +275,11 @@ func (r *LuaRuntime) savePreload() {
 	}
 }
 
-func (r *LuaRuntime) restoreAllowedModules() {
-	pkg := r.vm.GetGlobal("package")
-	if pkg.Type() != lua.LTTable {
-		return
+func (r *Runtime) restoreAllowedModules() {
+	pkg, ok := r.vm.GetGlobal("package").(*lua.LTable)
+	if !ok {
+		pkg = r.vm.NewTable()
+		r.vm.SetGlobal("package", pkg)
 	}
 
 	// создаём новую безопасную preload таблицу
@@ -288,26 +292,26 @@ func (r *LuaRuntime) restoreAllowedModules() {
 		}
 	})
 
-	pkg.(*lua.LTable).RawSetString("preload", safePreload)
+	pkg.RawSetString("preload", safePreload)
 }
 
-func (r *LuaRuntime) restoreSafeRequire() {
-	L := r.vm
+func (r *Runtime) restoreSafeRequire() {
+	l := r.vm
 
-	requireFn := L.NewFunction(func(L *lua.LState) int {
-		mod := L.CheckString(1)
+	requireFn := l.NewFunction(func(l *lua.LState) int {
+		mod := l.CheckString(1)
 
 		if !r.IsModuleAllowed(mod) {
-			L.RaiseError("module '%s' is not allowed", mod)
+			l.RaiseError("module '%s' is not allowed", mod)
 
 			return 0
 		}
 
-		pkg := L.GetGlobal("package")
+		pkg := l.GetGlobal("package")
 		pkgTbl, ok := pkg.(*lua.LTable)
 
 		if !ok {
-			L.RaiseError("package table missing")
+			l.RaiseError("package table missing")
 
 			return 0
 		}
@@ -317,24 +321,24 @@ func (r *LuaRuntime) restoreSafeRequire() {
 		plTable, ok := preload.(*lua.LTable)
 
 		if !ok {
-			L.RaiseError("preload table missing")
+			l.RaiseError("preload table missing")
 
 			return 0
 		}
 
 		loader := plTable.RawGetString(mod)
 		if loader.Type() != lua.LTFunction {
-			L.RaiseError("module '%s' not found", mod)
+			l.RaiseError("module '%s' not found", mod)
 
 			return 0
 		}
 
 		// call loader()
-		L.Push(loader)
-		L.Call(0, 1)
+		l.Push(loader)
+		l.Call(0, 1)
 
 		return 1
 	})
 
-	L.SetGlobal("require", requireFn)
+	l.SetGlobal("require", requireFn)
 }

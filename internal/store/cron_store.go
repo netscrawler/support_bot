@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+
 	"support_bot/internal/db/sqlcgen"
 	"support_bot/internal/models"
 
@@ -20,7 +21,9 @@ func NewCronStore(pool *pgxpool.Pool) *CronStore {
 
 // LoadActive возвращает только расписания с is_active = true — неактивные
 // crons планировщику не нужны.
-func (s *CronStore) LoadActive(ctx context.Context) ([]models.SheduleUnit, error) {
+func (s *CronStore) LoadActive(
+	ctx context.Context,
+) ([]models.SheduleUnit, error) {
 	rows, err := s.q.ListActiveCrons(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load active crons: %w", err)
@@ -36,7 +39,9 @@ func (s *CronStore) LoadActive(ctx context.Context) ([]models.SheduleUnit, error
 
 // LoadEvents возвращает привязки cron→отчёт только для отчётов с
 // active = true — событие для неактивного отчёта создавать не нужно.
-func (s *CronStore) LoadEvents(ctx context.Context) ([]models.ReportCronEvent, error) {
+func (s *CronStore) LoadEvents(
+	ctx context.Context,
+) ([]models.ReportCronEvent, error) {
 	rows, err := s.q.ListEventsForActiveReports(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load events for active reports: %w", err)
@@ -53,14 +58,20 @@ func (s *CronStore) LoadEventsByCronName(
 ) ([]models.ReportCronEvent, error) {
 	rows, err := s.q.ListEventsForActiveReportsByCronName(ctx, name)
 	if err != nil {
-		return nil, fmt.Errorf("load events for active reports by cron name: %w", err)
+		return nil, fmt.Errorf(
+			"load events for active reports by cron name: %w",
+			err,
+		)
 	}
 
 	events := make([]models.ReportCronEvent, 0, len(rows))
 	for _, row := range rows {
 		events = append(
 			events,
-			models.ReportCronEvent{CronName: row.CronName, Name: row.ReportName},
+			models.ReportCronEvent{
+				CronName: row.CronName,
+				Name:     row.ReportName,
+			},
 		)
 	}
 
@@ -68,15 +79,24 @@ func (s *CronStore) LoadEventsByCronName(
 }
 
 func mapCronRow(row sqlcgen.ListActiveCronsRow) models.SheduleUnit {
-	return models.SheduleUnit{Crontab: row.Cron, Name: row.Name, EventType: int(row.EventType)}
+	return models.SheduleUnit{
+		Crontab:   row.Cron,
+		Name:      row.Name,
+		EventType: int(row.EventType),
+	}
 }
 
-func mapReportCronEvents(rows []sqlcgen.ListEventsForActiveReportsRow) []models.ReportCronEvent {
+func mapReportCronEvents(
+	rows []sqlcgen.ListEventsForActiveReportsRow,
+) []models.ReportCronEvent {
 	events := make([]models.ReportCronEvent, 0, len(rows))
 	for _, row := range rows {
 		events = append(
 			events,
-			models.ReportCronEvent{CronName: row.CronName, Name: row.ReportName},
+			models.ReportCronEvent{
+				CronName: row.CronName,
+				Name:     row.ReportName,
+			},
 		)
 	}
 

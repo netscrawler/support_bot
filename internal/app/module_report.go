@@ -3,12 +3,18 @@ package app
 import (
 	"context"
 	"log/slog"
+
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/grafana"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	pgcoll "support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
+	"support_bot/internal/delivery"
 	maxadp "support_bot/internal/delivery/max"
 	"support_bot/internal/delivery/telegram"
 	"support_bot/internal/evaluator"
@@ -21,14 +27,18 @@ import (
 	"support_bot/internal/processor/lua"
 	luastd "support_bot/internal/processor/lua/stdlib"
 	"support_bot/internal/processor/pipeline"
+	"support_bot/internal/runlog"
 	reportsvc "support_bot/internal/service"
 	"support_bot/internal/sheduler"
 	reportstore "support_bot/internal/store"
+	"support_bot/internal/tg_bot/service"
 
 	"go.uber.org/fx"
 )
 
-const reportBufferSize uint8 = 15
+const (
+	reportBufferSize uint8 = 15
+)
 
 var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	fx.Annotate(newScheduleEventsChan, fx.ResultTags(`name:"scheduleEvents"`)),
@@ -37,7 +47,10 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newSpecialEventChan,
 	newShdAPIChan,
 	newCronStore,
-	fx.Annotate(newSheduler, fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``)),
+	fx.Annotate(
+		newSheduler,
+		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, ``),
+	),
 	fx.Annotate(
 		newEventCreator,
 		fx.ParamTags(``, ``, ``, `name:"scheduleEvents"`, `name:"eventChan"`),
@@ -50,12 +63,25 @@ var reportPipelineModule = fx.Module("report_pipeline", fx.Provide(
 	newProcessorReg,
 	newProcessor,
 	newSentMsgStore,
+	newRunStore,
+	newRunAlerter,
+	newRunRecorder,
 	fx.Annotate(newDeleter, fx.ParamTags(``, `name:"delChan"`, ``, ``, ``, ``)),
 	newGenerator,
 	newReportStore,
 	fx.Annotate(
 		newOrchestrator,
-		fx.ParamTags(``, `name:"eventChan"`, ``, `name:"delChan"`, ``, ``, ``, ``, ``),
+		fx.ParamTags(
+			``,
+			`name:"eventChan"`,
+			``,
+			`name:"delChan"`,
+			``,
+			``,
+			``,
+			``,
+			``,
+		),
 	),
 	newReportGenService,
 ))
@@ -115,7 +141,11 @@ func newEventCreator(
 	// No OnStop here — mirrors the original app.go asymmetry: the scheduler
 	// and other lifecycle-managed components stop, but the event creator's
 	// goroutine was never wired to a Stop hook in the pre-fx code either.
-	lc.Append(fx.Hook{OnStart: func(context.Context) error { return evC.Start(appCtx) }})
+	lc.Append(
+		fx.Hook{
+			OnStart: func(context.Context) error { return evC.Start(appCtx) },
+		},
+	)
 
 	return evC
 }
@@ -136,22 +166,40 @@ func newEvaluator() (*evaluator.Engine, error) {
 }
 
 func newLuaStdCollector(
+	cfg *config.Config,
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
 	jiraColl *jira.Collector,
 	pg *pgcoll.Collector,
+	prom *prometheus.Collector,
+	alerts *grafana.Collector,
+	zbx *zabbix.Collector,
+	httpColl *httpcoll.Collector,
 ) *luastd.CollectPlugin {
-	// Без pg интерфейс должен быть настоящим nil, иначе collector.pg попадёт в Lua.
-	var sqlColl luastd.SQLCollector
+	// Типизированный nil-указатель в интерфейсе не nil: без источника записи в map быть не должно,
+	// иначе модуль попадёт в Lua. prom, grafana_alerts и zabbix создаются всегда, поэтому смотрим конфиг.
+	queries := map[string]luastd.QueryCollector{}
 	if pg != nil {
-		sqlColl = pg
+		queries["pg"] = pg
+	}
+
+	if len(cfg.Prometheus) > 0 {
+		queries["prom"] = prom
+	}
+
+	if len(cfg.Grafana) > 0 {
+		queries["grafana_alerts"] = alerts
+	}
+
+	if len(cfg.Zabbix) > 0 {
+		queries["zabbix"] = zbx
 	}
 
 	return luastd.NewCollector(map[string]luastd.DirectCollector{
 		"jira":       jiraColl,
 		"mb":         mb,
 		"appmetrica": appM,
-	}, sqlColl)
+	}, queries).WithHTTP(httpColl) // URL-источники не требуют конфига, поэтому http всегда
 }
 
 func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {
@@ -174,17 +222,54 @@ func newProcessorReg(luaManager *lua.Manager) *processor.RunnerRegistry {
 	reg := processor.NewReg()
 	luaRunner := pipeline.NewLuaRunner(luaManager)
 	reg.Register("lua", luaRunner)
-	reg.Register("sql", &pipeline.SqlRunner{})
+	reg.Register("sql", &pipeline.SQLRunner{})
 
 	return reg
 }
 
-func newProcessor(runnerReg *processor.RunnerRegistry, log *slog.Logger) *processor.Processor {
+func newProcessor(
+	runnerReg *processor.RunnerRegistry,
+	log *slog.Logger,
+) *processor.Processor {
 	return processor.NewProcessor(runnerReg, log)
 }
 
-func newSentMsgStore(rdb *postgres.DB, log *slog.Logger) *reportstore.SentMsgStore {
+func newSentMsgStore(
+	rdb *postgres.DB,
+	log *slog.Logger,
+) *reportstore.SentMsgStore {
 	return reportstore.NewSentMsgStore(rdb.GetConn(), log)
+}
+
+func newRunStore(rdb *postgres.DB) *reportstore.RunStore {
+	return reportstore.NewRunStore(rdb.GetConn())
+}
+
+func newRunAlerter(
+	cfg *config.Config,
+	tg *telegram.ChatAdaptor,
+	notify *service.Notify,
+) runlog.Alerter {
+	return runlog.NewTgAlerter(cfg.Alerts, tg, notify)
+}
+
+func newRunRecorder(
+	appCtx context.Context,
+	store *reportstore.RunStore,
+	alerter runlog.Alerter,
+	cfg *config.Config,
+	log *slog.Logger,
+	lc fx.Lifecycle,
+) *runlog.Recorder {
+	rec := runlog.New(store, alerter, cfg.Runs, log)
+
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		rec.Start(appCtx)
+
+		return nil
+	}})
+
+	return rec
 }
 
 func newDeleter(
@@ -226,7 +311,10 @@ func newGenerator(
 	return gen
 }
 
-func newReportStore(rdb *postgres.DB, log *slog.Logger) *reportstore.ReportStore {
+func newReportStore(
+	rdb *postgres.DB,
+	log *slog.Logger,
+) *reportstore.ReportStore {
 	return reportstore.NewReportStore(rdb.GetConn(), log)
 }
 
@@ -237,8 +325,9 @@ func newOrchestrator(
 	delChan chan models.Event,
 	orchRepo *reportstore.ReportStore,
 	gen *generator.Generator,
-	snd *models.SenderProvider,
+	snd *delivery.Dispatcher,
 	delRepo *reportstore.SentMsgStore,
+	runs *runlog.Recorder,
 	log *slog.Logger,
 	lc fx.Lifecycle,
 ) *orchestrator.Orchestrator {
@@ -248,8 +337,9 @@ func newOrchestrator(
 		delChan,
 		orchRepo,
 		gen,
-		*snd,
+		snd,
 		delRepo,
+		runs,
 		log,
 	)
 

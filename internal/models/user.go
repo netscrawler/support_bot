@@ -23,7 +23,12 @@ type User struct {
 	Role       string  `db:"role"        json:"role"` // admin или user или primary
 }
 
-func NewUser(tgID int64, username, firstname string, lastname *string, isAdmin bool) User {
+func NewUser(
+	tgID int64,
+	username, firstname string,
+	lastname *string,
+	isAdmin bool,
+) User {
 	u := User{
 		TelegramID: tgID,
 		Username:   username,
@@ -47,7 +52,7 @@ func NewEmptyUser(username string, isAdmin bool) User {
 	}
 
 	return User{
-		TelegramID: rand.Int64(),
+		TelegramID: rand.Int64(), //nolint:gosec // G404: ID пользователя не секрет, криптостойкость не нужна
 		Username:   username,
 		Role:       role,
 	}

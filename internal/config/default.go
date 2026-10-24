@@ -1,20 +1,33 @@
 package config
 
 import (
-	"support_bot/internal/collector/appmetrica"
-	"support_bot/internal/collector/jira"
-	"support_bot/internal/delivery/smb"
-	"support_bot/internal/delivery/smtp"
-	"support_bot/internal/pkg/logger"
-	"support_bot/internal/postgres"
-	"support_bot/internal/processor/lua"
 	"time"
 
 	apihttp "support_bot/internal/api/http"
-
+	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/httpcoll"
+	"support_bot/internal/collector/jira"
+	pgcollector "support_bot/internal/collector/postgres"
+	"support_bot/internal/collector/prometheus"
+	"support_bot/internal/collector/zabbix"
+	"support_bot/internal/delivery/smb"
+	"support_bot/internal/delivery/smtp"
 	maxbot "support_bot/internal/max_bot"
-
+	"support_bot/internal/metrics"
+	"support_bot/internal/pkg/logger"
+	"support_bot/internal/pkg/retry"
+	"support_bot/internal/postgres"
+	"support_bot/internal/processor/lua"
+	"support_bot/internal/runlog"
 	tgbot "support_bot/internal/tg_bot"
+)
+
+// Значения-заглушки для примера конфига.
+const (
+	exampleName     = "example"
+	exampleName2    = "example-2"
+	examplePassword = "password"
+	exampleToken    = "token"
 )
 
 func Default() *Config {
@@ -70,7 +83,7 @@ func Default() *Config {
 			Token:       "max_bot_token",
 			CleanUpTime: 0,
 			BotPoll:     0,
-			ApiProxy:    "",
+			APIProxy:    "",
 			Enabled:     false,
 		},
 		Timeout: timeout{
@@ -79,7 +92,7 @@ func Default() *Config {
 		SMB: smb.Config{
 			Address:  "localhost:542",
 			User:     "user",
-			Password: "password",
+			Password: examplePassword,
 			Domain:   "WORKGROUP",
 			Share:    "public",
 			Active:   true,
@@ -88,7 +101,7 @@ func Default() *Config {
 			Host:     "smtp.example.com",
 			Port:     "465",
 			Email:    "example@example.com",
-			Password: "password",
+			Password: examplePassword,
 		},
 		HTTP: apihttp.Config{
 			Host:              "127.0.0.1",
@@ -99,6 +112,80 @@ func Default() *Config {
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20,
 			MaxBodyBytes:      10 << 20,
+		},
+		Delivery: delivery{Retry: deliveryRetry{
+			Delays: retry.Delays{
+				time.Second,
+				5 * time.Second,
+				15 * time.Second,
+			},
+		}},
+		Runs:    runlog.Config{Retention: 720 * time.Hour},
+		Metrics: metrics.Config{Enabled: true, Addr: "127.0.0.1:9090"},
+		Databases: map[string]pgcollector.Config{
+			exampleName: {
+				DSN:              "dsn://",
+				ReadOnly:         new(true),
+				StatementTimeout: 5 * time.Second,
+				MaxConns:         5,
+			},
+			exampleName2: {
+				DSN:              "dsn://",
+				ReadOnly:         new(true),
+				StatementTimeout: 5 * time.Second,
+				MaxConns:         5,
+			},
+		},
+		Grafana: map[string]prometheus.GrafanaConfig{
+			exampleName: {
+				URL:     "https://grafana.example",
+				Token:   exampleToken,
+				Timeout: 15 * time.Second,
+			},
+			exampleName2: {
+				URL:     "https://grafana.example",
+				Token:   exampleToken,
+				Timeout: 15 * time.Second,
+			},
+		},
+		Prometheus: map[string]prometheus.Config{
+			exampleName: {
+				URL:           "https://prometheus.org",
+				BearerToken:   exampleToken,
+				Grafana:       "",
+				DatasourceUID: "",
+				Timeout:       0,
+			},
+			exampleName2: {
+				URL:         "https://prometheus.org",
+				BearerToken: "",
+				BasicAuth: &prometheus.BasicAuth{
+					User:     "user",
+					Password: examplePassword,
+				},
+				Grafana:       "",
+				DatasourceUID: "",
+				Timeout:       15 * time.Second,
+			},
+		},
+		Zabbix: map[string]zabbix.Config{
+			exampleName: {
+				URL:     "https://zabbix.org",
+				Token:   exampleToken,
+				Timeout: 15 * time.Second,
+			},
+		},
+		HTTPSources: map[string]httpcoll.Config{
+			exampleName: {
+				BaseURL: "https://api.example.com",
+				Auth:    "bearer",
+				Token:   exampleToken,
+				Timeout: 15 * time.Second,
+			},
+		},
+		Alerts: runlog.AlertsConfig{
+			ChatID:   13141412432,
+			ThreadID: 12,
 		},
 	}
 }

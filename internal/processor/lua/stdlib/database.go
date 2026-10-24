@@ -2,14 +2,13 @@ package stdlib
 
 import (
 	"context"
-	"support_bot/internal/processor/duck"
+	"log/slog"
 
 	luapkg "support_bot/internal/pkg/lua"
+	"support_bot/internal/processor/duck"
 
 	lua "github.com/yuin/gopher-lua"
 )
-
-const duckDbType = "DuckDB"
 
 type DatabasePlugin struct{}
 
@@ -17,67 +16,73 @@ type LuaDatabase struct {
 	DB *duck.DB
 }
 
-func (d DatabasePlugin) Register(L *lua.LState) {
-	mt := L.NewTypeMetatable("DuckDB")
+func (d DatabasePlugin) Register(l *lua.LState) {
+	mt := l.NewTypeMetatable("DuckDB")
 
-	L.SetField(mt, "__index",
-		L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
+	l.SetField(mt, "__index",
+		l.SetFuncs(l.NewTable(), map[string]lua.LGFunction{
 			"query": d.luaQuery,
 			// "exec":     d.luaExec,
 			"loadData": d.luaLoadData,
 			"close":    d.luaClose,
 		}),
 	)
-	L.SetField(mt, "__gc", L.NewFunction(d.luaGC))
+	l.SetField(mt, "__gc", l.NewFunction(d.luaGC))
 
-	mod := L.NewTable()
+	mod := l.NewTable()
 
-	L.SetFuncs(mod, map[string]lua.LGFunction{
+	l.SetFuncs(mod, map[string]lua.LGFunction{
 		"new": d.luaNew,
 	})
 
-	L.SetGlobal("duck", mod)
+	l.SetGlobal("duck", mod)
 }
 
-func (d *DatabasePlugin) luaGC(L *lua.LState) int {
-	db := checkDB(L)
+func (d DatabasePlugin) luaGC(l *lua.LState) int {
+	db := checkDB(l)
 
 	if db.DB != nil {
-		_ = db.DB.Close()
+		if err := db.DB.Close(); err != nil {
+			slog.Error("close Lua DuckDB", slog.Any("error", err))
+		}
+
 		db.DB = nil
 	}
 
 	return 0
 }
 
-func (d *DatabasePlugin) luaNew(L *lua.LState) int {
+func (d DatabasePlugin) luaNew(l *lua.LState) int {
 	db, err := duck.New()
 	if err != nil {
-		L.RaiseError("%s", err.Error())
+		l.RaiseError("%s", err.Error())
+
 		return 0
 	}
 
-	ud := L.NewUserData()
+	ud := l.NewUserData()
+
 	ud.Value = &LuaDatabase{
 		DB: db,
 	}
 
-	L.SetMetatable(
+	l.SetMetatable(
 		ud,
-		L.GetTypeMetatable("DuckDB"),
+		l.GetTypeMetatable("DuckDB"),
 	)
 
-	L.Push(ud)
+	l.Push(ud)
 
 	return 1
 }
 
-func checkDB(L *lua.LState) *LuaDatabase {
-	ud := L.CheckUserData(1)
+func checkDB(l *lua.LState) *LuaDatabase {
+	ud := l.CheckUserData(1)
 
 	db, ok := ud.Value.(*LuaDatabase)
 	if !ok {
-		L.ArgError(1, "DuckDB expected")
+		l.ArgError(1, "DuckDB expected")
+
 		return nil
 	}
 
@@ -87,60 +92,60 @@ func checkDB(L *lua.LState) *LuaDatabase {
 // luaExecuteQuery executes a SQL query and returns results
 // Usage: results, err = stdlib.ExecuteQuery(query_string)
 // Returns: table of results (or nil), error message (or nil).
-func (d *DatabasePlugin) luaQuery(L *lua.LState) int {
-	db := checkDB(L)
+func (d DatabasePlugin) luaQuery(l *lua.LState) int {
+	db := checkDB(l)
 
-	sql := L.CheckString(2)
+	sql := l.CheckString(2)
 
 	ctx := context.Background()
 
 	rows, err := db.DB.ExecuteQuery(ctx, sql)
 	if err != nil {
-
-		L.Push(lua.LNil)
-		L.Push(lua.LString(err.Error()))
+		l.Push(lua.LNil)
+		l.Push(lua.LString(err.Error()))
 
 		return 2
 	}
 
-	L.Push(queryResultToLua(L, rows))
-	L.Push(lua.LNil)
+	l.Push(queryResultToLua(l, rows))
+	l.Push(lua.LNil)
 
 	return 2
 }
 
-func (d *DatabasePlugin) luaLoadData(L *lua.LState) int {
-	db := checkDB(L)
+func (d DatabasePlugin) luaLoadData(l *lua.LState) int {
+	db := checkDB(l)
 	ctx := context.TODO()
 
-	tbl := L.CheckTable(2)
+	tbl := l.CheckTable(2)
 
 	data, err := luapkg.LuaTableToGoData(tbl)
 	if err != nil {
-
-		L.Push(lua.LString(err.Error()))
+		l.Push(lua.LString(err.Error()))
 
 		return 1
 	}
 
 	err = db.DB.LoadDataFromMapSlice(ctx, data)
 	if err != nil {
-
-		L.Push(lua.LString(err.Error()))
+		l.Push(lua.LString(err.Error()))
 
 		return 1
 	}
 
-	L.Push(lua.LNil)
+	l.Push(lua.LNil)
 
 	return 1
 }
 
-func (d *DatabasePlugin) luaClose(L *lua.LState) int {
-	db := checkDB(L)
+func (d DatabasePlugin) luaClose(l *lua.LState) int {
+	db := checkDB(l)
 
 	if db.DB != nil {
-		_ = db.DB.Close()
+		if err := db.DB.Close(); err != nil {
+			slog.Error("close Lua DuckDB", slog.Any("error", err))
+		}
+
 		db.DB = nil
 	}
 
@@ -148,14 +153,14 @@ func (d *DatabasePlugin) luaClose(L *lua.LState) int {
 }
 
 // queryResultToLua converts query results to Lua table format.
-func queryResultToLua(L *lua.LState, results []map[string]any) *lua.LTable {
-	arr := L.NewTable()
+func queryResultToLua(l *lua.LState, results []map[string]any) *lua.LTable {
+	arr := l.NewTable()
 
 	for _, row := range results {
-		rowTbl := L.NewTable()
+		rowTbl := l.NewTable()
 
 		for k, v := range row {
-			rowTbl.RawSetString(k, luapkg.GoValueToLua(L, v))
+			rowTbl.RawSetString(k, luapkg.GoValueToLua(l, v))
 		}
 
 		arr.Append(rowTbl)

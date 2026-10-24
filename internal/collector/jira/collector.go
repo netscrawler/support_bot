@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+
 	"support_bot/internal/pkg/retry"
 )
 
@@ -43,7 +44,12 @@ func (c *Collector) Fetch(
 
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		u.String(),
+		http.NoBody,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +73,7 @@ func (c *Collector) Fetch(
 }
 
 func (c *Collector) do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+c.cfg.AuthToken)
+	req.Header.Set("Authorization", "Bearer "+c.cfg.AuthToken.Value())
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.client.Do(req)
