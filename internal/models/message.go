@@ -150,6 +150,11 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 
 		case MaxRecipient:
 			msg, err := m.sentMax(ctx, sp.MAX(), r)
+			// частично отправленное сообщение нужно удалить в конце дня даже при ошибке
+			if r.NeedDeleteAfterEndOfDay {
+				sentMsg = append(sentMsg, msg...)
+			}
+
 			if err != nil {
 				sendErr = errors.Join(sendErr, err)
 
@@ -157,10 +162,6 @@ func (m *Message) Send(ctx context.Context, sp senderProvider) (
 			}
 
 			delivered++
-
-			if r.NeedDeleteAfterEndOfDay {
-				sentMsg = append(sentMsg, msg...)
-			}
 
 		default:
 			sendErr = errors.Join(
@@ -268,8 +269,13 @@ func (m *Message) sentMax(
 		for _, data := range m.Text {
 			msg, err := sender.SendText(ctx, rcpt, data.Data.String())
 			if err != nil {
-				sendErr = fmt.Errorf("sending text: %w", err)
-			} else {
+				sendErr = errors.Join(
+					sendErr,
+					fmt.Errorf("sending text: %w", err),
+				)
+			}
+
+			if msg != nil {
 				retMsg = append(retMsg, *msg)
 			}
 		}
@@ -278,8 +284,13 @@ func (m *Message) sentMax(
 	if m.Files != nil {
 		msg, err := sender.SendDocument(ctx, rcpt, m.Files)
 		if err != nil {
-			sendErr = fmt.Errorf("sending document: %w", err)
-		} else {
+			sendErr = errors.Join(
+				sendErr,
+				fmt.Errorf("sending document: %w", err),
+			)
+		}
+
+		if msg != nil {
 			retMsg = append(retMsg, *msg)
 		}
 	}
@@ -287,8 +298,10 @@ func (m *Message) sentMax(
 	if m.Images != nil {
 		msg, err := sender.SendMedia(ctx, rcpt, m.Images)
 		if err != nil {
-			sendErr = fmt.Errorf("sending document: %w", err)
-		} else {
+			sendErr = errors.Join(sendErr, fmt.Errorf("sending media: %w", err))
+		}
+
+		if msg != nil {
 			retMsg = append(retMsg, *msg)
 		}
 	}

@@ -78,3 +78,51 @@ func TestMessageSendDelivered(t *testing.T) {
 		})
 	}
 }
+
+type fakeMaxSender struct {
+	MaxSender
+
+	msg *SentMessage
+	err error
+}
+
+func (f fakeMaxSender) SendDocument(
+	context.Context,
+	MaxChat,
+	[]Data,
+) (*SentMessage, error) {
+	return f.msg, f.err
+}
+
+type maxProvider struct {
+	fakeProvider
+
+	max MaxSender
+}
+
+func (p maxProvider) MAX() MaxSender { return p.max }
+
+func TestMessageSendMaxPartial(t *testing.T) {
+	rcpt := Recipient{
+		Type:                    MaxRecipient,
+		Chat:                    &Chat{ChatID: 1, ChType: ChatTypeMax},
+		NeedDeleteAfterEndOfDay: true,
+	}
+	files := []Data{{
+		Data:     bytes.NewBufferString("x"),
+		FileName: "a.txt",
+		Type:     sendFileKind,
+	}}
+	m := NewMessage("r", files, nil, rcpt)
+
+	sent, delivered, err := m.Send(
+		context.Background(),
+		maxProvider{max: fakeMaxSender{
+			msg: &SentMessage{MessageID: 7},
+			err: errors.New("upload a.txt"),
+		}},
+	)
+	if err == nil || delivered != 0 || len(sent) != 1 {
+		t.Fatalf("delivered=%d err=%v sent=%d", delivered, err, len(sent))
+	}
+}

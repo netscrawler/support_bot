@@ -154,7 +154,6 @@ func (smb *SMB) reconnectLoop(ctx context.Context) {
 
 func (smb *SMB) cleanup() {
 	smb.log.Info("start closing connection")
-	smb.cancel()
 
 	if smb.fs != nil {
 		err := smb.fs.Umount()

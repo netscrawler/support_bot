@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 
 	"support_bot/internal/models"
@@ -14,13 +15,21 @@ import (
 	"github.com/hirochachacha/go-smb2"
 )
 
+// share — то, что нужно от *smb2.Share; позволяет подменять шару в тестах.
+type share interface {
+	WriteFile(name string, data []byte, perm os.FileMode) error
+	Stat(name string) (os.FileInfo, error)
+	Umount() error
+}
+
 type SMB struct {
 	cfg    Config
 	delays retry.Delays
 
 	conn    net.Conn
 	session *smb2.Session
-	fs      *smb2.Share
+	// shortcut: монитор переписывает fs без блокировки, пока Upload его читает; добавить мьютекс, если поймает -race или прод.
+	fs share
 
 	cancel context.CancelFunc
 
@@ -69,7 +78,10 @@ func (smb *SMB) Close() error {
 	}
 
 	smb.log.Info("start closing connection")
-	smb.cancel()
+
+	if smb.cancel != nil {
+		smb.cancel()
+	}
 
 	if smb.fs != nil {
 		err := smb.fs.Umount()
@@ -127,32 +139,11 @@ func (smb *SMB) write(
 	remotePath, name string,
 	raw []byte,
 ) error {
-	f, err := smb.fs.Create(remotePath)
-	if err != nil {
-		smb.log.ErrorContext(
-			ctx,
-			"failed create remote file",
-			slog.Any("file", name),
-			slog.Any("error", err),
-		)
-
-		return fmt.Errorf(
-			"failed to create remote file %s: %w",
-			remotePath,
-			err,
-		)
+	if smb.fs == nil {
+		return errors.New("smb not connected")
 	}
 
-	_, err = f.Write(raw)
-
-	if cerr := f.Close(); cerr != nil {
-		smb.log.ErrorContext(
-			ctx,
-			"unable close file body",
-			slog.Any("error", cerr),
-		)
-	}
-
+	err := smb.fs.WriteFile(remotePath, raw, 0o644)
 	if err != nil {
 		smb.log.ErrorContext(
 			ctx,

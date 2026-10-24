@@ -112,20 +112,33 @@ func (ca *Adaptor) sendUploads(
 	maxMsg := &maxcli.Message{}
 	maxMsg.SetChat(chat.ChatID)
 
+	attach := maxModel.AttachFile
+	if kind == maxModel.UploadImage {
+		attach = maxModel.AttachImage
+	}
+
+	var uploadErr error
+
+	tokens := 0
+
 	for _, i := range files {
 		token, err := ca.upload(ctx, kind, i)
 		if err != nil {
-			ca.log.ErrorContext(
-				ctx,
-				"max upload failed",
-				slog.String("file", i.FileName),
-				slog.Any("error", err),
+			uploadErr = errors.Join(
+				uploadErr,
+				fmt.Errorf("upload %s: %w", i.FileName, err),
 			)
 
 			continue
 		}
 
-		maxMsg.AddAttachByToken(token, maxModel.AttachImage)
+		maxMsg.AddAttachByToken(token, attach)
+
+		tokens++
+	}
+
+	if tokens == 0 {
+		return nil, uploadErr
 	}
 
 	var repl maxModel.SendMessageResult
@@ -136,10 +149,13 @@ func (ca *Adaptor) sendUploads(
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("max send to chat %d: %w", chat.ChatID, err)
+		return nil, errors.Join(
+			fmt.Errorf("max send to chat %d: %w", chat.ChatID, err),
+			uploadErr,
+		)
 	}
 
-	return models.NewMsgFromMax(repl.Message), nil
+	return models.NewMsgFromMax(repl.Message), uploadErr
 }
 
 func (ca *Adaptor) DeleteMsg(
