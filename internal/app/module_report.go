@@ -7,6 +7,7 @@ import (
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	pgcoll "support_bot/internal/collector/postgres"
@@ -173,6 +174,7 @@ func newLuaStdCollector(
 	prom *prometheus.Collector,
 	alerts *grafana.Collector,
 	zbx *zabbix.Collector,
+	httpColl *httpcoll.Collector,
 ) *luastd.CollectPlugin {
 	// Типизированный nil-указатель в интерфейсе не nil: без источника записи в map быть не должно,
 	// иначе модуль попадёт в Lua. prom, grafana_alerts и zabbix создаются всегда, поэтому смотрим конфиг.
@@ -197,7 +199,7 @@ func newLuaStdCollector(
 		"jira":       jiraColl,
 		"mb":         mb,
 		"appmetrica": appM,
-	}, queries)
+	}, queries).WithHTTP(httpColl) // URL-источники не требуют конфига, поэтому http всегда
 }
 
 func newScriptStore(rdb *postgres.DB) *reportstore.ScriptStore {

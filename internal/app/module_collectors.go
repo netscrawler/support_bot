@@ -7,6 +7,7 @@ import (
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
@@ -14,6 +15,9 @@ import (
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
 	"support_bot/internal/models"
+	"support_bot/internal/pkg/secret"
+	pgdb "support_bot/internal/postgres"
+	"support_bot/internal/store"
 
 	"go.uber.org/fx"
 )
@@ -32,6 +36,9 @@ var collectorsModule = fx.Module(
 		newPrometheusCollector,
 		newGrafanaAlertsCollector,
 		newZabbixCollector,
+		newCipher,
+		newSecretStore,
+		newHTTPCollector,
 		newCollector,
 	),
 )
@@ -110,6 +117,27 @@ func newZabbixCollector(
 	return zabbix.New(cfg.Zabbix, log)
 }
 
+// newCipher возвращает nil без SECRETS_KEY: секреты из БД тогда недоступны.
+func newCipher(cfg *config.Config) (*secret.Cipher, error) {
+	if cfg.Secrets.Key == "" {
+		return nil, nil //nolint:nilnil // ключ не задан — не ошибка
+	}
+
+	return secret.NewCipher(cfg.Secrets.Key.Value())
+}
+
+func newSecretStore(rdb *pgdb.DB, c *secret.Cipher) *store.SecretStore {
+	return store.NewSecretStore(rdb.GetConn(), c)
+}
+
+func newHTTPCollector(
+	cfg *config.Config,
+	secrets *store.SecretStore,
+	log *slog.Logger,
+) (*httpcoll.Collector, error) {
+	return httpcoll.New(cfg.HTTPSources, secrets, log)
+}
+
 func newCollector(
 	mb *metabase.Metabase,
 	appM *appmetrica.Collector,
@@ -118,6 +146,7 @@ func newCollector(
 	prom *prometheus.Collector,
 	alerts *grafana.Collector,
 	zbx *zabbix.Collector,
+	httpColl *httpcoll.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
 	return collector.NewCollector(collectorsParallel, collector.Fetchers{
@@ -128,5 +157,6 @@ func newCollector(
 		models.CollectTypePrometheus:    prom,
 		models.CollectTypeGrafanaAlerts: alerts,
 		models.CollectTypeZabbix:        zbx,
+		models.CollectTypeHTTP:          httpColl,
 	}, log)
 }

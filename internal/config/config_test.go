@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
@@ -29,7 +30,7 @@ import (
 )
 
 func fullSecretsConfig() config.Config {
-	return config.Config{
+	cfg := config.Config{
 		Database: postgres.Config{
 			Password: "db-pass-1",
 			DSN:      "postgres://u:dsn-pass-2@h/db",
@@ -56,7 +57,14 @@ func fullSecretsConfig() config.Config {
 			},
 		},
 		Zabbix: map[string]zabbix.Config{"z": {Token: "zbx-token-13"}},
+		HTTPSources: map[string]httpcoll.Config{
+			"h": {Token: "http-token-15", Password: "http-pass-16"},
+		},
 	}
+
+	cfg.Secrets.Key = "secrets-key-14"
+
+	return cfg
 }
 
 var allSecrets = []string{
@@ -73,6 +81,9 @@ var allSecrets = []string{
 	"bearer-11",
 	"basic-pass-12",
 	"zbx-token-13",
+	"secrets-key-14",
+	"http-token-15",
+	"http-pass-16",
 }
 
 func TestLogDoesNotLeakSecrets(t *testing.T) {
@@ -95,6 +106,7 @@ func TestLogDoesNotLeakSecrets(t *testing.T) {
 	}
 
 	assert.Equal(t, "graf-token-10", cfg.Grafana["ops"].Token.Value())
+	assert.Equal(t, "http-token-15", cfg.HTTPSources["h"].Token.Value())
 }
 
 // TestSecretFieldsAreSecretString: поля с token|password|dsn|secret в имени — только secret.String.
@@ -242,6 +254,17 @@ func TestValidate(t *testing.T) {
 			name:    "jira_host без токена",
 			mutate:  func(c *config.Config) { c.Jira.JiraHost = "https://j" },
 			wantErr: []string{"jira.auth_token"},
+		},
+		{
+			name:    "secrets key 16 байт",
+			mutate:  func(c *config.Config) { c.Secrets.Key = "AAAAAAAAAAAAAAAAAAAAAA==" },
+			wantErr: []string{"SECRETS_KEY", "32 bytes"},
+		},
+		{
+			name: "secrets key 32 байта",
+			mutate: func(c *config.Config) {
+				c.Secrets.Key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+			},
 		},
 		{
 			name: "две ошибки разом",

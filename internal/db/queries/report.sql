@@ -50,7 +50,7 @@ update public_reports set expires_at = now()
 where public_id = $1 and (expires_at is null or expires_at > now());
 
 -- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params, q.query
+select q.card_uuid, q.title, q.q_type, q.params, q.query, q.options, q.secret
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint;
@@ -123,10 +123,11 @@ insert into evaluate(expr) values ($1) returning id;
 insert into pipelines(pipeline) values ($1) returning id;
 
 -- name: FindQueryIDByUUIDAndTitle :one
-select id from queries where card_uuid = $1 and title = $2 and query is not distinct from sqlc.narg(query)::text;
+select id from queries where card_uuid = $1 and title = $2 and query is not distinct from sqlc.narg(query)::text
+  and options = sqlc.arg(options)::jsonb and secret is not distinct from sqlc.narg(secret)::text;
 
 -- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id;
+insert into queries(card_uuid, title, q_type, params, query, options, secret) values ($1, $2, $3, $4, $5, $6, $7) returning id;
 
 -- name: FindRecipientIDByName :one
 select id from recipients where name = $1;

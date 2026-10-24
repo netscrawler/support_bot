@@ -76,6 +76,28 @@ zabbix:
         url: https://zabbix.example.com
         token: <api-token>
         timeout: 30s
+# Источники HTTP (коллектор типа http). Ключ — имя источника.
+# Карточка: type = 'http', card_uuid = имя источника, query = путь (дописывается к base_url),
+# либо card_uuid = полный URL (http/https), query = пустой или путь/query-string.
+# params карточки — значения для ${name} в query.
+# Ответ: json, ndjson, csv, xml, xlsx, yaml или text; формат определяется по Content-Type или options.format.
+# root — путь через точку к массиву (json/yaml) или путь имён элементов от корня (xml, например rss.channel.item).
+# options карточки (JSON-объект в БД, таблица в Lua): headers, format (json|ndjson|csv|xml|xlsx|yaml|text), root, delimiter, sheet (лист xlsx, по умолчанию первый),
+# auth (bearer|basic|header), auth_header, timeout. Неизвестный ключ — ошибка.
+# Секрет карточки: `ctl secret set -name <имя> -host <хост[:порт]>` (значение — из stdin; секрет уходит только на этот хост), в карточке поле secret = имя.
+# Нужен SECRETS_KEY (секция secrets ниже). Токены не кладите в options.headers: options хранится в БД открытым текстом.
+# ВНИМАНИЕ: белого списка хостов нет — карточка с card_uuid-URL из БД достучится до любого адреса,
+# включая внутренние сервисы. Карточки в БД должны писать только доверенные администраторы.
+# Из Lua: collector.http.collect("billing", "/v1/invoices", {}, {root = "data.items"})
+#   (ключ secret в options из Lua запрещён).
+http_sources:
+    billing:
+        base_url: https://billing.example.com/api
+        auth: bearer
+        token: <api-token>
+        headers:
+            Accept: application/json
+        timeout: 30s
 # Настройки Lua-процессора.
 lua:
     # Таймаут для выполнения плагина.
@@ -226,3 +248,8 @@ metrics:
     enabled: true
     # Адрес сервера. Для доступа из другого контейнера нужен 0.0.0.0:9090 и закрытый снаружи порт.
     addr: 127.0.0.1:9090
+# Шифрование секретов в БД (ctl secret).
+secrets:
+    # Ключ AES-256: base64 от 32 байт (openssl rand -base64 32). Потеря ключа = секреты не расшифровать,
+    # их придётся завести заново через `ctl secret set`.
+    key: ""

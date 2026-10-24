@@ -13,6 +13,7 @@ import (
 	"support_bot/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -373,6 +374,8 @@ func mapCardRows(rows []sqlcgen.ListCardsByReportIDRow) []models.Card {
 			Type:      row.QType,
 			RawParams: row.Params,
 			Query:     derefStr(row.Query),
+			Options:   row.Options,
+			Secret:    derefStr(row.Secret),
 		})
 	}
 
@@ -725,10 +728,22 @@ func (s *ReportStore) getOrCreateQuery(
 		query = &card.Query
 	}
 
+	options := []byte("{}")
+	if len(card.Options) > 0 {
+		options = card.Options
+	}
+
+	var secret *string
+
+	if card.Secret != "" {
+		secret = &card.Secret
+	}
+
 	id, err := q.FindQueryIDByUUIDAndTitle(
 		ctx,
 		sqlcgen.FindQueryIDByUUIDAndTitleParams{
 			CardUuid: card.CardUUID, Title: card.Title, Query: query,
+			Options: options, Secret: secret,
 		},
 	)
 	if err == nil {
@@ -755,8 +770,6 @@ func (s *ReportStore) getOrCreateQuery(
 	case len(card.RawParams) > 0:
 		params = card.RawParams
 	case len(card.Params) > 0:
-		var err error
-
 		params, err = json.Marshal(card.Params)
 		if err != nil {
 			return 0, fmt.Errorf("marshal card params: %w", err)
@@ -766,13 +779,24 @@ func (s *ReportStore) getOrCreateQuery(
 		params = []byte("{}")
 	}
 
-	return q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
+	id, err = q.CreateQuery(ctx, sqlcgen.CreateQueryParams{
 		CardUuid: card.CardUUID,
 		Title:    card.Title,
 		QType:    card.Type,
 		Params:   params,
 		Query:    query,
+		Options:  options,
+		Secret:   secret,
 	})
+
+	var pgErr *pgconn.PgError
+
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" &&
+		pgErr.ConstraintName == "queries_secret_fkey" {
+		return 0, fmt.Errorf("secret %q not found", card.Secret)
+	}
+
+	return id, err
 }
 
 func (s *ReportStore) getOrCreateExportFormat(

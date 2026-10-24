@@ -117,6 +117,8 @@ type Query struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 type Recipient struct {
@@ -181,6 +183,13 @@ type ReportsExport struct {
 type ReportsRecipient struct {
 	ReportID    *int32
 	RecipientID *int32
+}
+
+type Secret struct {
+	Name      string
+	Value     string
+	Host      string
+	UpdatedAt pgtype.Timestamptz
 }
 
 type SentMessage struct {

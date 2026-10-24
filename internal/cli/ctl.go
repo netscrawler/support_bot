@@ -31,7 +31,7 @@ func Ctl() {
 		fmt.Fprintf(os.Stderr, "Usage: %s ctl <command> [args]\n", os.Args[0])
 		fmt.Fprintf(
 			os.Stderr,
-			"Commands: export, create, apply, validate, script, link\n",
+			"Commands: export, create, apply, validate, script, link, secret\n",
 		)
 
 		return
@@ -52,6 +52,8 @@ func Ctl() {
 		err = scriptCtl(os.Args[3:])
 	case "link":
 		err = linkCtl(os.Args[3:])
+	case "secret":
+		err = secretCtl(os.Args[3:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown ctl command: %s\n", os.Args[2])
 		os.Exit(1)
@@ -72,6 +74,10 @@ func setupDB(
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
+	return openDB(ctx, cfg)
+}
+
+func openDB(ctx context.Context, cfg *config.Config) (*postgres.DB, error) {
 	db, err := postgres.New(ctx, cfg.Database, slog.Default())
 	if err != nil {
 		return nil, fmt.Errorf("create db connection: %w", err)

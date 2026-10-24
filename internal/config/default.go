@@ -5,6 +5,7 @@ import (
 
 	apihttp "support_bot/internal/api/http"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
@@ -170,6 +171,14 @@ func Default() *Config {
 		Zabbix: map[string]zabbix.Config{
 			exampleName: {
 				URL:     "https://zabbix.org",
+				Token:   exampleToken,
+				Timeout: 15 * time.Second,
+			},
+		},
+		HTTPSources: map[string]httpcoll.Config{
+			exampleName: {
+				BaseURL: "https://api.example.com",
+				Auth:    "bearer",
 				Token:   exampleToken,
 				Timeout: 15 * time.Second,
 			},

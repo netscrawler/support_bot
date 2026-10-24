@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"support_bot/internal/models"
 	"support_bot/internal/processor/lua/stdlib"
 
 	"github.com/stretchr/testify/require"
@@ -108,4 +109,82 @@ func TestPromCollect(t *testing.T) {
 
 	require.Equal(t, lua.LNil, l.GetGlobal("rows"))
 	require.Equal(t, lua.LString("boom"), l.GetGlobal("err"))
+}
+
+type fakeCard struct {
+	card  models.Card
+	calls int
+}
+
+func (f *fakeCard) FetchCard(
+	_ context.Context,
+	card models.Card,
+) ([]map[string]any, error) {
+	f.card = card
+	f.calls++
+
+	return []map[string]any{{"x": float64(1)}}, nil
+}
+
+func runHTTP(t *testing.T, f *fakeCard, script string) *lua.LState {
+	t.Helper()
+
+	l := lua.NewState()
+	t.Cleanup(l.Close)
+	stdlib.NewCollector(nil, nil).WithHTTP(f).Register(l)
+	require.NoError(t, l.DoString(script))
+
+	return l
+}
+
+func TestHTTPCollect(t *testing.T) {
+	t.Parallel()
+
+	t.Run("options reach FetchCard", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		l := runHTTP(t, f, `
+rows, err = collector.http.collect("billing", "/v1/x", {a = "1"}, {format = "csv", headers = {Accept = "text/csv"}})`)
+
+		require.Equal(t, lua.LNil, l.GetGlobal("err"))
+		require.Equal(t, "billing", f.card.CardUUID)
+		require.Equal(t, "/v1/x", f.card.Query)
+		require.Equal(t, map[string]string{"a": "1"}, f.card.Params)
+		require.JSONEq(
+			t,
+			`{"format":"csv","headers":{"Accept":"text/csv"}}`,
+			string(f.card.Options),
+		)
+		require.Empty(t, f.card.Secret)
+	})
+
+	t.Run("no options", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		runHTTP(t, f, `collector.http.collect("billing", "/v1/x")`)
+
+		require.Equal(t, 1, f.calls)
+		require.Empty(t, f.card.Options)
+	})
+
+	t.Run("secret key rejected", func(t *testing.T) {
+		t.Parallel()
+
+		f := &fakeCard{}
+		l := runHTTP(
+			t,
+			f,
+			`rows, err = collector.http.collect("b", "/", {}, {secret = "s"})`,
+		)
+
+		require.Equal(t, lua.LNil, l.GetGlobal("rows"))
+		require.Equal(
+			t,
+			lua.LString("secret is not available from lua"),
+			l.GetGlobal("err"),
+		)
+		require.Zero(t, f.calls)
+	})
 }

@@ -121,7 +121,7 @@ func (q *Queries) CreatePublicLink(ctx context.Context, arg CreatePublicLinkPara
 }
 
 const createQuery = `-- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id
+insert into queries(card_uuid, title, q_type, params, query, options, secret) values ($1, $2, $3, $4, $5, $6, $7) returning id
 `
 
 type CreateQueryParams struct {
@@ -130,6 +130,8 @@ type CreateQueryParams struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32, error) {
@@ -139,6 +141,8 @@ func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32
 		arg.QType,
 		arg.Params,
 		arg.Query,
+		arg.Options,
+		arg.Secret,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -281,16 +285,25 @@ func (q *Queries) FindExportFormatIDByFormat(ctx context.Context, format *string
 
 const findQueryIDByUUIDAndTitle = `-- name: FindQueryIDByUUIDAndTitle :one
 select id from queries where card_uuid = $1 and title = $2 and query is not distinct from $3::text
+  and options = $4::jsonb and secret is not distinct from $5::text
 `
 
 type FindQueryIDByUUIDAndTitleParams struct {
 	CardUuid string
 	Title    string
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) FindQueryIDByUUIDAndTitle(ctx context.Context, arg FindQueryIDByUUIDAndTitleParams) (int32, error) {
-	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle, arg.CardUuid, arg.Title, arg.Query)
+	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle,
+		arg.CardUuid,
+		arg.Title,
+		arg.Query,
+		arg.Options,
+		arg.Secret,
+	)
 	var id int32
 	err := row.Scan(&id)
 	return id, err
@@ -539,7 +552,7 @@ func (q *Queries) LinkTemplateToReport(ctx context.Context, arg LinkTemplateToRe
 }
 
 const listCardsByReportID = `-- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params, q.query
+select q.card_uuid, q.title, q.q_type, q.params, q.query, q.options, q.secret
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint
@@ -551,6 +564,8 @@ type ListCardsByReportIDRow struct {
 	QType    string
 	Params   []byte
 	Query    *string
+	Options  []byte
+	Secret   *string
 }
 
 func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]ListCardsByReportIDRow, error) {
@@ -568,6 +583,8 @@ func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]Li
 			&i.QType,
 			&i.Params,
 			&i.Query,
+			&i.Options,
+			&i.Secret,
 		); err != nil {
 			return nil, err
 		}

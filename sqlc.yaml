@@ -11,6 +11,7 @@ sql:
       - "migrations/init.sql/008_public_report_links_ttl.sql"
       - "migrations/init.sql/009_report_dedup.sql"
       - "migrations/init.sql/010_report_default_period.sql"
+      - "migrations/init.sql/011_query_options_secrets.sql"
     gen:
       go:
         package: "sqlcgen"

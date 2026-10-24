@@ -106,6 +106,7 @@ const (
 	CollectTypePrometheus    = "prom"
 	CollectTypeGrafanaAlerts = "grafana_alerts"
 	CollectTypeZabbix        = "zabbix"
+	CollectTypeHTTP          = "http"
 )
 
 type Card struct {
@@ -115,6 +116,8 @@ type Card struct {
 	Params    map[string]string `json:"params"`
 	Type      string            `json:"type"`
 	Query     string            `json:"query"`
+	Options   json.RawMessage   `json:"options,omitempty"`
+	Secret    string            `json:"secret,omitempty"`
 }
 
 func (c *Card) ToString(_ string) string {

@@ -11,6 +11,7 @@ import (
 
 	apihttp "support_bot/internal/api/http"
 	"support_bot/internal/collector/appmetrica"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	pgcollector "support_bot/internal/collector/postgres"
 	"support_bot/internal/collector/prometheus"
@@ -42,6 +43,7 @@ type Config struct {
 	Grafana        map[string]prometheus.GrafanaConfig `comment:"Подключения к Grafana: для запросов к Prometheus через proxy datasource и для коллектора grafana_alerts.\nКлюч — имя для поля grafana в секции prometheus и для card_uuid запроса grafana_alerts."                                                                                                  yaml:"grafana"`
 	Prometheus     map[string]prometheus.Config        `comment:"Источники Prometheus для коллектора типа prom.\nКлюч — имя источника, которое указывается в card_uuid запроса."                                                                                                                                                                                     yaml:"prometheus"`
 	Zabbix         map[string]zabbix.Config            `comment:"Источники Zabbix для коллектора типа zabbix.\nКлюч — имя источника, которое указывается в card_uuid запроса."                                                                                                                                                                                       yaml:"zabbix"`
+	HTTPSources    map[string]httpcoll.Config          `comment:"Источники HTTP для коллектора типа http.\nКлюч — имя источника, которое указывается в card_uuid запроса (либо card_uuid — полный URL)."                                                                                                                                                             yaml:"http_sources"`
 	TgBot          tgbot.Config                        `comment:"Настройки Telegram-бота.\nИспользуется для приема команд и отправки уведомлений."                                                                                                                                                                                                                   yaml:"telegram"`
 	Timeout        timeout                             `comment:"Настройка таймаутов"                                                                                                                                                                                                                                                                                yaml:"timeout"`
 	SMB            smb.Config                          `comment:"Настройки подключения к SMB (Samba) файловой шаре.\nИспользуется для чтения и/или записи файлов на сетевой ресурс.\nПоддерживается аутентификация по логину/паролю."                                                                                                                                yaml:"smb"`
@@ -51,7 +53,12 @@ type Config struct {
 	Alerts         runlog.AlertsConfig                 `comment:"Уведомления администраторов о сбоях отчётов."                                                                                                                                                                                                                                                       yaml:"alerts"`
 	Runs           runlog.Config                       `comment:"Журнал запусков отчётов."                                                                                                                                                                                                                                                                           yaml:"runs"`
 	Delivery       delivery                            `comment:"Доставка отчётов."                                                                                                                                                                                                                                                                                  yaml:"delivery"`
+	Secrets        secrets                             `comment:"Шифрование секретов в БД (ctl secret)."                                                                                                                                                                                                                                                             yaml:"secrets"`
 	Metrics        metrics.Config                      `comment:"Сервер /metrics и /healthz."                                                                                                                                                                                                                                                                        yaml:"metrics"`
+}
+
+type secrets struct {
+	Key secret.String `comment:"Ключ AES-256: base64 от 32 байт (например, openssl rand -base64 32)." env:"SECRETS_KEY" yaml:"key"`
 }
 
 type delivery struct {
@@ -115,6 +122,7 @@ func registerSecrets(cfg *Config) {
 		cfg.SMB.Password,
 		cfg.Jira.AuthToken,
 		cfg.AppMetrica.OAuthToken,
+		cfg.Secrets.Key,
 	)
 
 	// Database.DSN здесь ещё пуст: его регистрирует postgres.Config.getDSN.
@@ -137,6 +145,10 @@ func registerSecrets(cfg *Config) {
 	for _, z := range cfg.Zabbix {
 		secret.Register(z.Token)
 	}
+
+	for _, h := range cfg.HTTPSources {
+		secret.Register(h.Token, h.Password)
+	}
 }
 
 // registerDSN регистрирует DSN целиком и пароль из него.
@@ -152,7 +164,7 @@ func registerDSN(dsn secret.String) {
 
 // Validate проверяет обязательные поля: токен Telegram и БД всегда,
 // остальные секции — только если задано их ключевое поле.
-// Map-секции (databases, prometheus, grafana, zabbix) проверяют конструкторы коллекторов.
+// Map-секции (databases, prometheus, grafana, zabbix, http_sources) проверяют конструкторы коллекторов.
 func (c Config) Validate() error {
 	var errs []error
 
@@ -186,6 +198,12 @@ func (c Config) Validate() error {
 
 	if c.Jira.JiraHost != "" {
 		need("jira.auth_token", c.Jira.AuthToken == "")
+	}
+
+	if c.Secrets.Key != "" {
+		_, err := secret.NewCipher(c.Secrets.Key.Value())
+
+		errs = append(errs, err)
 	}
 
 	return errors.Join(append(errs, c.Log.Validate(), c.HTTP.Validate())...)

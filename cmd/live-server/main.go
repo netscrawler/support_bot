@@ -26,6 +26,7 @@ import (
 	"support_bot/internal/collector"
 	"support_bot/internal/collector/appmetrica"
 	"support_bot/internal/collector/grafana"
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/collector/jira"
 	"support_bot/internal/collector/metabase"
 	"support_bot/internal/collector/postgres"
@@ -145,6 +146,8 @@ type config struct {
 	Prometheus map[string]prometheus.Config        `json:"prometheus"`
 	Grafana    map[string]prometheus.GrafanaConfig `json:"grafana"`
 	Zabbix     map[string]zabbix.Config            `json:"zabbix"`
+
+	HTTPSources map[string]httpcoll.Config `json:"http_sources"`
 }
 
 func main() {
@@ -237,6 +240,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Секреты из БД в live-server не поддерживаются: secrets = nil.
+	httpColl, err := httpcoll.New(cfg.HTTPSources, nil, log)
+	if err != nil {
+		log.Error("error create http collector", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	pg, err := postgres.New(ctx, cfg.Databases, log)
 	if err != nil {
 		log.Error("error create postgres collector", slog.Any("error", err))
@@ -259,6 +269,7 @@ func main() {
 			models.CollectTypePrometheus:    prom,
 			models.CollectTypeGrafanaAlerts: grafana.New(cfg.Grafana, log),
 			models.CollectTypeZabbix:        zbx,
+			models.CollectTypeHTTP:          httpColl,
 		},
 		slog.Default(),
 	)

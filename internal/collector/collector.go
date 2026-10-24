@@ -33,6 +33,11 @@ type QueryFetcher interface {
 	) ([]map[string]any, error)
 }
 
+// CardFetcher получает карточку целиком (options, secret).
+type CardFetcher interface {
+	FetchCard(ctx context.Context, card models.Card) ([]map[string]any, error)
+}
+
 // Fetchers — реестр источников по типу карточки.
 type Fetchers map[string]QueryFetcher
 
@@ -165,6 +170,8 @@ func (c *Collector) collect(
 
 			if f == nil {
 				err = fmt.Errorf("unknown fetcher type %s", crd.Type)
+			} else if cf, ok := f.(CardFetcher); ok {
+				data, err = cf.FetchCard(ctx, crd)
 			} else {
 				data, err = f.Fetch(ctx, crd.CardUUID, crd.Query, crd.Params)
 			}

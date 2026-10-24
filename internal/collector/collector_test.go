@@ -559,3 +559,63 @@ func TestCollectUnknownType(t *testing.T) {
 
 	require.EqualError(t, err, "unknown fetcher type nope")
 }
+
+type cardFake struct {
+	fetchCalls int
+	got        models.Card
+}
+
+func (f *cardFake) Fetch(
+	context.Context, string, string, map[string]string,
+) ([]map[string]any, error) {
+	f.fetchCalls++
+
+	return []map[string]any{{"via": "fetch"}}, nil
+}
+
+func (f *cardFake) FetchCard(
+	_ context.Context,
+	card models.Card,
+) ([]map[string]any, error) {
+	f.got = card
+
+	return []map[string]any{{"via": "card"}}, nil
+}
+
+// plainFake реализует только QueryFetcher.
+type plainFake struct{ calls int }
+
+func (f *plainFake) Fetch(
+	context.Context, string, string, map[string]string,
+) ([]map[string]any, error) {
+	f.calls++
+
+	return []map[string]any{{"via": "fetch"}}, nil
+}
+
+func TestCollect_CardFetcher(t *testing.T) {
+	t.Parallel()
+
+	cf := &cardFake{}
+	pf := &plainFake{}
+
+	c := collector.NewCollector(0, collector.Fetchers{
+		models.CollectTypeHTTP:     cf,
+		models.CollectTypeMetabase: pf,
+	}, slog.Default())
+
+	ds, err := c.Collect(t.Context(),
+		models.Card{
+			Title: "a", Type: models.CollectTypeHTTP, CardUUID: "src",
+			Options: []byte(`{"format":"csv"}`), Secret: "tok",
+		},
+		models.Card{Title: "b", Type: models.CollectTypeMetabase},
+	)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, cf.fetchCalls)
+	assert.JSONEq(t, `{"format":"csv"}`, string(cf.got.Options))
+	assert.Equal(t, "tok", cf.got.Secret)
+	assert.Equal(t, "card", ds["a"][0]["via"])
+	assert.Equal(t, 1, pf.calls)
+}

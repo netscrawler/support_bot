@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"support_bot/internal/collector/httpcoll"
 	"support_bot/internal/models"
 )
 
@@ -52,6 +54,12 @@ func (r *ReportValidation) Validate(
 		seenQueries[q.Title] = true
 		if q.CardUUID == "" && q.Type == "mb" {
 			return fmt.Errorf("query %q card_uuid is empty", q.Title)
+		}
+
+		if q.Type == models.CollectTypeHTTP {
+			if err := validateHTTPCard(q); err != nil {
+				return fmt.Errorf("query %q: %w", q.Title, err)
+			}
 		}
 	}
 
@@ -136,6 +144,22 @@ func (r *ReportValidation) Validate(
 	}
 
 	return nil
+}
+
+// validateHTTPCard: card_uuid — имя источника из конфига (неизвестное имя ловится
+// при сборе) или полный http(s)-URL; options разбирает сам коллектор.
+func validateHTTPCard(q models.Card) error {
+	if q.CardUUID == "" {
+		return errors.New("card_uuid is empty")
+	}
+
+	if strings.Contains(q.CardUUID, "://") {
+		if _, err := httpcoll.ParseHTTPURL(q.CardUUID); err != nil {
+			return fmt.Errorf("card_uuid %q is %w", q.CardUUID, err)
+		}
+	}
+
+	return httpcoll.ValidateOptions(q.Options)
 }
 
 // validateRecipient checks that a recipient carries the fields its delivery

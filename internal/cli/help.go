@@ -124,7 +124,23 @@ func Help() {
 	)
 	fmt.Fprintf(
 		os.Stderr,
-		"                         revoke -config <путь> <uuid>  Отозвать ссылку\n\n",
+		"                         revoke -config <путь> <uuid>  Отозвать ссылку\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"               secret    Секреты в БД (нужен SECRETS_KEY; значение для set читается из stdin)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         set    -config <путь> -name <имя> -host <хост[:порт]>  Сохранить секрет\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         list   -config <путь>  Список секретов (имя и хост)\n",
+	)
+	fmt.Fprintf(
+		os.Stderr,
+		"                         delete -config <путь> -name <имя>  Удалить секрет\n\n",
 	)
 
 	fmt.Fprintf(

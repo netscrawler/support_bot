@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"support_bot/internal/models"
@@ -210,6 +212,48 @@ func TestValidateDefaultPeriod(t *testing.T) {
 				err,
 				c.wantErr,
 			)
+		}
+	}
+}
+
+func TestValidateHTTPCard(t *testing.T) {
+	v := NewReportValidation()
+
+	for _, c := range []struct {
+		name    string
+		uuid    string
+		options string
+		wantErr string // подстрока ошибки; пусто — ошибки нет
+	}{
+		{"имя источника", "billing", "", ""},
+		{"url", "https://api.example.com/v1", `{"format":"csv"}`, ""},
+		{"пустой card_uuid", "", "", "card_uuid is empty"},
+		{"ftp", "ftp://x", "", "ftp://x"},
+		{"url без host", "https://", "", "https://"},
+		{"неизвестная опция", "billing", `{"fromat":"csv"}`, "fromat"},
+		{"format вне списка", "billing", `{"format":"html"}`, "html"},
+		{"xlsx с листом", "billing", `{"format":"xlsx","sheet":"Data"}`, ""},
+		{"auth вне списка", "billing", `{"auth":"digest"}`, "digest"},
+		{"header без auth_header", "billing", `{"auth":"header"}`, ""},
+		{"header с auth_header", "billing", `{"auth":"header","auth_header":"X-Key"}`, ""},
+		{"options не объект", "billing", `[1]`, "invalid options"},
+	} {
+		r := baseReport()
+
+		r.Queries = []models.Card{{
+			Title:    "q",
+			Type:     models.CollectTypeHTTP,
+			CardUUID: c.uuid,
+			Options:  json.RawMessage(c.options),
+		}}
+
+		err := v.Validate(context.Background(), r)
+
+		switch {
+		case c.wantErr == "" && err != nil:
+			t.Errorf("%s: unexpected error: %v", c.name, err)
+		case c.wantErr != "" && (err == nil || !strings.Contains(err.Error(), c.wantErr)):
+			t.Errorf("%s: err = %v, want substring %q", c.name, err, c.wantErr)
 		}
 	}
 }
