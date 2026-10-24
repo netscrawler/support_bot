@@ -104,7 +104,7 @@ func (q *Queries) CreatePipeline(ctx context.Context, pipeline []byte) (int32, e
 }
 
 const createQuery = `-- name: CreateQuery :one
-insert into queries(card_uuid, title, q_type, params) values ($1, $2, $3, $4) returning id
+insert into queries(card_uuid, title, q_type, params, query) values ($1, $2, $3, $4, $5) returning id
 `
 
 type CreateQueryParams struct {
@@ -112,6 +112,7 @@ type CreateQueryParams struct {
 	Title    string
 	QType    string
 	Params   []byte
+	Query    *string
 }
 
 func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32, error) {
@@ -120,6 +121,7 @@ func (q *Queries) CreateQuery(ctx context.Context, arg CreateQueryParams) (int32
 		arg.Title,
 		arg.QType,
 		arg.Params,
+		arg.Query,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -244,16 +246,17 @@ func (q *Queries) FindExportFormatIDByFormat(ctx context.Context, format *string
 }
 
 const findQueryIDByUUIDAndTitle = `-- name: FindQueryIDByUUIDAndTitle :one
-select id from queries where card_uuid = $1 and title = $2
+select id from queries where card_uuid = $1 and title = $2 and query is not distinct from $3::text
 `
 
 type FindQueryIDByUUIDAndTitleParams struct {
 	CardUuid string
 	Title    string
+	Query    *string
 }
 
 func (q *Queries) FindQueryIDByUUIDAndTitle(ctx context.Context, arg FindQueryIDByUUIDAndTitleParams) (int32, error) {
-	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle, arg.CardUuid, arg.Title)
+	row := q.db.QueryRow(ctx, findQueryIDByUUIDAndTitle, arg.CardUuid, arg.Title, arg.Query)
 	var id int32
 	err := row.Scan(&id)
 	return id, err
@@ -530,7 +533,7 @@ func (q *Queries) ListActiveReportRows(ctx context.Context) ([]ListActiveReportR
 }
 
 const listCardsByReportID = `-- name: ListCardsByReportID :many
-select q.card_uuid, q.title, q.q_type, q.params
+select q.card_uuid, q.title, q.q_type, q.params, q.query
 from report_queries rq
 join queries q on q.id = rq.query_id
 where rq.report_id = $1::bigint
@@ -541,6 +544,7 @@ type ListCardsByReportIDRow struct {
 	Title    string
 	QType    string
 	Params   []byte
+	Query    *string
 }
 
 func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]ListCardsByReportIDRow, error) {
@@ -557,6 +561,7 @@ func (q *Queries) ListCardsByReportID(ctx context.Context, dollar_1 int64) ([]Li
 			&i.Title,
 			&i.QType,
 			&i.Params,
+			&i.Query,
 		); err != nil {
 			return nil, err
 		}

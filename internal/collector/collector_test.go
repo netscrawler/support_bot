@@ -30,13 +30,13 @@ func TestCollect(t *testing.T) {
 
 		df := &cmock.MockDataFetcher{}
 
-		card := models.Card{Title: "card1", CardUUID: "uuid1"}
+		card := models.Card{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase}
 
-		df.On("Fetch", ctx, "uuid1").Return([]map[string]any{
+		df.On("Fetch", ctx, "uuid1", mock.Anything).Return([]map[string]any{
 			{"field": "value1"},
 		}, nil)
 
-		c := collector.NewCollector(0, df, df, df, l)
+		c := collector.NewCollector(0, df, df, df, nil, l)
 
 		result, err := c.Collect(ctx, card)
 
@@ -45,6 +45,29 @@ func TestCollect(t *testing.T) {
 		assert.Equal(t, "value1", result["card1"][0]["field"])
 
 		df.AssertExpectations(t)
+	})
+
+	t.Run("pg card", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+
+		pg := &cmock.MockSQLFetcher{}
+		params := map[string]string{"a": "b"}
+		card := models.Card{
+			Title: "card1", CardUUID: "analytics", Type: models.CollectTypePostgres,
+			Query: "select 1", Params: params,
+		}
+
+		pg.On("Fetch", ctx, "analytics", "select 1", params).
+			Return([]map[string]any{{"field": "pg"}}, nil)
+
+		c := collector.NewCollector(0, nil, nil, nil, pg, l)
+
+		result, err := c.Collect(ctx, card)
+
+		require.NoError(t, err)
+		assert.Equal(t, "pg", result["card1"][0]["field"])
+		pg.AssertExpectations(t)
 	})
 
 	t.Run("many query", func(t *testing.T) {
@@ -56,19 +79,19 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1"},
-			{Title: "card2", CardUUID: "uuid2"},
-			{Title: "card3", CardUUID: "uuid3"},
+			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
+			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
+			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
 		}
 
 		for _, card := range cards {
 			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid).Run(func(_ mock.Arguments) {
+			df.On("Fetch", ctx, uuid, mock.Anything).Run(func(_ mock.Arguments) {
 				time.Sleep(1 * time.Second)
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, l)
+		c := collector.NewCollector(3, df, df, df, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -95,19 +118,19 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1"},
-			{Title: "card2", CardUUID: "uuid2"},
+			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
+			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
 		}
 
-		df.On("Fetch", ctx, "uuid1").Run(func(_ mock.Arguments) {
+		df.On("Fetch", ctx, "uuid1", mock.Anything).Run(func(_ mock.Arguments) {
 			time.Sleep(1 * time.Second)
 		}).Return([]map[string]any{{"field": "value_" + "uuid1"}}, nil)
 
-		df.On("Fetch", ctx, "uuid2").Run(func(_ mock.Arguments) {
+		df.On("Fetch", ctx, "uuid2", mock.Anything).Run(func(_ mock.Arguments) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
-		c := collector.NewCollector(3, df, df, df, l)
+		c := collector.NewCollector(3, df, df, df, nil, l)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -130,21 +153,21 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards1 := []models.Card{
-			{Title: "card1", CardUUID: "uuid1"},
-			{Title: "card2", CardUUID: "uuid2"},
+			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
+			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
 		}
 		cards2 := []models.Card{
-			{Title: "card3", CardUUID: "uuid3"},
-			{Title: "card4", CardUUID: "uuid4"},
+			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
+			{Title: "card4", CardUUID: "uuid4", Type: models.CollectTypeMetabase},
 		}
 
 		for _, card := range append(cards1, cards2...) {
-			df.On("Fetch", ctx, card.CardUUID).Run(func(_ mock.Arguments) {
+			df.On("Fetch", ctx, card.CardUUID, mock.Anything).Run(func(_ mock.Arguments) {
 				time.Sleep(200 * time.Millisecond) // симуляция долгой работы
 			}).Return([]map[string]any{{"field": "value_" + card.CardUUID}}, nil)
 		}
 
-		c := collector.NewCollector(2, df, df, df, slog.Default())
+		c := collector.NewCollector(2, df, df, df, nil, slog.Default())
 
 		start := time.Now()
 
@@ -203,12 +226,12 @@ func TestCollect(t *testing.T) {
 		df := &cmock.MockDataFetcher{}
 
 		cards := []models.Card{
-			{Title: "card1", CardUUID: "uuid1"},
-			{Title: "card2", CardUUID: "uuid2"},
-			{Title: "card3", CardUUID: "uuid3"},
-			{Title: "card4", CardUUID: "uuid4"},
-			{Title: "card5", CardUUID: "uuid5"},
-			{Title: "card6", CardUUID: "uuid6"},
+			{Title: "card1", CardUUID: "uuid1", Type: models.CollectTypeMetabase},
+			{Title: "card2", CardUUID: "uuid2", Type: models.CollectTypeMetabase},
+			{Title: "card3", CardUUID: "uuid3", Type: models.CollectTypeMetabase},
+			{Title: "card4", CardUUID: "uuid4", Type: models.CollectTypeMetabase},
+			{Title: "card5", CardUUID: "uuid5", Type: models.CollectTypeMetabase},
+			{Title: "card6", CardUUID: "uuid6", Type: models.CollectTypeMetabase},
 		}
 
 		var mu sync.Mutex
@@ -218,7 +241,7 @@ func TestCollect(t *testing.T) {
 
 		for _, card := range cards {
 			uuid := card.CardUUID
-			df.On("Fetch", ctx, uuid).Run(func(_ mock.Arguments) {
+			df.On("Fetch", ctx, uuid, mock.Anything).Run(func(_ mock.Arguments) {
 				mu.Lock()
 
 				currentRunning++
@@ -238,7 +261,7 @@ func TestCollect(t *testing.T) {
 			}).Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, slog.Default())
+		c := collector.NewCollector(3, df, df, df, nil, slog.Default())
 
 		var wg sync.WaitGroup
 

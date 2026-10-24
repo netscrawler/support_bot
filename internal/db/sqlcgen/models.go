@@ -114,6 +114,7 @@ type Query struct {
 	Title    string
 	QType    string
 	Params   []byte
+	Query    *string
 }
 
 type Recipient struct {
