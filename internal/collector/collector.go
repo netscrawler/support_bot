@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -32,27 +33,31 @@ type QueryFetcher interface {
 	) ([]map[string]any, error)
 }
 
+// Fetchers — реестр источников по типу карточки.
+type Fetchers map[string]QueryFetcher
+
+type ignoreQuery struct{ f DataFetcher }
+
+func (q ignoreQuery) Fetch(
+	ctx context.Context,
+	target, _ string,
+	params map[string]string,
+) ([]map[string]any, error) {
+	return q.f.Fetch(ctx, target, params)
+}
+
+// IgnoreQuery приводит источник без query к QueryFetcher.
+func IgnoreQuery(f DataFetcher) QueryFetcher { return ignoreQuery{f} }
+
 type Collector struct {
-	mb         DataFetcher
-	appMetrica DataFetcher
-	jira       DataFetcher
-	pg         QueryFetcher
-	prom       QueryFetcher
-	alerts     QueryFetcher
-	zabbix     QueryFetcher
-	log        *slog.Logger
-	parallel   chan struct{}
+	fetchers Fetchers
+	log      *slog.Logger
+	parallel chan struct{}
 }
 
 func NewCollector(
 	parallel uint8,
-	mb DataFetcher,
-	appMetrica DataFetcher,
-	jira DataFetcher,
-	pg QueryFetcher,
-	prom QueryFetcher,
-	alerts QueryFetcher,
-	zabbix QueryFetcher,
+	fetchers Fetchers,
 	log *slog.Logger,
 ) *Collector {
 	l := log.With(slog.Any("module", "collector"))
@@ -63,18 +68,10 @@ func NewCollector(
 
 	l.Info("create collector", slog.Any("parallel_query", parallel))
 
-	semaphore := make(chan struct{}, parallel)
-
 	return &Collector{
-		mb:         mb,
-		appMetrica: appMetrica,
-		jira:       jira,
-		pg:         pg,
-		prom:       prom,
-		alerts:     alerts,
-		zabbix:     zabbix,
-		log:        l,
-		parallel:   semaphore,
+		fetchers: fetchers,
+		log:      l,
+		parallel: make(chan struct{}, parallel),
 	}
 }
 
@@ -157,43 +154,21 @@ func (c *Collector) collect(
 			defer wg.Done()
 			defer func() { <-c.parallel }()
 
-			var fetchFn func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error)
-
-			switch crd.Type {
-			case models.CollectTypeMetabase:
-				fetchFn = c.mb.Fetch
-			case models.CollectTypeAppMetrica:
-				fetchFn = c.appMetrica.Fetch
-			case models.CollectTypeJIRA:
-				fetchFn = c.jira.Fetch
-			case models.CollectTypePostgres:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return c.pg.Fetch(ctx, target, crd.Query, params)
-				}
-
-			case models.CollectTypePrometheus:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return c.prom.Fetch(ctx, target, crd.Query, params)
-				}
-
-			case models.CollectTypeGrafanaAlerts:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return c.alerts.Fetch(ctx, target, crd.Query, params)
-				}
-
-			case models.CollectTypeZabbix:
-				fetchFn = func(ctx context.Context, target string, params map[string]string) ([]map[string]any, error) {
-					return c.zabbix.Fetch(ctx, target, crd.Query, params)
-				}
-
-			default:
-				fetchFn = func(_ context.Context, _ string, _ map[string]string) ([]map[string]any, error) {
-					return nil, errors.New("unknown fetcher type")
-				}
-			}
+			f := c.fetchers[crd.Type]
 
 			fetchStart := time.Now()
-			data, err := fetchFn(ctx, crd.CardUUID, crd.Params)
+
+			var (
+				data []map[string]any
+				err  error
+			)
+
+			if f == nil {
+				err = fmt.Errorf("unknown fetcher type %s", crd.Type)
+			} else {
+				data, err = f.Fetch(ctx, crd.CardUUID, crd.Query, crd.Params)
+			}
+
 			metrics.CollectorDuration.WithLabelValues(crd.Type).
 				Observe(time.Since(fetchStart).Seconds())
 

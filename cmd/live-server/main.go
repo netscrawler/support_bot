@@ -245,13 +245,21 @@ func main() {
 
 	clct := collector.NewCollector(
 		4,
-		metabase.New(cfg.MetabaseBaseURL),
-		appmetrica.NewCollector(&cfg.AppMetrica, log),
-		jira.New(cfg.Jira),
-		pg,
-		prom,
-		grafana.New(cfg.Grafana, log),
-		zbx,
+		collector.Fetchers{
+			models.CollectTypeMetabase: collector.IgnoreQuery(
+				metabase.New(cfg.MetabaseBaseURL),
+			),
+			models.CollectTypeAppMetrica: collector.IgnoreQuery(
+				appmetrica.NewCollector(&cfg.AppMetrica, log),
+			),
+			models.CollectTypeJIRA: collector.IgnoreQuery(
+				jira.New(cfg.Jira),
+			),
+			models.CollectTypePostgres:      pg,
+			models.CollectTypePrometheus:    prom,
+			models.CollectTypeGrafanaAlerts: grafana.New(cfg.Grafana, log),
+			models.CollectTypeZabbix:        zbx,
+		},
 		slog.Default(),
 	)
 

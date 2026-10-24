@@ -13,6 +13,7 @@ import (
 	"support_bot/internal/collector/prometheus"
 	"support_bot/internal/collector/zabbix"
 	"support_bot/internal/config"
+	"support_bot/internal/models"
 
 	"go.uber.org/fx"
 )
@@ -119,7 +120,13 @@ func newCollector(
 	zbx *zabbix.Collector,
 	log *slog.Logger,
 ) *collector.Collector {
-	return collector.NewCollector(
-		collectorsParallel, mb, appM, jiraColl, pg, prom, alerts, zbx, log,
-	)
+	return collector.NewCollector(collectorsParallel, collector.Fetchers{
+		models.CollectTypeMetabase:      collector.IgnoreQuery(mb),
+		models.CollectTypeAppMetrica:    collector.IgnoreQuery(appM),
+		models.CollectTypeJIRA:          collector.IgnoreQuery(jiraColl),
+		models.CollectTypePostgres:      pg,
+		models.CollectTypePrometheus:    prom,
+		models.CollectTypeGrafanaAlerts: alerts,
+		models.CollectTypeZabbix:        zbx,
+	}, log)
 }

@@ -46,7 +46,13 @@ func TestCollect(t *testing.T) {
 			{"field": "value1"},
 		}, nil)
 
-		c := collector.NewCollector(0, df, df, df, nil, nil, nil, nil, l)
+		c := collector.NewCollector(
+			0,
+			collector.Fetchers{
+				models.CollectTypeMetabase: collector.IgnoreQuery(df),
+			},
+			l,
+		)
 
 		result, err := c.Collect(ctx, card)
 
@@ -75,7 +81,11 @@ func TestCollect(t *testing.T) {
 		pg.On("Fetch", ctx, "analytics", "select 1", params).
 			Return([]map[string]any{{"field": "pg"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, nil, l)
+		c := collector.NewCollector(
+			0,
+			collector.Fetchers{models.CollectTypePostgres: pg},
+			l,
+		)
 
 		result, err := c.Collect(ctx, card)
 
@@ -102,7 +112,11 @@ func TestCollect(t *testing.T) {
 		prom.On("Fetch", ctx, "main", "up", params).
 			Return([]map[string]any{{"field": "prom"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, nil, prom, nil, nil, l)
+		c := collector.NewCollector(
+			0,
+			collector.Fetchers{models.CollectTypePrometheus: prom},
+			l,
+		)
 
 		result, err := c.Collect(ctx, card)
 
@@ -129,7 +143,11 @@ func TestCollect(t *testing.T) {
 		alerts.On("Fetch", ctx, "ops", "active", params).
 			Return([]map[string]any{{"field": "alerts"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, nil, nil, alerts, nil, l)
+		c := collector.NewCollector(
+			0,
+			collector.Fetchers{models.CollectTypeGrafanaAlerts: alerts},
+			l,
+		)
 
 		result, err := c.Collect(ctx, card)
 
@@ -153,7 +171,11 @@ func TestCollect(t *testing.T) {
 		zbx.On("Fetch", ctx, "host1", "item.key", params).
 			Return([]map[string]any{{"field": "zabbix"}}, nil)
 
-		c := collector.NewCollector(0, nil, nil, nil, nil, nil, nil, zbx, l)
+		c := collector.NewCollector(
+			0,
+			collector.Fetchers{models.CollectTypeZabbix: zbx},
+			l,
+		)
 
 		result, err := c.Collect(ctx, card)
 
@@ -197,7 +219,13 @@ func TestCollect(t *testing.T) {
 				Return([]map[string]any{{"field": "value_" + uuid}}, nil)
 		}
 
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, l)
+		c := collector.NewCollector(
+			3,
+			collector.Fetchers{
+				models.CollectTypeMetabase: collector.IgnoreQuery(df),
+			},
+			l,
+		)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -248,7 +276,13 @@ func TestCollect(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}).Return(nil, errors.New("some error"))
 
-		c := collector.NewCollector(3, df, df, df, nil, nil, nil, nil, l)
+		c := collector.NewCollector(
+			3,
+			collector.Fetchers{
+				models.CollectTypeMetabase: collector.IgnoreQuery(df),
+			},
+			l,
+		)
 
 		start := time.Now()
 		result, err := c.Collect(ctx, cards...)
@@ -307,13 +341,9 @@ func TestCollect(t *testing.T) {
 
 		c := collector.NewCollector(
 			2,
-			df,
-			df,
-			df,
-			nil,
-			nil,
-			nil,
-			nil,
+			collector.Fetchers{
+				models.CollectTypeMetabase: collector.IgnoreQuery(df),
+			},
 			slog.Default(),
 		)
 
@@ -444,13 +474,9 @@ func TestCollect(t *testing.T) {
 
 			c := collector.NewCollector(
 				3,
-				df,
-				df,
-				df,
-				nil,
-				nil,
-				nil,
-				nil,
+				collector.Fetchers{
+					models.CollectTypeMetabase: collector.IgnoreQuery(df),
+				},
 				slog.Default(),
 			)
 
@@ -514,9 +540,22 @@ func TestCollectErrorMetric(t *testing.T) {
 	before := testutil.ToFloat64(c)
 
 	l := slog.New(slog.DiscardHandler)
-	col := collector.NewCollector(0, nil, nil, nil, pg, nil, nil, nil, l)
+	col := collector.NewCollector(
+		0,
+		collector.Fetchers{models.CollectTypePostgres: pg},
+		l,
+	)
 	_, err := col.Collect(t.Context(), card)
 
 	require.Error(t, err)
 	assert.InDelta(t, 1, testutil.ToFloat64(c)-before, 0)
+}
+
+func TestCollectUnknownType(t *testing.T) {
+	t.Parallel()
+
+	c := collector.NewCollector(0, nil, slog.New(slog.DiscardHandler))
+	_, err := c.Collect(t.Context(), models.Card{Title: "c", Type: "nope"})
+
+	require.EqualError(t, err, "unknown fetcher type nope")
 }
