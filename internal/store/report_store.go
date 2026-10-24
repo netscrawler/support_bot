@@ -47,19 +47,10 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 
 	reports := make([]models.Report, 0, len(rows))
 
+	var errs []error
+
 	for _, row := range rows {
-		report, err := s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.Dedup,
-			row.DefaultPeriod,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
+		report, err := s.assemble(ctx, row)
 		if err != nil {
 			s.log.ErrorContext(
 				ctx,
@@ -68,43 +59,7 @@ func (s *ReportStore) Load(ctx context.Context) ([]models.Report, error) {
 				slog.Any("error", err),
 			)
 
-			continue
-		}
-
-		reports = append(reports, *report)
-	}
-
-	return reports, nil
-}
-
-func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
-	rows, err := s.q.ListActiveReportRows(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list active reports: %w", err)
-	}
-
-	reports := make([]models.Report, 0, len(rows))
-
-	for _, row := range rows {
-		report, err := s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.Dedup,
-			row.DefaultPeriod,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
-		if err != nil {
-			s.log.ErrorContext(
-				ctx,
-				"error assembling report",
-				slog.Any("report_name", row.Name),
-				slog.Any("error", err),
-			)
+			errs = append(errs, fmt.Errorf("report %s: %w", row.Name, err))
 
 			continue
 		}
@@ -112,7 +67,7 @@ func (s *ReportStore) LoadActive(ctx context.Context) ([]models.Report, error) {
 		reports = append(reports, *report)
 	}
 
-	return reports, nil
+	return reports, errors.Join(errs...)
 }
 
 func (s *ReportStore) GetByID(
@@ -124,18 +79,7 @@ func (s *ReportStore) GetByID(
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.Dedup,
-		row.DefaultPeriod,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
 func (s *ReportStore) GetByName(
@@ -147,18 +91,7 @@ func (s *ReportStore) GetByName(
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.Dedup,
-		row.DefaultPeriod,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
 func (s *ReportStore) LoadByEvent(
@@ -172,18 +105,7 @@ func (s *ReportStore) LoadByEvent(
 			return nil, translateNoRows(err)
 		}
 
-		return s.assemble(
-			ctx,
-			int64(row.ID),
-			row.Name,
-			row.Title,
-			row.Active,
-			row.AccessFromLk,
-			row.Dedup,
-			row.DefaultPeriod,
-			row.PipelineID,
-			derefStr(row.Evaluation),
-		)
+		return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 	}
 
 	row, err := s.q.GetAnyReportRowByName(ctx, event)
@@ -191,18 +113,7 @@ func (s *ReportStore) LoadByEvent(
 		return nil, translateNoRows(err)
 	}
 
-	return s.assemble(
-		ctx,
-		int64(row.ID),
-		row.Name,
-		row.Title,
-		row.Active,
-		row.AccessFromLk,
-		row.Dedup,
-		row.DefaultPeriod,
-		row.PipelineID,
-		derefStr(row.Evaluation),
-	)
+	return s.assemble(ctx, sqlcgen.ListReportRowsRow(row))
 }
 
 func (s *ReportStore) GetByPublicID(
@@ -401,37 +312,32 @@ func (s *ReportStore) Create(
 // entry point above.
 func (s *ReportStore) assemble(
 	ctx context.Context,
-	id int64,
-	name, title string,
-	active, accessFromLK, dedup bool,
-	defaultPeriod string,
-	pipelineID *int64,
-	evaluation string,
+	r sqlcgen.ListReportRowsRow, // все *ReportRow*-запросы отдают одни колонки — конвертируются сюда
 ) (*models.Report, error) {
-	cardRows, err := s.q.ListCardsByReportID(ctx, id)
+	cardRows, err := s.q.ListCardsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load queries: %w", err)
 	}
 
-	recipientRows, err := s.q.ListRecipientsByReportID(ctx, id)
+	recipientRows, err := s.q.ListRecipientsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load recipients: %w", err)
 	}
 
-	exportRows, err := s.q.ListExportsByReportID(ctx, id)
+	exportRows, err := s.q.ListExportsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load exports: %w", err)
 	}
 
-	cronRows, err := s.q.ListCronsByReportID(ctx, id)
+	cronRows, err := s.q.ListCronsByReportID(ctx, int64(r.ID))
 	if err != nil {
 		return nil, fmt.Errorf("load crons: %w", err)
 	}
 
 	var pipeline *models.Pipeline
 
-	if pipelineID != nil {
-		pipeData, err := s.q.GetPipelineByID(ctx, *pipelineID)
+	if r.PipelineID != nil {
+		pipeData, err := s.q.GetPipelineByID(ctx, *r.PipelineID)
 		if err != nil {
 			return nil, translateNoRows(err)
 		}
@@ -442,17 +348,17 @@ func (s *ReportStore) assemble(
 	}
 
 	return &models.Report{
-		Name:          name,
-		Title:         title,
+		Name:          r.Name,
+		Title:         r.Title,
 		Queries:       mapCardRows(cardRows),
 		Recipients:    mapRecipientRows(recipientRows),
 		Exports:       s.mapExportRows(ctx, exportRows),
 		Pipeline:      pipeline,
-		Evaluation:    evaluation,
-		Active:        active,
-		AccessFromLK:  accessFromLK,
-		Dedup:         dedup,
-		DefaultPeriod: models.PeriodName(defaultPeriod),
+		Evaluation:    derefStr(r.Evaluation),
+		Active:        r.Active,
+		AccessFromLK:  r.AccessFromLk,
+		Dedup:         r.Dedup,
+		DefaultPeriod: models.PeriodName(r.DefaultPeriod),
 		Crons:         mapCronRows(cronRows),
 	}, nil
 }

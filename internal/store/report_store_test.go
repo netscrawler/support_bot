@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"support_bot/internal/db/sqlcgen"
@@ -808,6 +809,79 @@ func TestReportStore_Create_WiresAllDependencies(t *testing.T) {
 
 	if id != 100 {
 		t.Errorf("Create() id = %d, want 100", id)
+	}
+
+	if err := pool.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestReportStore_Load_PartialResult проверяет, что отчёт, который не удалось
+// собрать, не теряется молча: Load возвращает собранные отчёты и ошибку с
+// именем несобранного.
+func TestReportStore_Load_PartialResult(t *testing.T) {
+	pool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	pool.ExpectQuery("select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr").
+		WillReturnRows(pgxmock.NewRows(
+			[]string{
+				"id", "name", "title", "active", "access_from_lk", "dedup",
+				"default_period", "pipeline_id", "evaluation",
+			},
+		).
+			AddRow(int32(1), "broken", "Broken", true, true, true, "yesterday", (*int64)(nil), new("1 == 1")).
+			AddRow(int32(2), "ok", "Ok", true, true, true, "yesterday", (*int64)(nil), new("1 == 1")),
+		)
+
+	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
+		WithArgs(int64(1)).
+		WillReturnError(errors.New("boom"))
+
+	pool.ExpectQuery("select q.card_uuid, q.title, q.q_type, q.params, q.query").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows(
+			[]string{"card_uuid", "title", "q_type", "params", "query"},
+		))
+
+	pool.ExpectQuery("select\n    rc.name").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"name", "config", "remote_path", "thread_id", "email_id", "type",
+			"need_delete_after_end_of_day", "dest", "copy", "subject", "body",
+			"chat_id", "chat_title", "chat_type", "chat_description",
+			"chat_is_active", "chat_ch_type",
+		}))
+
+	pool.ExpectQuery("select ef.format, re.file_name").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"format", "file_name", "template_id", "template_title",
+			"template_type", "template_text", "sort_order",
+		}))
+
+	pool.ExpectQuery("select c.cron, c.name, c.description, c.is_active, c.event_type").
+		WithArgs(int64(2)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"cron", "name", "description", "is_active", "event_type",
+		}))
+
+	s := NewReportStoreForTest(sqlcgen.New(pool))
+
+	got, err := s.Load(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Fatalf(
+			"Load() error = %v, want error naming report %q",
+			err,
+			"broken",
+		)
+	}
+
+	if len(got) != 1 || got[0].Name != "ok" {
+		t.Fatalf("Load() = %+v, want only report %q", got, "ok")
 	}
 
 	if err := pool.ExpectationsWereMet(); err != nil {

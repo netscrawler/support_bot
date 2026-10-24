@@ -23,7 +23,6 @@ const (
 )
 
 type ReportLoader interface {
-	LoadActive(ctx context.Context) ([]models.Report, error)
 	LoadByEvent(
 		ctx context.Context,
 		event string,

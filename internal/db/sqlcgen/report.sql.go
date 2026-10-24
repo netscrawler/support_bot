@@ -538,55 +538,6 @@ func (q *Queries) LinkTemplateToReport(ctx context.Context, arg LinkTemplateToRe
 	return err
 }
 
-const listActiveReportRows = `-- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
-from reports r
-left join evaluate e on e.id = r.eval_id
-where r.active = true
-`
-
-type ListActiveReportRowsRow struct {
-	ID            int32
-	Name          string
-	Title         string
-	Active        bool
-	AccessFromLk  bool
-	Dedup         bool
-	DefaultPeriod string
-	PipelineID    *int64
-	Evaluation    *string
-}
-
-func (q *Queries) ListActiveReportRows(ctx context.Context) ([]ListActiveReportRowsRow, error) {
-	rows, err := q.db.Query(ctx, listActiveReportRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListActiveReportRowsRow
-	for rows.Next() {
-		var i ListActiveReportRowsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Title,
-			&i.Active,
-			&i.AccessFromLk,
-			&i.Dedup,
-			&i.DefaultPeriod,
-			&i.PipelineID,
-			&i.Evaluation,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCardsByReportID = `-- name: ListCardsByReportID :many
 select q.card_uuid, q.title, q.q_type, q.params, q.query
 from report_queries rq

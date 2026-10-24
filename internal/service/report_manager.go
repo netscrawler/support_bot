@@ -12,6 +12,8 @@ import (
 )
 
 type ReportStore interface {
+	// Load возвращает все собранные отчёты; если часть отчётов собрать не
+	// удалось, результат частичный, а ошибка перечисляет несобранные отчёты.
 	Load(ctx context.Context) ([]models.Report, error)
 	Create(ctx context.Context, report models.Report) (int64, error)
 }

@@ -29,7 +29,7 @@
 // Основные публичные функции/методы:
 //   - NewReportStore / NewChatStore / NewUserStore — конструкторы для
 //     продакшена (fx-DI).
-//   - ReportStore.Load / LoadActive / GetByID / GetByName / GetByPublicID /
+//   - ReportStore.Load / GetByID / GetByName / GetByPublicID /
 //     LoadByEvent / LoadPaged / GetLinkedCrons — чтение отчётов и их
 //     зависимостей (queries, recipients, exports, crons, pipeline).
 //   - ReportStore.Create — создание отчёта и всех его зависимостей одной

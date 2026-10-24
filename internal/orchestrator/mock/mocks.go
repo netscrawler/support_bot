@@ -47,68 +47,6 @@ func (_m *MockReportLoader) EXPECT() *MockReportLoader_Expecter {
 	return &MockReportLoader_Expecter{mock: &_m.Mock}
 }
 
-// LoadActive provides a mock function for the type MockReportLoader
-func (_mock *MockReportLoader) LoadActive(ctx context.Context) ([]models.Report, error) {
-	ret := _mock.Called(ctx)
-
-	if len(ret) == 0 {
-		panic("no return value specified for LoadActive")
-	}
-
-	var r0 []models.Report
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]models.Report, error)); ok {
-		return returnFunc(ctx)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) []models.Report); ok {
-		r0 = returnFunc(ctx)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]models.Report)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockReportLoader_LoadActive_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadActive'
-type MockReportLoader_LoadActive_Call struct {
-	*mock.Call
-}
-
-// LoadActive is a helper method to define mock.On call
-//   - ctx context.Context
-func (_e *MockReportLoader_Expecter) LoadActive(ctx any) *MockReportLoader_LoadActive_Call {
-	return &MockReportLoader_LoadActive_Call{Call: _e.mock.On("LoadActive", ctx)}
-}
-
-func (_c *MockReportLoader_LoadActive_Call) Run(run func(ctx context.Context)) *MockReportLoader_LoadActive_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		run(
-			arg0,
-		)
-	})
-	return _c
-}
-
-func (_c *MockReportLoader_LoadActive_Call) Return(reports []models.Report, err error) *MockReportLoader_LoadActive_Call {
-	_c.Call.Return(reports, err)
-	return _c
-}
-
-func (_c *MockReportLoader_LoadActive_Call) RunAndReturn(run func(ctx context.Context) ([]models.Report, error)) *MockReportLoader_LoadActive_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // LoadByEvent provides a mock function for the type MockReportLoader
 func (_mock *MockReportLoader) LoadByEvent(ctx context.Context, event string, active bool) (*models.Report, error) {
 	ret := _mock.Called(ctx, event, active)

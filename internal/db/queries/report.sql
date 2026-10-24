@@ -18,12 +18,6 @@ select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_per
 from reports r
 left join evaluate e on e.id = r.eval_id;
 
--- name: ListActiveReportRows :many
-select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
-from reports r
-left join evaluate e on e.id = r.eval_id
-where r.active = true;
-
 -- name: GetActiveReportRowByName :one
 select r.id, r.name, r.title, r.active, r.access_from_lk, r.dedup, r.default_period, r.pipeline_id, e.expr as evaluation
 from reports r

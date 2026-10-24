@@ -117,10 +117,8 @@ func exportReportsDslFromDB(args []string) error {
 		slog.Default(),
 	)
 
-	reports, err := mng.Load(ctx)
-	if err != nil {
-		return fmt.Errorf("load reports from db: %w", err)
-	}
+	// Load может вернуть часть отчётов вместе с ошибкой: сохраняем собранные.
+	reports, loadErr := mng.Load(ctx)
 
 	fmt.Fprintf(os.Stdout, "Loaded %d reports from db\n", len(reports))
 
@@ -152,6 +150,10 @@ func exportReportsDslFromDB(args []string) error {
 		}
 
 		fmt.Fprintf(os.Stdout, "Saved report %s to %s\n", r.Name, rP)
+	}
+
+	if loadErr != nil {
+		return fmt.Errorf("load reports from db: %w", loadErr)
 	}
 
 	return nil
