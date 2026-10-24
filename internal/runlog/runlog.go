@@ -70,7 +70,7 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 
 			r.log.ErrorContext(
 				ctx,
-				"runlog: чтение прошлого статуса",
+				"runlog: read previous status",
 				"report",
 				run.ReportName,
 				"error",
@@ -95,7 +95,7 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 	if err := r.store.Insert(ctx, run); err != nil {
 		r.log.ErrorContext(
 			ctx,
-			"runlog: запись запуска",
+			"runlog: write run",
 			"report",
 			run.ReportName,
 			"error",
@@ -138,7 +138,7 @@ func (r *Recorder) Record(ctx context.Context, run models.Run) {
 	if err := r.alerter.Alert(ctx, text); err != nil {
 		r.log.ErrorContext(
 			ctx,
-			"runlog: отправка уведомления",
+			"runlog: send notification",
 			"report",
 			run.ReportName,
 			"error",
@@ -157,7 +157,7 @@ func (r *Recorder) LastSuccessHash(
 	if err != nil {
 		r.log.WarnContext(
 			ctx,
-			"runlog: чтение хэша прошлого запуска",
+			"runlog: read previous run hash",
 			"report",
 			report,
 			"error",
@@ -192,9 +192,9 @@ func (r *Recorder) Start(ctx context.Context) {
 				time.Now().Add(-r.cfg.Retention),
 			)
 			if err != nil {
-				r.log.ErrorContext(ctx, "runlog: очистка журнала", "error", err)
+				r.log.ErrorContext(ctx, "runlog: purge journal", "error", err)
 			} else {
-				r.log.InfoContext(ctx, "runlog: очистка журнала", "deleted", n)
+				r.log.InfoContext(ctx, "runlog: purge journal", "deleted", n)
 			}
 
 			select {

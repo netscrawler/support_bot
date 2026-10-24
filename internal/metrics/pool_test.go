@@ -26,7 +26,7 @@ func TestRegisterPool(t *testing.T) {
 	_, body := get(t, func(context.Context) error { return nil }, "/metrics")
 	for _, name := range []string{"sbot_db_pool_acquired_conns", "sbot_db_pool_max_conns"} {
 		if !strings.Contains(body, name) {
-			t.Errorf("в /metrics нет %s", name)
+			t.Errorf("%s missing from /metrics", name)
 		}
 	}
 }

@@ -65,11 +65,11 @@ func TestCleanupKeepsMonitorContext(t *testing.T) {
 	s.cleanup()
 
 	if ctx.Err() != nil {
-		t.Fatal("cleanup отменил контекст монитора")
+		t.Fatal("cleanup cancelled the monitor context")
 	}
 
 	if !fs.umounted || s.fs != nil {
-		t.Fatal("cleanup не закрыл fs")
+		t.Fatal("cleanup did not close fs")
 	}
 }
 
@@ -86,7 +86,7 @@ func TestCloseCancelsMonitorContext(t *testing.T) {
 	}
 
 	if ctx.Err() == nil {
-		t.Fatal("Close не отменил контекст монитора")
+		t.Fatal("Close did not cancel the monitor context")
 	}
 }
 
@@ -111,11 +111,11 @@ func TestUploadCancelledContextStopsRetries(t *testing.T) {
 	cancel()
 
 	if err := s.Upload(ctx, "dir", testData()); err == nil {
-		t.Fatal("ожидалась ошибка")
+		t.Fatal("expected an error")
 	}
 
 	if fs.writes != 1 {
-		t.Fatalf("после отмены ctx записей: %d, ожидалась 1", fs.writes)
+		t.Fatalf("writes after ctx cancel: %d, want 1", fs.writes)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestUploadNilShare(t *testing.T) {
 	s := newTestSMB(nil)
 
 	if err := s.Upload(context.Background(), "dir", testData()); err == nil {
-		t.Fatal("ожидалась ошибка smb not connected")
+		t.Fatal("expected smb not connected error")
 	}
 }
 

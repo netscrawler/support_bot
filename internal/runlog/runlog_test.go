@@ -224,7 +224,7 @@ func TestStartCleansUp(t *testing.T) {
 		)
 
 	case <-time.After(time.Second):
-		t.Fatal("очистка не вызвана")
+		t.Fatal("cleanup was not called")
 	}
 }
 

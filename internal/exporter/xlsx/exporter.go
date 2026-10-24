@@ -61,14 +61,14 @@ func (e *Exporter) createXlsxBook(
 		&excelize.Style{CustomNumFmt: new("dd.mm.yyyy")},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("создание стиля даты: %w", err)
+		return nil, fmt.Errorf("create date style: %w", err)
 	}
 
 	dateTimeStyle, err := f.NewStyle(
 		&excelize.Style{CustomNumFmt: new("dd.mm.yyyy hh:mm:ss")},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("создание стиля даты и времени: %w", err)
+		return nil, fmt.Errorf("create datetime style: %w", err)
 	}
 
 	styles := map[string]int{
@@ -101,25 +101,25 @@ func (e *Exporter) createXlsxBook(
 		sheetName := sanitizeSheetName(unit)
 
 		if _, err = f.NewSheet(sheetName); err != nil {
-			return nil, fmt.Errorf("создание листа %s: %w", sheetName, err)
+			return nil, fmt.Errorf("create sheet %s: %w", sheetName, err)
 		}
 
 		for rowIdx, row := range sortedRecords {
 			for colIdx, val := range row {
 				cell, cErr := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
 				if cErr != nil {
-					return nil, fmt.Errorf("имя ячейки: %w", cErr)
+					return nil, fmt.Errorf("cell name: %w", cErr)
 				}
 
 				v, kind := detectValueType(fmt.Sprint(val))
 				if err = f.SetCellValue(sheetName, cell, v); err != nil {
-					return nil, fmt.Errorf("запись ячейки %s: %w", cell, err)
+					return nil, fmt.Errorf("write cell %s: %w", cell, err)
 				}
 
 				if styleID, ok := styles[kind]; ok {
 					err = f.SetCellStyle(sheetName, cell, cell, styleID)
 					if err != nil {
-						return nil, fmt.Errorf("стиль ячейки %s: %w", cell, err)
+						return nil, fmt.Errorf("cell style %s: %w", cell, err)
 					}
 				}
 			}
@@ -128,7 +128,7 @@ func (e *Exporter) createXlsxBook(
 		// Добавление таблицы (с фильтрацией)
 		startCell, cErr := excelize.CoordinatesToCellName(1, 1)
 		if cErr != nil {
-			return nil, fmt.Errorf("имя ячейки: %w", cErr)
+			return nil, fmt.Errorf("cell name: %w", cErr)
 		}
 
 		endCell, cErr := excelize.CoordinatesToCellName(
@@ -136,7 +136,7 @@ func (e *Exporter) createXlsxBook(
 			len(sortedRecords),
 		)
 		if cErr != nil {
-			return nil, fmt.Errorf("имя ячейки: %w", cErr)
+			return nil, fmt.Errorf("cell name: %w", cErr)
 		}
 
 		tableRange := fmt.Sprintf("%s:%s", startCell, endCell)
@@ -155,7 +155,7 @@ func (e *Exporter) createXlsxBook(
 		})
 		if err != nil {
 			return nil, fmt.Errorf(
-				"ошибка создания таблицы на листе %s: %w",
+				"create table on sheet %s: %w",
 				sheetName,
 				err,
 			)
@@ -165,7 +165,7 @@ func (e *Exporter) createXlsxBook(
 		for colIdx := range sortedRecords[0] {
 			colLetter, cErr := excelize.ColumnNumberToName(colIdx + 1)
 			if cErr != nil {
-				return nil, fmt.Errorf("имя колонки: %w", cErr)
+				return nil, fmt.Errorf("column name: %w", cErr)
 			}
 
 			colRange := colLetter + ":" + colLetter
@@ -176,13 +176,13 @@ func (e *Exporter) createXlsxBook(
 				colRange,
 				getAutoWidth(sortedRecords, colIdx),
 			); err != nil {
-				return nil, fmt.Errorf("ширина колонки %s: %w", colLetter, err)
+				return nil, fmt.Errorf("column width %s: %w", colLetter, err)
 			}
 		}
 	}
 
 	if err = f.DeleteSheet("Sheet1"); err != nil {
-		return nil, fmt.Errorf("удаление листа Sheet1: %w", err)
+		return nil, fmt.Errorf("delete sheet Sheet1: %w", err)
 	}
 
 	return f.WriteToBuffer()

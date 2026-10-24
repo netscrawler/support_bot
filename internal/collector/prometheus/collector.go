@@ -103,7 +103,7 @@ func (c *Collector) Fetch(
 
 	if err = json.Unmarshal(body, &r); err != nil {
 		return nil, fmt.Errorf(
-			"prometheus %s: HTTP %d, ответ не JSON: %w",
+			"prometheus %s: HTTP %d, response is not JSON: %w",
 			target,
 			resp.StatusCode,
 			err,
@@ -144,13 +144,13 @@ func (c *Collector) Fetch(
 
 func toRows(resultType string, raw json.RawMessage) ([]map[string]any, error) {
 	if resultType != "vector" && resultType != "matrix" {
-		return nil, fmt.Errorf("неподдерживаемый тип результата %q", resultType)
+		return nil, fmt.Errorf("unsupported result type %q", resultType)
 	}
 
 	var series []sample
 
 	if err := json.Unmarshal(raw, &series); err != nil {
-		return nil, fmt.Errorf("разбор результата: %w", err)
+		return nil, fmt.Errorf("parse result: %w", err)
 	}
 
 	rows := make([]map[string]any, 0, len(series))

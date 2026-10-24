@@ -323,7 +323,7 @@ func (o *Orchestrator) generateAndDeliver(
 		if hash == "" {
 			o.log.WarnContext(
 				ctx,
-				"dataset не маршалится, дедупликация не применяется",
+				"dataset is not marshalable, dedup skipped",
 				slog.String("report", report.Name),
 			)
 		}
@@ -336,7 +336,7 @@ func (o *Orchestrator) generateAndDeliver(
 				prev == hash {
 				o.log.InfoContext(
 					ctx,
-					"данные не изменились, отправка пропущена",
+					"data unchanged, send skipped",
 					slog.String("report", report.Name),
 				)
 

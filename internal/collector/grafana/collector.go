@@ -121,7 +121,7 @@ func (c *Collector) Fetch(
 	keys, ok := allowed[mode]
 	if !ok {
 		return nil, fmt.Errorf(
-			"grafana %s: неизвестный режим %q (active, rules, history)",
+			"grafana %s: unknown mode %q (active, rules, history)",
 			target,
 			mode,
 		)
@@ -130,7 +130,7 @@ func (c *Collector) Fetch(
 	for k := range params {
 		if !slices.Contains(keys, k) {
 			return nil, fmt.Errorf(
-				"grafana %s: параметр %q недопустим для режима %s",
+				"grafana %s: parameter %q is not allowed for mode %s",
 				target,
 				k,
 				mode,
@@ -218,7 +218,7 @@ func historyQuery(params map[string]string) (string, error) {
 		n, err := strconv.Atoi(s)
 		if err != nil || n <= 0 {
 			return "", fmt.Errorf(
-				"параметр limit: нужно положительное целое, получено %q",
+				"parameter limit: positive integer required, got %q",
 				s,
 			)
 		}
@@ -238,7 +238,7 @@ func historyQuery(params map[string]string) (string, error) {
 			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
 				return "", fmt.Errorf(
-					"параметр %s: ожидается epoch ms или RFC3339: %w",
+					"parameter %s: epoch ms or RFC3339 expected: %w",
 					k,
 					err,
 				)
@@ -266,7 +266,7 @@ func historyRows(body []byte, code int) ([]map[string]any, error) {
 
 	if err := json.Unmarshal(body, &as); err != nil {
 		return nil, fmt.Errorf(
-			"HTTP %d, ответ не JSON-массив: %w: %.200s",
+			"HTTP %d, response is not a JSON array: %w: %.200s",
 			code,
 			err,
 			body,
@@ -320,10 +320,10 @@ func ruleRows(body []byte, code int, mode string) ([]map[string]any, error) {
 	case !ok2xx(code):
 		return nil, httpErr(code, body)
 	case jerr != nil:
-		return nil, fmt.Errorf("HTTP %d, ответ не JSON: %w", code, jerr)
+		return nil, fmt.Errorf("HTTP %d, response is not JSON: %w", code, jerr)
 	default:
 		return nil, fmt.Errorf(
-			"HTTP %d, ответ не rules API: %.200s",
+			"HTTP %d, response is not a rules API: %.200s",
 			code,
 			body,
 		)

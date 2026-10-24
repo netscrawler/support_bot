@@ -185,7 +185,7 @@ func linkRevoke(
 	}
 
 	if fs.NArg() != 1 {
-		return errors.New("usage: ctl link revoke -config <путь> <uuid>")
+		return errors.New("usage: ctl link revoke -config <path> <uuid>")
 	}
 
 	st, closeFn, err := open(ctx, *cfgPath)
@@ -197,7 +197,7 @@ func linkRevoke(
 	revoked, err := st.ExpirePublicLink(ctx, fs.Arg(0))
 	switch {
 	case errors.Is(err, models.ErrNotFound):
-		return errors.New("ссылка не найдена")
+		return errors.New("link not found")
 	case err != nil:
 		return fmt.Errorf("revoke link: %w", err)
 	case revoked:

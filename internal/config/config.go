@@ -158,7 +158,7 @@ func (c Config) Validate() error {
 
 	need := func(path string, empty bool) {
 		if empty {
-			errs = append(errs, fmt.Errorf("%s: не задано", path))
+			errs = append(errs, fmt.Errorf("%s: not set", path))
 		}
 	}
 

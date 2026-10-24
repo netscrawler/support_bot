@@ -31,18 +31,18 @@ func TestBuildSources(t *testing.T) {
 		{
 			"оба варианта",
 			Config{URL: "http://p", Grafana: "ops", DatasourceUID: "u"},
-			"либо url",
+			"either url",
 		},
-		{"ни одного", Config{}, "ни url"},
+		{"ни одного", Config{}, "neither url"},
 		{
 			"grafana без uid",
 			Config{Grafana: "ops"},
-			"и grafana, и datasource_uid",
+			"both grafana and datasource_uid",
 		},
 		{
 			"uid без grafana",
 			Config{DatasourceUID: "u"},
-			"и grafana, и datasource_uid",
+			"both grafana and datasource_uid",
 		},
 		{
 			"нет grafana",
@@ -52,7 +52,7 @@ func TestBuildSources(t *testing.T) {
 		{
 			"bearer и basic",
 			Config{URL: "http://p", BearerToken: "t", BasicAuth: &BasicAuth{}},
-			"взаимоисключающие",
+			"mutually exclusive",
 		},
 	}
 	for _, tc := range bad {

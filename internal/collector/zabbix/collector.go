@@ -47,9 +47,9 @@ func New(cfgs map[string]Config, log *slog.Logger) (*Collector, error) {
 	for name, c := range cfgs {
 		switch {
 		case c.URL == "":
-			return nil, fmt.Errorf("zabbix %q: не задан url", name)
+			return nil, fmt.Errorf("zabbix %q: url is not set", name)
 		case c.Token == "":
-			return nil, fmt.Errorf("zabbix %q: не задан token", name)
+			return nil, fmt.Errorf("zabbix %q: token is not set", name)
 		}
 
 		sources[name] = source{
@@ -92,7 +92,7 @@ func (c *Collector) Fetch(
 
 	if !readMethod.MatchString(req.Method) {
 		return nil, fmt.Errorf(
-			"zabbix %s: метод %s запрещён, разрешены только *.get",
+			"zabbix %s: method %s is forbidden, only *.get is allowed",
 			target,
 			req.Method,
 		)
@@ -130,11 +130,11 @@ func parseQuery(query string) (request, error) {
 	}
 
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return req, errors.New("query: лишние данные после JSON-объекта")
+		return req, errors.New("query: extra data after JSON object")
 	}
 
 	if req.Method == "" {
-		return req, errors.New("query: не задан method")
+		return req, errors.New("query: method is not set")
 	}
 
 	if req.Params == nil {
@@ -162,7 +162,7 @@ func substitute(v any, params map[string]string) (any, error) {
 		})
 
 		if missing != "" {
-			return nil, fmt.Errorf("в params нет значения для ${%s}", missing)
+			return nil, fmt.Errorf("no value in params for ${%s}", missing)
 		}
 
 		return out, nil
@@ -240,7 +240,7 @@ func (c *Collector) call(
 
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, fmt.Errorf(
-			"HTTP %d, ответ не JSON: %w",
+			"HTTP %d, response is not JSON: %w",
 			resp.StatusCode,
 			err,
 		)
@@ -254,7 +254,7 @@ func (c *Collector) call(
 	var result any
 
 	if err := json.Unmarshal(r.Result, &result); err != nil {
-		return nil, fmt.Errorf("HTTP %d, нет result: %w", resp.StatusCode, err)
+		return nil, fmt.Errorf("HTTP %d, no result: %w", resp.StatusCode, err)
 	}
 
 	return rows(result), nil

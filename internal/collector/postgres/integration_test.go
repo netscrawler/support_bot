@@ -16,7 +16,7 @@ import (
 func TestIntegrationReadOnly(t *testing.T) {
 	dsn := os.Getenv("PG_COLLECTOR_TEST_DSN")
 	if dsn == "" {
-		t.Skip("PG_COLLECTOR_TEST_DSN не задан")
+		t.Skip("PG_COLLECTOR_TEST_DSN is not set")
 	}
 
 	ctx := context.Background()

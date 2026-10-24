@@ -260,7 +260,7 @@ func TestStatusError(t *testing.T) {
 	})
 
 	_, err = c.Fetch(context.Background(), "g", "rules", nil)
-	require.ErrorContains(t, err, "не rules API")
+	require.ErrorContains(t, err, "not a rules API")
 }
 
 func TestErrorsKeepCodeAndBody(t *testing.T) {

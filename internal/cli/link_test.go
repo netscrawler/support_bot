@@ -143,7 +143,7 @@ func TestLinkRevoke(t *testing.T) {
 		&out,
 		[]string{"id"},
 	); err == nil ||
-		!strings.Contains(err.Error(), "не найдена") {
+		!strings.Contains(err.Error(), "not found") {
 		t.Fatalf("not found: %v", err)
 	}
 

@@ -96,7 +96,7 @@ func TestReportJSON_IgnoreEvaluateNotSerialized(t *testing.T) {
 	}
 
 	if strings.Contains(strings.ToLower(string(b)), "ignore") {
-		t.Fatalf("IgnoreEvaluate попал в JSON: %s", b)
+		t.Fatalf("IgnoreEvaluate leaked into JSON: %s", b)
 	}
 }
 
@@ -108,7 +108,11 @@ func TestReportJSON_Dedup(t *testing.T) {
 		&rep,
 	); err != nil ||
 		rep.Dedup {
-		t.Fatalf("без dedup: Dedup = %v, err = %v, want false", rep.Dedup, err)
+		t.Fatalf(
+			"without dedup: Dedup = %v, err = %v, want false",
+			rep.Dedup,
+			err,
+		)
 	}
 
 	if err := json.Unmarshal(
@@ -121,7 +125,7 @@ func TestReportJSON_Dedup(t *testing.T) {
 
 	b, err := json.Marshal(rep)
 	if err != nil || !strings.Contains(string(b), `"dedup":true`) {
-		t.Errorf("Marshal = %s, err = %v, want содержит \"dedup\":true", b, err)
+		t.Errorf("Marshal = %s, err = %v, want contains \"dedup\":true", b, err)
 	}
 }
 

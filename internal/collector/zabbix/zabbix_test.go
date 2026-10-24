@@ -95,7 +95,7 @@ func TestRejectedWithoutRequest(t *testing.T) {
 	// Zabbix берёт только первые два сегмента: host.delete.get выполнил бы host.delete.
 	for _, m := range []string{"host.delete.get", ".get", "host..get", "HOST.GET"} {
 		_, err = fetch(c, `{"method":"`+m+`","params":{}}`, nil)
-		require.ErrorContains(t, err, "запрещён", m)
+		require.ErrorContains(t, err, "forbidden", m)
 	}
 
 	_, err = fetch(c, `{"method":"host.get","params":{},"extra":1}`, nil)
@@ -243,8 +243,8 @@ func TestUnknownSource(t *testing.T) {
 
 func TestNewValidation(t *testing.T) {
 	_, err := New(map[string]Config{"prod": {Token: "t"}}, slog.Default())
-	require.ErrorContains(t, err, `zabbix "prod": не задан url`)
+	require.ErrorContains(t, err, `zabbix "prod": url is not set`)
 
 	_, err = New(map[string]Config{"prod": {URL: "http://x"}}, slog.Default())
-	require.ErrorContains(t, err, `zabbix "prod": не задан token`)
+	require.ErrorContains(t, err, `zabbix "prod": token is not set`)
 }

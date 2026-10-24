@@ -124,7 +124,7 @@ func TestSecretFieldsAreSecretString(t *testing.T) {
 				f.Type != reflect.TypeFor[secret.String]() &&
 				re.MatchString(f.Name) {
 				_, ok := allowed[p]
-				assert.True(t, ok, "%s должно быть secret.String", p)
+				assert.True(t, ok, "%s must be secret.String", p)
 			}
 
 			walk(f.Type, p, seen)
@@ -203,7 +203,7 @@ func TestValidate(t *testing.T) {
 		{
 			name:    "нет токена telegram",
 			mutate:  func(c *config.Config) { c.TgBot.TelegramToken = "" },
-			wantErr: []string{"telegram.telegram_token: не задано"},
+			wantErr: []string{"telegram.telegram_token: not set"},
 		},
 		{
 			name:   "нет полей database",

@@ -66,17 +66,17 @@ func buildSource(c Config, grafanas map[string]GrafanaConfig) (source, error) {
 	switch {
 	case c.URL != "" && viaGrafana:
 		return source{}, errors.New(
-			"задайте либо url, либо grafana + datasource_uid",
+			"set either url or grafana + datasource_uid",
 		)
 
 	case c.URL == "" && !viaGrafana:
 		return source{}, errors.New(
-			"не задан ни url, ни grafana + datasource_uid",
+			"neither url nor grafana + datasource_uid is set",
 		)
 
 	case c.BearerToken != "" && c.BasicAuth != nil:
 		return source{}, errors.New(
-			"bearer_token и basic_auth взаимоисключающие",
+			"bearer_token and basic_auth are mutually exclusive",
 		)
 	}
 
@@ -98,14 +98,14 @@ func buildSource(c Config, grafanas map[string]GrafanaConfig) (source, error) {
 
 	if c.Grafana == "" || c.DatasourceUID == "" {
 		return source{}, errors.New(
-			"для доступа через Grafana нужны и grafana, и datasource_uid",
+			"access via Grafana requires both grafana and datasource_uid",
 		)
 	}
 
 	g, ok := grafanas[c.Grafana]
 	if !ok {
 		return source{}, fmt.Errorf(
-			"grafana %q не найдена в секции grafana",
+			"grafana %q not found in grafana section",
 			c.Grafana,
 		)
 	}

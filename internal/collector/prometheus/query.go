@@ -28,7 +28,7 @@ func buildRequest(
 	})
 
 	if missing != "" {
-		return "", nil, fmt.Errorf("в params нет значения для ${%s}", missing)
+		return "", nil, fmt.Errorf("no value in params for ${%s}", missing)
 	}
 
 	vals := url.Values{"query": {q}}
@@ -55,7 +55,7 @@ func buildRequest(
 
 	default:
 		return "", nil, fmt.Errorf(
-			"неполный range-запрос, не хватает: %s",
+			"incomplete range query, missing: %s",
 			strings.Join(absent, ", "),
 		)
 	}
